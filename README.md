@@ -77,3 +77,20 @@ Quality factors:
 - `volume_expansion_24h`
 
 The report is intended to narrow the universe. Final entries still require manual chart structure, key level, invalidation, and BTC regime checks.
+
+## Data Quality
+
+Rows with critical sanity flags are excluded from factor normalization and watchlist ranking. The report keeps them visible in the Data Quality section so suspicious provider data can be inspected manually.
+
+Default guards:
+
+- absolute 24h price change above 300%
+- absolute 24h OI change above 300%
+- absolute 24h volume change above 1000%
+- absolute funding rate above 2%
+- post-enrichment quote volume below $10M
+- missing or nonpositive price/volume fields
+- malformed symbol or contract/quote mismatch
+- CoinGlass price deviates from Binance fallback by more than 25%
+- CoinGlass price deviates from index price by more than 25%
+- CoinGlass enrichment has fewer than 2 configured exchange venues

@@ -39,19 +39,27 @@ def score_snapshot(
     history_records: list[dict[str, Any]],
     config: dict[str, Any],
 ) -> dict[str, Any]:
-    raw_factors = [_raw_factors(row, rows, market_context) for row in rows]
+    trusted_rows = [row for row in rows if row.get("is_trusted", True)]
+    raw_factors = [_raw_factors(row, trusted_rows, market_context) for row in trusted_rows]
     normalized = _normalize_factors(raw_factors)
     weights = factor_weights(history_records, config)
 
-    for row, raw, factors in zip(rows, raw_factors, normalized, strict=True):
+    for row, raw, factors in zip(trusted_rows, raw_factors, normalized, strict=True):
         row["raw_factors"] = raw
         row["factors"] = factors
         _apply_scores(row, factors, weights)
 
+    for row in rows:
+        if row.get("is_trusted", True):
+            continue
+        row["raw_factors"] = {}
+        row["factors"] = {}
+        _apply_excluded_scores(row)
+
     return {
         "rows": rows,
         "factor_weights": weights,
-        "regime": infer_regime(weights, rows, market_context),
+        "regime": infer_regime(weights, trusted_rows, market_context),
     }
 
 
@@ -247,10 +255,23 @@ def _apply_scores(row: dict[str, Any], factors: dict[str, float], weights: dict[
     row.update(row["scores"])
 
 
+def _apply_excluded_scores(row: dict[str, Any]) -> None:
+    row["scores"] = {
+        "factor_score": 0.0,
+        "liquidity_quality": 0.0,
+        "long_score": 0.0,
+        "short_score": 0.0,
+        "crowded_long_score": 0.0,
+        "squeeze_risk_score": 0.0,
+    }
+    row.update(row["scores"])
+
+
 def reason_for(row: dict[str, Any], side: str) -> str:
     parts: list[str] = []
     factors = row.get("factors", {})
     scores = row.get("scores", {})
+    quality_flags = row.get("data_quality_flags") or []
 
     _append_metric(parts, "24h", row.get("price_change_24h_pct"), "{:+.2f}%")
     _append_metric(parts, "OI", row.get("oi_change_24h_pct"), "{:+.2f}%")
@@ -273,6 +294,8 @@ def reason_for(row: dict[str, Any], side: str) -> str:
         parts.append("crowded long conditions")
     if side == "squeeze-risk":
         parts.append("crowded short conditions")
+    if quality_flags:
+        parts.append("excluded: " + ", ".join(str(flag) for flag in quality_flags))
     return "; ".join(parts)
 
 

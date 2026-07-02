@@ -7,6 +7,7 @@ from typing import Any
 from .binance import BinanceFuturesClient, ProviderError
 from .coingecko import CoinGeckoClient
 from .coinglass import CoinGlassClient
+from .quality import apply_data_quality
 from .scoring import funding_annualized_pct, funding_rate_pct, pct_change, spread_bps, to_float
 
 
@@ -15,6 +16,7 @@ def collect_market(config: dict[str, Any]) -> dict[str, Any]:
     rows = collect_binance_usdm(config, status)
     market_context = collect_coingecko_context(config, status)
     enrich_with_coinglass(rows, config, status)
+    status["data_quality"] = apply_data_quality(rows, config)
     return {
         "rows": rows,
         "market_context": market_context,
@@ -142,6 +144,7 @@ def enrich_with_coinglass(rows: list[dict[str, Any]], config: dict[str, Any], st
             pairs = client.futures_pairs_markets(symbol)
             aggregate = _aggregate_coinglass_pairs(pairs, exchanges)
             if aggregate:
+                _preserve_binance_fields(row)
                 row.update(aggregate)
                 row["data_source"] = "coinglass+binance"
                 enriched += 1
@@ -281,6 +284,19 @@ def _aggregate_coinglass_pairs(pairs: list[dict[str, Any]], exchanges: set[str])
         "open_interest_volume_ratio": (total_oi / total_volume) if total_volume > 0 else None,
         "coinglass_exchange_count": len({pair.get("exchange_name") for pair in filtered}),
     }
+
+
+def _preserve_binance_fields(row: dict[str, Any]) -> None:
+    for key in [
+        "price_usd",
+        "price_change_24h_pct",
+        "quote_volume_usd",
+        "open_interest_usd",
+        "oi_change_24h_pct",
+        "funding_rate_pct",
+    ]:
+        if key in row and f"binance_{key}" not in row:
+            row[f"binance_{key}"] = row[key]
 
 
 def _normalize_coingecko_global(global_data: dict[str, Any]) -> dict[str, Any]:

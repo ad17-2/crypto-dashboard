@@ -61,6 +61,16 @@
       "note": "reserved for ETF flows and sector indexes if official API access exposes them"
     }
   },
+  "data_quality": {
+    "max_abs_price_change_24h_pct": 300,
+    "max_abs_oi_change_24h_pct": 300,
+    "max_abs_volume_change_24h_pct": 1000,
+    "max_abs_funding_rate_pct": 2,
+    "max_price_deviation_from_binance_pct": 25,
+    "max_price_deviation_from_index_pct": 25,
+    "min_quote_volume_usd": 10000000,
+    "min_coinglass_exchange_count": 2
+  },
   "factors": {
     "forward_return_hours": 24,
     "ic_window_days": 30,

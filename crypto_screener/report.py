@@ -31,6 +31,9 @@ REPORT_FIELDS = [
     "short_score",
     "crowded_long_score",
     "squeeze_risk_score",
+    "is_trusted",
+    "data_quality_score",
+    "data_quality_flags",
 ]
 
 
@@ -67,7 +70,10 @@ def top_by(
     limit: int,
     minimum: float = 0.01,
     predicate=None,
+    trusted_only: bool = True,
 ) -> list[dict[str, Any]]:
+    if trusted_only:
+        rows = [row for row in rows if row.get("is_trusted", True)]
     ranked = sorted(rows, key=lambda item: item.get(field) or 0, reverse=True)
     if predicate is not None:
         ranked = [row for row in ranked if predicate(row)]
@@ -102,6 +108,9 @@ def render_markdown(payload: dict[str, Any], config: dict[str, Any]) -> str:
             "",
             "## Provider Status",
             _provider_status_block(provider_status),
+            "",
+            "## Data Quality",
+            _data_quality_block(rows),
             "",
             "## Factor Regime",
             _factor_weights_table(weights),
@@ -218,15 +227,16 @@ def _candidate_table(rows: list[dict[str, Any]], score_field: str, side: str) ->
         return "_No matches._"
 
     lines = [
-        "| Symbol | Score | 24h | OI 24h | Funding | L/S | Volume | Source | Reason |",
-        "|---|---:|---:|---:|---:|---:|---:|---|---|",
+        "| Symbol | Score | Quality | 24h | OI 24h | Funding | L/S | Volume | Source | Reason |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in rows:
         score = row.get(score_field)
         lines.append(
-            "| {symbol} | {score:.2f} | {price} | {oi} | {funding} | {ls} | {volume} | {source} | {reason} |".format(
+            "| {symbol} | {score:.2f} | {quality} | {price} | {oi} | {funding} | {ls} | {volume} | {source} | {reason} |".format(
                 symbol=row.get("symbol", "-"),
                 score=score or 0.0,
+                quality=row.get("data_quality_score", 100),
                 price=format_pct(row.get("price_change_24h_pct")),
                 oi=format_pct(row.get("oi_change_24h_pct")),
                 funding=format_pct(row.get("funding_rate_pct"), digits=4),
@@ -249,6 +259,39 @@ def _is_crowded_short(row: dict[str, Any]) -> bool:
     funding = row.get("funding_rate_pct") or 0.0
     ls_ratio = row.get("long_short_ratio")
     return funding < -0.015 or (ls_ratio is not None and ls_ratio <= 0.8)
+
+
+def _data_quality_block(rows: list[dict[str, Any]]) -> str:
+    flagged = [row for row in rows if row.get("data_quality_flags")]
+    trusted = sum(1 for row in rows if row.get("is_trusted", True))
+    excluded = len(rows) - trusted
+    lines = [
+        f"- Trusted rows used for ranking: `{trusted}`",
+        f"- Excluded rows: `{excluded}`",
+    ]
+    if not flagged:
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            "",
+            "| Symbol | Source | 24h | OI 24h | Flags |",
+            "|---|---|---:|---:|---|",
+        ]
+    )
+    for row in flagged[:12]:
+        lines.append(
+            "| {symbol} | {source} | {price} | {oi} | {flags} |".format(
+                symbol=row.get("symbol", "-"),
+                source=row.get("data_source", "-"),
+                price=format_pct(row.get("price_change_24h_pct")),
+                oi=format_pct(row.get("oi_change_24h_pct")),
+                flags=", ".join(str(flag) for flag in row.get("data_quality_flags", [])).replace("|", "/"),
+            )
+        )
+    if len(flagged) > 12:
+        lines.append(f"| ... | ... | ... | ... | {len(flagged) - 12} more excluded rows |")
+    return "\n".join(lines)
 
 
 def write_reports(payload: dict[str, Any], config: dict[str, Any], out_dir: Path) -> dict[str, Path]:
