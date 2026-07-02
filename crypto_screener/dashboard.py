@@ -682,9 +682,18 @@ DASHBOARD_HTML = r"""<!doctype html>
     table { width: 100%; border-collapse: collapse; min-width: 700px; }
     th, td { padding: 9px 10px; border-bottom: 1px solid #edf1f6; text-align: right; font-size: 12px; vertical-align: top; }
     th { color: var(--muted); font-weight: 650; background: #fbfcfe; white-space: nowrap; }
-    td:first-child, th:first-child, td.reason-cell { text-align: left; }
-    tr.reason-row td { border-bottom: 1px solid #dfe6ef; background: #fcfdff; }
-    td.reason-cell { color: #3b4351; padding: 0 10px 12px; }
+    td:first-child, th:first-child { text-align: left; }
+    td.row-cell { padding: 0; text-align: left; border-bottom: 1px solid #dfe6ef; }
+    .asset-row {
+      display: grid;
+      grid-template-columns: minmax(110px, 1.2fr) .7fr .45fr .9fr .9fr .95fr .55fr 1fr minmax(150px, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px 12px;
+    }
+    .asset-metric { text-align: right; font-size: 13px; }
+    .asset-metric.left { text-align: left; }
+    .reason-cell { color: #3b4351; background: #fcfdff; border-top: 1px solid #edf1f6; padding: 10px 20px 14px; }
     .symbol { font-weight: 760; font-size: 13px; }
     .tag, .source-tag, .status-pill, .quality-flag-chip {
       display: inline-flex;
@@ -743,9 +752,8 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
     .help-tip:hover::after, .help-tip:focus::after { opacity: 1; transform: translateY(0); }
     .reason-line {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      gap: 10px;
+      display: flex;
+      gap: 12px;
       align-items: start;
       width: 100%;
     }
@@ -827,7 +835,11 @@ DASHBOARD_HTML = r"""<!doctype html>
       select, button { width: 100%; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .value { font-size: 19px; }
-      .reason-line { grid-template-columns: 1fr; gap: 6px; }
+      .asset-row { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px 14px 10px; }
+      .asset-metric { text-align: left; }
+      .source-stack { justify-content: flex-start; }
+      .reason-cell { padding: 10px 14px 14px; }
+      .reason-line { flex-direction: column; gap: 7px; }
     }
   </style>
 </head>
@@ -921,21 +933,23 @@ DASHBOARD_HTML = r"""<!doctype html>
       if (!rows || rows.length === 0) return `<div class="empty">No matches</div>`;
       const body = rows.map((row) => `
         <tr>
-          <td><span class="symbol">${esc(row.symbol)}</span></td>
-          <td>${fmtNum(row.score)}</td>
-          <td>${esc(row.quality ?? 100)}</td>
-          <td class="${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</td>
-          <td class="${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</td>
-          <td class="${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</td>
-          <td>${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</td>
-          <td>${fmtUsd(row.quote_volume_usd)}</td>
-          <td><div class="source-stack">${sourceTags(row.data_source)}</div></td>
-        </tr>
-        <tr class="reason-row">
-          <td class="reason-cell" colspan="9">
+          <td class="row-cell" colspan="9">
+            <div class="asset-row">
+              <div class="asset-metric left"><span class="symbol">${esc(row.symbol)}</span></div>
+              <div class="asset-metric">${fmtNum(row.score)}</div>
+              <div class="asset-metric">${esc(row.quality ?? 100)}</div>
+              <div class="asset-metric ${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</div>
+              <div class="asset-metric ${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</div>
+              <div class="asset-metric ${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</div>
+              <div class="asset-metric">${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</div>
+              <div class="asset-metric">${fmtUsd(row.quote_volume_usd)}</div>
+              <div class="asset-metric"><div class="source-stack">${sourceTags(row.data_source)}</div></div>
+            </div>
+            <div class="reason-cell">
             <div class="reason-line">
               ${reasonHeader()}
               ${reasonView(row)}
+            </div>
             </div>
           </td>
         </tr>`).join("");
