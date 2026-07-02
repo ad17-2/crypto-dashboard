@@ -704,7 +704,13 @@ DASHBOARD_HTML = r"""<!doctype html>
     .asset-metric.left { text-align: left; }
     .asset-metric[data-label]::before { display: none; }
     .reason-cell { color: #3b4351; background: #fcfdff; border-top: 1px solid #edf1f6; padding: 10px 20px 14px; }
-    .symbol { font-weight: 760; font-size: 13px; }
+    .symbol-link {
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 760;
+      text-decoration: none;
+    }
+    .symbol-link:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
     .tag, .source-tag, .status-pill, .quality-flag-chip {
       display: inline-flex;
       align-items: center;
@@ -1007,12 +1013,25 @@ DASHBOARD_HTML = r"""<!doctype html>
         `<span class="source-tag">${esc(part)}</span>`
       )).join("");
     }
+    function tradingViewSymbol(symbol) {
+      const base = String(symbol || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      return base ? `BINANCE:${base}USDT.P` : "";
+    }
+    function tradingViewUrl(symbol) {
+      const tvSymbol = tradingViewSymbol(symbol);
+      return tvSymbol ? `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol)}` : "#";
+    }
+    function symbolLink(symbol) {
+      const tvSymbol = tradingViewSymbol(symbol);
+      if (!tvSymbol) return esc(symbol || "-");
+      return `<a class="symbol-link" href="${tradingViewUrl(symbol)}" target="_blank" rel="noopener noreferrer" title="Open ${esc(tvSymbol)} on TradingView">${esc(symbol)}</a>`;
+    }
     function rowsTable(rows) {
       if (!rows || rows.length === 0) return `<div class="empty">No matches</div>`;
       const body = rows.map((row) => `
         <div class="market-row">
           <div class="asset-row">
-            <div class="asset-metric left" data-label="Symbol"><span class="symbol">${esc(row.symbol)}</span></div>
+            <div class="asset-metric left" data-label="Symbol">${symbolLink(row.symbol)}</div>
             <div class="asset-metric" data-label="Score">${fmtNum(row.score)}</div>
             <div class="asset-metric" data-label="Q">${esc(row.quality ?? 100)}</div>
             <div class="asset-metric ${clsFor(row.price_change_24h_pct)}" data-label="24h">${fmtPct(row.price_change_24h_pct)}</div>
