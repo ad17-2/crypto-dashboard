@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from crypto_screener.dashboard import build_dashboard_payload
+from crypto_screener.dashboard import DASHBOARD_HTML, build_dashboard_payload
 from crypto_screener.storage import connect, save_snapshot
 
 
@@ -71,7 +71,14 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(dashboard["quality"]["trusted_count"], 1)
         self.assertEqual(dashboard["quality"]["excluded_count"], 1)
         self.assertEqual(dashboard["sections"]["long"][0]["symbol"], "BTC")
+        self.assertTrue(dashboard["sections"]["long"][0]["reason_parts"])
+        self.assertEqual(dashboard["sections"]["long"][0]["reason_parts"][0]["label"], "24h")
         self.assertEqual(dashboard["runs"][0]["coinglass_status"], "-")
+
+    def test_dashboard_reason_has_help_tooltip(self):
+        self.assertIn("reasonTooltip", DASHBOARD_HTML)
+        self.assertIn("help-tip", DASHBOARD_HTML)
+        self.assertIn("reason_parts", DASHBOARD_HTML)
 
     def test_existing_runs_table_gets_dashboard_columns(self):
         with tempfile.TemporaryDirectory() as tmpdir:

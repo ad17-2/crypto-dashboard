@@ -13,13 +13,24 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .cli import load_config
-from .factors import reason_for
+from .factors import DIRECTIONAL_FACTORS, reason_for
 from .pipeline import run_pipeline
 from .report import top_by
+from .scoring import to_float
 from .storage import connect
 
 
 DEFAULT_CONFIG_PATH = Path("config/default.json")
+
+FACTOR_LABELS = {
+    "momentum_24h": "Momentum",
+    "reversal_1d": "Reversal",
+    "oi_price_signal": "OI/Price",
+    "funding_rate_contrarian": "Funding",
+    "ls_ratio_contrarian": "L/S",
+    "liquidation_imbalance": "Liquidations",
+    "btc_relative_strength": "BTC Relative",
+}
 
 
 @dataclass(frozen=True)
@@ -277,7 +288,135 @@ def _dashboard_row(row: dict[str, Any], score_field: str, side: str) -> dict[str
         "data_source": row.get("data_source"),
         "is_trusted": row.get("is_trusted", True),
         "reason": reason_for(row, side),
+        "reason_parts": _reason_parts(row, side),
     }
+
+
+def _reason_parts(row: dict[str, Any], side: str) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    scores = row.get("scores", {})
+    factors = row.get("factors", {})
+
+    _append_reason_metric(
+        parts,
+        "24h",
+        row.get("price_change_24h_pct"),
+        "{:+.2f}%",
+        "Spot or mark price change over the last 24 hours.",
+    )
+    _append_reason_metric(
+        parts,
+        "OI 24h",
+        row.get("oi_change_24h_pct"),
+        "{:+.2f}%",
+        "Open-interest change over the last 24 hours; rising OI means more futures positioning.",
+    )
+    _append_reason_metric(
+        parts,
+        "Funding",
+        row.get("funding_rate_pct"),
+        "{:+.4f}%",
+        "Perpetual funding rate; positive usually means longs pay shorts, negative means shorts pay longs.",
+    )
+    if row.get("long_short_ratio") is not None:
+        _append_reason_metric(
+            parts,
+            "L/S",
+            row.get("long_short_ratio"),
+            "{:.2f}",
+            "Long/short volume ratio; above 1 leans long, below 1 leans short.",
+            neutral_value=1.0,
+        )
+    if scores.get("factor_score") is not None:
+        _append_reason_metric(
+            parts,
+            "Factor",
+            scores.get("factor_score"),
+            "{:+.2f}",
+            "Weighted directional model score before watchlist-specific ranking.",
+        )
+
+    strongest = sorted(
+        ((name, value) for name, value in factors.items() if name in DIRECTIONAL_FACTORS),
+        key=lambda item: abs(item[1]),
+        reverse=True,
+    )[:2]
+    for name, value in strongest:
+        if abs(value) >= 0.5:
+            parts.append(
+                {
+                    "kind": "driver",
+                    "label": FACTOR_LABELS.get(name, name.replace("_", " ").title()),
+                    "value": f"{float(value):+.2f}",
+                    "tone": _reason_tone(float(value)),
+                    "help": "Normalized factor driver. Larger absolute values contributed more to the setup read.",
+                }
+            )
+
+    if side == "fade-long":
+        parts.append(
+            {
+                "kind": "context",
+                "label": "Crowding",
+                "value": "long fade",
+                "tone": "warn",
+                "help": "Crowded-long watchlist: useful for fade ideas, not automatic shorts.",
+            }
+        )
+    if side == "squeeze-risk":
+        parts.append(
+            {
+                "kind": "context",
+                "label": "Crowding",
+                "value": "short squeeze",
+                "tone": "warn",
+                "help": "Crowded-short watchlist: useful for squeeze-risk review, not automatic longs.",
+            }
+        )
+
+    quality_flags = row.get("data_quality_flags") or []
+    if quality_flags:
+        parts.append(
+            {
+                "kind": "quality",
+                "label": "Excluded",
+                "value": ", ".join(str(flag) for flag in quality_flags),
+                "tone": "bad",
+                "help": "This row failed sanity checks and is excluded from ranking.",
+            }
+        )
+
+    return parts
+
+
+def _append_reason_metric(
+    parts: list[dict[str, Any]],
+    label: str,
+    value: Any,
+    template: str,
+    help_text: str,
+    neutral_value: float = 0.0,
+) -> None:
+    numeric = to_float(value)
+    if numeric is None:
+        return
+    parts.append(
+        {
+            "kind": "metric",
+            "label": label,
+            "value": template.format(numeric),
+            "tone": _reason_tone(numeric - neutral_value),
+            "help": help_text,
+        }
+    )
+
+
+def _reason_tone(value: float) -> str:
+    if value > 0:
+        return "pos"
+    if value < 0:
+        return "neg"
+    return "neutral"
 
 
 def _quality_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -544,7 +683,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     th, td { padding: 9px 10px; border-bottom: 1px solid #edf1f6; text-align: right; font-size: 12px; vertical-align: top; }
     th { color: var(--muted); font-weight: 650; background: #fbfcfe; white-space: nowrap; }
     td:first-child, th:first-child, td.reason, th.reason { text-align: left; }
-    td.reason { color: #3b4351; min-width: 240px; max-width: 380px; }
+    td.reason { color: #3b4351; min-width: 300px; max-width: 460px; }
     .symbol { font-weight: 760; font-size: 13px; }
     .tag {
       display: inline-flex;
@@ -557,6 +696,65 @@ DASHBOARD_HTML = r"""<!doctype html>
       background: #edf7f5;
       color: var(--teal);
     }
+    .reason-head { display: inline-flex; align-items: center; gap: 6px; }
+    .help-tip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 17px;
+      height: 17px;
+      border: 1px solid #b8c2d1;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      cursor: help;
+      outline: none;
+    }
+    .help-tip::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      right: 0;
+      top: 24px;
+      z-index: 5;
+      width: min(360px, calc(100vw - 48px));
+      padding: 10px 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #111827;
+      color: #f8fafc;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.45;
+      white-space: normal;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-3px);
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+    .help-tip:hover::after, .help-tip:focus::after { opacity: 1; transform: translateY(0); }
+    .reason-stack { display: flex; flex-wrap: wrap; gap: 5px; max-width: 460px; }
+    .reason-part {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      min-height: 23px;
+      padding: 2px 7px;
+      border: 1px solid #d9e2ec;
+      border-radius: 6px;
+      background: #f8fafc;
+      line-height: 1.35;
+    }
+    .reason-part span { color: var(--muted); font-size: 11px; }
+    .reason-part strong { color: #253044; font-size: 12px; font-weight: 760; }
+    .reason-part.pos strong { color: var(--green); }
+    .reason-part.neg strong { color: var(--red); }
+    .reason-part.warn strong { color: var(--amber); }
+    .reason-part.bad strong { color: var(--red); }
+    .reason-part.quality { flex-basis: 100%; border-style: dashed; background: #fff7ed; }
     .list { padding: 10px 12px 12px; display: grid; gap: 8px; }
     .list-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
     .list-row span:last-child { color: var(--muted); text-align: right; }
@@ -611,6 +809,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? "-").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const clsFor = (value) => Number(value || 0) > 0 ? "good" : Number(value || 0) < 0 ? "bad" : "";
+    const reasonTooltip = "Read left to right: 24h price move, OI positioning change, funding, L/S crowding, weighted factor score, then the strongest normalized factor drivers. Green is positive, red is negative. Crowding and excluded notes are context flags, not automatic trade instructions.";
 
     function fmtNum(value, digits = 2) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
@@ -637,6 +836,26 @@ DASHBOARD_HTML = r"""<!doctype html>
     function panel(title, count, body) {
       return `<div class="panel-head"><h2>${esc(title)}</h2><span class="count">${esc(count)}</span></div>${body}`;
     }
+    function reasonHeader() {
+      return `<span class="reason-head">Reason <span class="help-tip" tabindex="0" aria-label="${esc(reasonTooltip)}" data-tooltip="${esc(reasonTooltip)}">?</span></span>`;
+    }
+    function fallbackReasonParts(reason) {
+      return String(reason || "").split(";").map((part) => part.trim()).filter(Boolean).map((part) => ({
+        label: "Note",
+        value: part,
+        tone: "neutral",
+        kind: "metric",
+      }));
+    }
+    function reasonView(row) {
+      const parts = Array.isArray(row.reason_parts) && row.reason_parts.length ? row.reason_parts : fallbackReasonParts(row.reason);
+      if (!parts.length) return "-";
+      return `<div class="reason-stack" title="${esc(row.reason || "")}">${parts.map((part) => `
+        <span class="reason-part ${esc(part.kind || "metric")} ${esc(part.tone || "neutral")}" title="${esc(part.help || "")}">
+          <span>${esc(part.label)}</span><strong>${esc(part.value)}</strong>
+        </span>
+      `).join("")}</div>`;
+    }
     function rowsTable(rows) {
       if (!rows || rows.length === 0) return `<div class="empty">No matches</div>`;
       const body = rows.map((row) => `
@@ -650,10 +869,10 @@ DASHBOARD_HTML = r"""<!doctype html>
           <td>${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</td>
           <td>${fmtUsd(row.quote_volume_usd)}</td>
           <td><span class="tag">${esc(row.data_source)}</span></td>
-          <td class="reason">${esc(row.reason)}</td>
+          <td class="reason">${reasonView(row)}</td>
         </tr>`).join("");
       return `<div class="table-wrap"><table>
-        <thead><tr><th>Symbol</th><th>Score</th><th>Q</th><th>24h</th><th>OI 24h</th><th>Funding</th><th>L/S</th><th>Volume</th><th>Source</th><th class="reason">Reason</th></tr></thead>
+        <thead><tr><th>Symbol</th><th>Score</th><th>Q</th><th>24h</th><th>OI 24h</th><th>Funding</th><th>L/S</th><th>Volume</th><th>Source</th><th class="reason">${reasonHeader()}</th></tr></thead>
         <tbody>${body}</tbody>
       </table></div>`;
     }
