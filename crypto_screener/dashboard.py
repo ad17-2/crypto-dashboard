@@ -678,21 +678,31 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
     h2 { margin: 0; font-size: 14px; }
     .count { color: var(--muted); font-size: 12px; }
-    .table-wrap { width: 100%; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; min-width: 700px; }
-    th, td { padding: 9px 10px; border-bottom: 1px solid #edf1f6; text-align: right; font-size: 12px; vertical-align: top; }
-    th { color: var(--muted); font-weight: 650; background: #fbfcfe; white-space: nowrap; }
-    td:first-child, th:first-child { text-align: left; }
-    td.row-cell { padding: 0; text-align: left; border-bottom: 1px solid #dfe6ef; }
-    .asset-row {
+    .market-list { width: 100%; overflow: hidden; }
+    .market-head, .asset-row {
       display: grid;
-      grid-template-columns: minmax(110px, 1.2fr) .7fr .45fr .9fr .9fr .95fr .55fr 1fr minmax(150px, 1fr);
+      grid-template-columns: minmax(68px, 1.15fr) minmax(0, .58fr) minmax(0, .38fr) minmax(0, .72fr) minmax(0, .78fr) minmax(0, .86fr) minmax(0, .48fr) minmax(0, .86fr) minmax(88px, 1fr);
       align-items: center;
-      gap: 10px;
+      column-gap: 9px;
+    }
+    .market-head {
+      padding: 9px 20px;
+      border-bottom: 1px solid #edf1f6;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      background: #fbfcfe;
+    }
+    .market-head div { min-width: 0; overflow-wrap: anywhere; text-align: right; }
+    .market-head div:first-child { text-align: left; }
+    .market-row { border-bottom: 1px solid #dfe6ef; }
+    .market-row:last-child { border-bottom: 0; }
+    .asset-row {
       padding: 16px 20px 12px;
     }
-    .asset-metric { text-align: right; font-size: 13px; }
+    .asset-metric { min-width: 0; overflow-wrap: anywhere; text-align: right; font-size: 13px; }
     .asset-metric.left { text-align: left; }
+    .asset-metric[data-label]::before { display: none; }
     .reason-cell { color: #3b4351; background: #fcfdff; border-top: 1px solid #edf1f6; padding: 10px 20px 14px; }
     .symbol { font-weight: 760; font-size: 13px; }
     .tag, .source-tag, .status-pill, .quality-flag-chip {
@@ -709,7 +719,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       color: var(--teal);
     }
     .source-stack { display: flex; justify-content: flex-end; gap: 4px; flex-wrap: wrap; }
-    .source-tag { background: #eef4ff; color: var(--blue); }
+    .source-tag { max-width: 100%; background: #eef4ff; color: var(--blue); }
     .source-tag:nth-child(2n) { background: #edf7f5; color: var(--teal); }
     .reason-head { display: inline-flex; align-items: center; gap: 6px; }
     .help-tip {
@@ -728,13 +738,10 @@ DASHBOARD_HTML = r"""<!doctype html>
       cursor: help;
       outline: none;
     }
-    .help-tip::after {
-      content: attr(data-tooltip);
-      position: absolute;
-      right: 0;
-      top: 24px;
-      z-index: 5;
-      width: min(360px, calc(100vw - 48px));
+    .tooltip-popover {
+      position: fixed;
+      z-index: 1000;
+      max-width: min(360px, calc(100vw - 32px));
       padding: 10px 11px;
       border: 1px solid #cbd5e1;
       border-radius: 8px;
@@ -743,25 +750,21 @@ DASHBOARD_HTML = r"""<!doctype html>
       font-size: 12px;
       font-weight: 500;
       line-height: 1.45;
-      white-space: normal;
       box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
-      opacity: 0;
       pointer-events: none;
-      transform: translateY(-3px);
-      transition: opacity 120ms ease, transform 120ms ease;
     }
-    .help-tip:hover::after, .help-tip:focus::after { opacity: 1; transform: translateY(0); }
     .reason-line {
       display: flex;
       gap: 12px;
       align-items: start;
       width: 100%;
     }
-    .reason-stack { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+    .reason-stack { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; max-width: 100%; }
     .reason-part {
       display: inline-flex;
       align-items: baseline;
       gap: 4px;
+      max-width: 100%;
       min-height: 23px;
       padding: 2px 7px;
       border: 1px solid #d9e2ec;
@@ -770,7 +773,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       line-height: 1.35;
     }
     .reason-part span { color: var(--muted); font-size: 11px; }
-    .reason-part strong { color: #253044; font-size: 12px; font-weight: 760; }
+    .reason-part strong { min-width: 0; overflow-wrap: anywhere; color: #253044; font-size: 12px; font-weight: 760; }
     .reason-part.pos strong { color: var(--green); }
     .reason-part.neg strong { color: var(--red); }
     .reason-part.warn strong { color: var(--amber); }
@@ -828,6 +831,20 @@ DASHBOARD_HTML = r"""<!doctype html>
       .metrics { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
       .grid { grid-template-columns: 1fr; }
     }
+    @media (max-width: 900px) {
+      .market-head { display: none; }
+      .asset-row { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+      .asset-metric { text-align: left; }
+      .asset-metric[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 2px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.2;
+      }
+      .source-stack { justify-content: flex-start; }
+    }
     @media (max-width: 680px) {
       .shell { width: min(100vw - 20px, 1480px); padding-top: 14px; }
       .topbar { flex-direction: column; align-items: stretch; }
@@ -835,9 +852,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       select, button { width: 100%; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .value { font-size: 19px; }
-      .asset-row { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px 14px 10px; }
-      .asset-metric { text-align: left; }
-      .source-stack { justify-content: flex-start; }
+      .asset-row { padding: 14px 14px 10px; }
       .reason-cell { padding: 10px 14px 14px; }
       .reason-line { flex-direction: column; gap: 7px; }
     }
@@ -907,6 +922,69 @@ DASHBOARD_HTML = r"""<!doctype html>
     function reasonHeader() {
       return `<span class="reason-head">Reason <span class="help-tip" tabindex="0" aria-label="${esc(reasonTooltip)}" data-tooltip="${esc(reasonTooltip)}">?</span></span>`;
     }
+    let tooltipEl = null;
+    function ensureTooltip() {
+      if (!tooltipEl) {
+        tooltipEl = document.createElement("div");
+        tooltipEl.className = "tooltip-popover";
+        tooltipEl.setAttribute("role", "tooltip");
+        tooltipEl.hidden = true;
+        document.body.appendChild(tooltipEl);
+      }
+      return tooltipEl;
+    }
+    function showTooltip(target) {
+      const text = target?.getAttribute("data-tooltip");
+      if (!text) return;
+      const tip = ensureTooltip();
+      tip.textContent = text;
+      tip.hidden = false;
+      tip.style.visibility = "hidden";
+      tip.style.left = "0px";
+      tip.style.top = "0px";
+      requestAnimationFrame(() => {
+        const margin = 12;
+        const targetRect = target.getBoundingClientRect();
+        const tipRect = tip.getBoundingClientRect();
+        const left = Math.min(
+          window.innerWidth - tipRect.width - margin,
+          Math.max(margin, targetRect.left + (targetRect.width / 2) - (tipRect.width / 2))
+        );
+        let top = targetRect.bottom + 8;
+        if (top + tipRect.height + margin > window.innerHeight) {
+          top = targetRect.top - tipRect.height - 8;
+        }
+        tip.style.left = `${Math.max(margin, left)}px`;
+        tip.style.top = `${Math.max(margin, top)}px`;
+        tip.style.visibility = "visible";
+      });
+    }
+    function hideTooltip() {
+      if (tooltipEl) {
+        tooltipEl.style.visibility = "hidden";
+        tooltipEl.hidden = true;
+      }
+    }
+    function tooltipTarget(event) {
+      return event.target instanceof Element ? event.target.closest(".help-tip") : null;
+    }
+    document.addEventListener("pointerover", (event) => {
+      const target = tooltipTarget(event);
+      if (target) showTooltip(target);
+    });
+    document.addEventListener("pointerout", (event) => {
+      const target = tooltipTarget(event);
+      if (target && !target.contains(event.relatedTarget)) hideTooltip();
+    });
+    document.addEventListener("focusin", (event) => {
+      const target = tooltipTarget(event);
+      if (target) showTooltip(target);
+    });
+    document.addEventListener("focusout", (event) => {
+      if (tooltipTarget(event)) hideTooltip();
+    });
+    document.addEventListener("scroll", hideTooltip, true);
+    window.addEventListener("resize", hideTooltip);
     function fallbackReasonParts(reason) {
       return String(reason || "").split(";").map((part) => part.trim()).filter(Boolean).map((part) => ({
         label: "Note",
@@ -932,31 +1010,31 @@ DASHBOARD_HTML = r"""<!doctype html>
     function rowsTable(rows) {
       if (!rows || rows.length === 0) return `<div class="empty">No matches</div>`;
       const body = rows.map((row) => `
-        <tr>
-          <td class="row-cell" colspan="9">
-            <div class="asset-row">
-              <div class="asset-metric left"><span class="symbol">${esc(row.symbol)}</span></div>
-              <div class="asset-metric">${fmtNum(row.score)}</div>
-              <div class="asset-metric">${esc(row.quality ?? 100)}</div>
-              <div class="asset-metric ${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</div>
-              <div class="asset-metric ${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</div>
-              <div class="asset-metric ${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</div>
-              <div class="asset-metric">${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</div>
-              <div class="asset-metric">${fmtUsd(row.quote_volume_usd)}</div>
-              <div class="asset-metric"><div class="source-stack">${sourceTags(row.data_source)}</div></div>
-            </div>
-            <div class="reason-cell">
+        <div class="market-row">
+          <div class="asset-row">
+            <div class="asset-metric left" data-label="Symbol"><span class="symbol">${esc(row.symbol)}</span></div>
+            <div class="asset-metric" data-label="Score">${fmtNum(row.score)}</div>
+            <div class="asset-metric" data-label="Q">${esc(row.quality ?? 100)}</div>
+            <div class="asset-metric ${clsFor(row.price_change_24h_pct)}" data-label="24h">${fmtPct(row.price_change_24h_pct)}</div>
+            <div class="asset-metric ${clsFor(row.oi_change_24h_pct)}" data-label="OI 24h">${fmtPct(row.oi_change_24h_pct)}</div>
+            <div class="asset-metric ${clsFor(row.funding_rate_pct)}" data-label="Funding">${fmtPct(row.funding_rate_pct, 4)}</div>
+            <div class="asset-metric" data-label="L/S">${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</div>
+            <div class="asset-metric" data-label="Volume">${fmtUsd(row.quote_volume_usd)}</div>
+            <div class="asset-metric" data-label="Source"><div class="source-stack">${sourceTags(row.data_source)}</div></div>
+          </div>
+          <div class="reason-cell">
             <div class="reason-line">
               ${reasonHeader()}
               ${reasonView(row)}
             </div>
-            </div>
-          </td>
-        </tr>`).join("");
-      return `<div class="table-wrap"><table>
-        <thead><tr><th>Symbol</th><th>Score</th><th>Q</th><th>24h</th><th>OI 24h</th><th>Funding</th><th>L/S</th><th>Volume</th><th>Source</th></tr></thead>
-        <tbody>${body}</tbody>
-      </table></div>`;
+          </div>
+        </div>`).join("");
+      return `<div class="market-list">
+        <div class="market-head">
+          <div>Symbol</div><div>Score</div><div>Q</div><div>24h</div><div>OI 24h</div><div>Funding</div><div>L/S</div><div>Volume</div><div>Source</div>
+        </div>
+        ${body}
+      </div>`;
     }
     function providerList(providers) {
       const entries = Object.entries(providers || {});
