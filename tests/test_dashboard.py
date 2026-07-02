@@ -1,9 +1,19 @@
 import copy
+import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from urllib.request import urlopen
 
-from crypto_screener.dashboard import DASHBOARD_HTML, build_dashboard_payload
+from crypto_screener.dashboard import (
+    DASHBOARD_STATIC_DIR,
+    DashboardHandler,
+    DashboardServer,
+    DashboardSettings,
+    RefreshRuntime,
+    build_dashboard_payload,
+)
 from crypto_screener.storage import connect, save_snapshot
 
 
@@ -89,34 +99,91 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(len(dashboard["watchlists"][1]["rows"][0]["history"]), 2)
         self.assertEqual(dashboard["runs"][0]["coinglass_status"], "-")
 
-    def test_dashboard_reason_has_help_tooltip(self):
-        self.assertIn("reasonTooltip", DASHBOARD_HTML)
-        self.assertIn("help-tip", DASHBOARD_HTML)
-        self.assertIn("tooltip-popover", DASHBOARD_HTML)
-        self.assertIn("reason_parts", DASHBOARD_HTML)
-        self.assertIn("watchTabs", DASHBOARD_HTML)
-        self.assertIn("watchTable", DASHBOARD_HTML)
-        self.assertIn("detailPanel", DASHBOARD_HTML)
-        self.assertIn("sparkline", DASHBOARD_HTML)
-        self.assertIn("filterValues", DASHBOARD_HTML)
-        self.assertIn("factorBars", DASHBOARD_HTML)
-        self.assertIn("module-panel", DASHBOARD_HTML)
-        self.assertIn('class="watch-row', DASHBOARD_HTML)
-        self.assertIn('class="watch-cell', DASHBOARD_HTML)
-        self.assertIn('class="detail-rail"', DASHBOARD_HTML)
-        self.assertIn("sourceTags(row.data_source)", DASHBOARD_HTML)
-        self.assertIn("tradingViewSymbol", DASHBOARD_HTML)
-        self.assertIn("BINANCE:${base}USDT.P", DASHBOARD_HTML)
-        self.assertIn("https://www.tradingview.com/chart/?symbol=", DASHBOARD_HTML)
-        self.assertIn("rel=\"noopener noreferrer\"", DASHBOARD_HTML)
-        self.assertIn("qualityFlagChip", DASHBOARD_HTML)
-        self.assertNotIn("table-wrap", DASHBOARD_HTML)
-        self.assertNotIn("<table>", DASHBOARD_HTML)
-        self.assertNotIn('class="row-cell"', DASHBOARD_HTML)
-        self.assertNotIn('colspan="9"', DASHBOARD_HTML)
-        self.assertNotIn("function rowsTable", DASHBOARD_HTML)
-        self.assertNotIn("<th class=\"reason\">", DASHBOARD_HTML)
-        self.assertNotIn('class="reason-row"', DASHBOARD_HTML)
+    def test_dashboard_static_assets_keep_watchlist_ui_contract(self):
+        index = (DASHBOARD_STATIC_DIR / "index.html").read_text()
+        css = (DASHBOARD_STATIC_DIR / "dashboard.css").read_text()
+        js = (DASHBOARD_STATIC_DIR / "dashboard.js").read_text()
+        combined = "\n".join([index, css, js])
+
+        self.assertIn('/assets/dashboard.css', index)
+        self.assertIn('/assets/dashboard.js', index)
+        self.assertNotIn("<style>", index)
+        self.assertIn("reasonTooltip", js)
+        self.assertIn("help-tip", css)
+        self.assertIn("tooltip-popover", css)
+        self.assertIn("reason_parts", js)
+        self.assertIn("watchTabs", index)
+        self.assertIn("watchTable", index)
+        self.assertIn("detailPanel", index)
+        self.assertIn("sparkline", js)
+        self.assertIn("filterValues", js)
+        self.assertIn("factorBars", js)
+        self.assertIn("module-panel", css)
+        self.assertIn('class="watch-row', js)
+        self.assertIn('class="watch-cell', js)
+        self.assertIn('class="detail-rail"', index)
+        self.assertIn("sourceTags(row.data_source)", js)
+        self.assertIn("tradingViewSymbol", js)
+        self.assertIn("BINANCE:${base}USDT.P", js)
+        self.assertIn("https://www.tradingview.com/chart/?symbol=", js)
+        self.assertIn("rel=\"noopener noreferrer\"", js)
+        self.assertIn("qualityFlagChip", js)
+        self.assertNotIn("table-wrap", combined)
+        self.assertNotIn("<table>", combined)
+        self.assertNotIn('class="row-cell"', combined)
+        self.assertNotIn('colspan="9"', combined)
+        self.assertNotIn("function rowsTable", combined)
+        self.assertNotIn("<th class=\"reason\">", combined)
+        self.assertNotIn('class="reason-row"', combined)
+
+    def test_dashboard_serves_index_assets_and_empty_api(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "missing.sqlite3"
+            settings = DashboardSettings(
+                config_path=Path("config/default.json"),
+                db_path=db_path,
+                report_dir=Path(tmpdir) / "reports",
+                host="127.0.0.1",
+                port=0,
+                limit=5,
+                auto_refresh_seconds=0,
+                refresh_token=None,
+            )
+            handler = type(
+                "TestDashboardHandler",
+                (DashboardHandler,),
+                {"settings": settings, "runtime": RefreshRuntime(settings)},
+            )
+            server = DashboardServer((settings.host, settings.port), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                status, content_type, body = self._get(server, "/")
+                self.assertEqual(status, 200)
+                self.assertEqual(content_type, "text/html; charset=utf-8")
+                self.assertIn('/assets/dashboard.css', body)
+                self.assertIn('/assets/dashboard.js', body)
+
+                status, content_type, body = self._get(server, "/assets/dashboard.css")
+                self.assertEqual(status, 200)
+                self.assertEqual(content_type, "text/css; charset=utf-8")
+                self.assertIn(".watch-row", body)
+
+                status, content_type, body = self._get(server, "/assets/dashboard.js")
+                self.assertEqual(status, 200)
+                self.assertEqual(content_type, "text/javascript; charset=utf-8")
+                self.assertIn("reasonTooltip", body)
+
+                status, content_type, body = self._get(server, "/api/dashboard")
+                self.assertEqual(status, 200)
+                self.assertEqual(content_type, "application/json; charset=utf-8")
+                payload = json.loads(body)
+                self.assertEqual(payload["status"], "empty")
+                self.assertEqual(payload["runs"], [])
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
 
     def test_existing_runs_table_gets_dashboard_columns(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -142,6 +209,11 @@ class DashboardTests(unittest.TestCase):
 
         self.assertIn("regime_json", columns)
         self.assertIn("factor_weights_json", columns)
+
+    def _get(self, server: DashboardServer, path: str) -> tuple[int, str, str]:
+        host, port = server.server_address
+        with urlopen(f"http://{host}:{port}{path}", timeout=5) as response:
+            return response.status, response.headers.get("Content-Type", ""), response.read().decode("utf-8")
 
 
 if __name__ == "__main__":

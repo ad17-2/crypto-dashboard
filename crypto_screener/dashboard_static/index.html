@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crypto Dashboard</title>
+  <link rel="stylesheet" href="/assets/dashboard.css">
+</head>
+<body>
+  <main class="shell">
+    <div class="topbar">
+      <div>
+        <h1>Crypto Dashboard</h1>
+        <div class="subline" id="generated">Loading latest run</div>
+      </div>
+      <div class="actions">
+        <select id="runSelect" aria-label="Run"></select>
+        <button id="reload" type="button">Reload</button>
+      </div>
+    </div>
+    <section class="metrics" id="metrics"></section>
+    <section class="dashboard-grid">
+      <section class="panel watch-panel" aria-label="Watchlist workbench">
+        <div class="panel-head">
+          <h2>Watchlist</h2>
+          <span class="count" id="watchCount">-</span>
+        </div>
+        <div class="watch-tabs" id="watchTabs"></div>
+        <div class="watch-controls">
+          <input class="filter-input" id="symbolFilter" type="search" placeholder="Filter symbol or setup" aria-label="Filter symbol or setup">
+          <select class="filter-select" id="qualityFilter" aria-label="Minimum quality">
+            <option value="0">Q 0+</option>
+            <option value="50">Q 50+</option>
+            <option value="75">Q 75+</option>
+            <option value="90">Q 90+</option>
+          </select>
+          <select class="filter-select" id="sourceFilter" aria-label="Source">
+            <option value="all">All sources</option>
+          </select>
+          <select class="filter-select" id="volumeFilter" aria-label="Minimum volume">
+            <option value="0">Any volume</option>
+            <option value="20000000">$20M+</option>
+            <option value="100000000">$100M+</option>
+            <option value="1000000000">$1B+</option>
+          </select>
+          <label class="filter-toggle"><input id="positiveOiFilter" type="checkbox"> OI &gt; 0</label>
+          <label class="filter-toggle"><input id="negativeFundingFilter" type="checkbox"> Funding &lt; 0</label>
+        </div>
+        <div class="watch-table" id="watchTable"></div>
+      </section>
+      <aside class="detail-rail">
+        <div class="panel" id="detailPanel"></div>
+        <div id="providerPanel"></div>
+        <div id="qualityPanel"></div>
+        <div id="sectorPanel"></div>
+        <div id="runsPanel"></div>
+      </aside>
+    </section>
+  </main>
+  <script src="/assets/dashboard.js" defer></script>
+</body>
+</html>

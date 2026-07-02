@@ -54,7 +54,9 @@ The dashboard is designed around this workflow:
 |   |-- scoring.py                   # Shared numeric helpers and scoring primitives
 |   |-- report.py                    # Markdown/JSON/CSV report writer
 |   |-- storage.py                   # SQLite schema, snapshots, labeled history records
-|   `-- dashboard.py                 # Stdlib HTTP dashboard and dashboard JSON API
+|   |-- dashboard.py                 # Stdlib HTTP dashboard server and runtime
+|   |-- dashboard_payload.py         # Dashboard JSON payload assembly
+|   `-- dashboard_static/            # Package-local HTML, CSS, and JavaScript assets
 |-- reports/.gitkeep                 # Report output directory placeholder
 |-- scripts/sync_sqlite_to_railway.sh # Upload local SQLite DB to Railway volume
 |-- tests/                           # Unit tests for scoring, quality, dashboard contracts
@@ -72,6 +74,12 @@ The screener and dashboard use the Python standard library only. There are no re
 - Optional API keys for CoinGlass and CoinGecko.
 
 No exchange account or trading API key is needed.
+
+## License And Security
+
+This project is released under the MIT license. See `LICENSE`.
+
+Do not publish API keys, `.env` files, SQLite databases, or generated reports that may contain private operating context. See `SECURITY.md` for reporting guidance.
 
 ## Quick Start
 
@@ -359,7 +367,7 @@ Open:
 http://127.0.0.1:8080/
 ```
 
-The dashboard is a stdlib HTTP server with embedded HTML/CSS/JS. It reads SQLite and does not require a frontend build step.
+The dashboard is a stdlib HTTP server with package-local HTML, CSS, and JavaScript assets. It reads SQLite and does not require a frontend build step.
 
 ### Dashboard UI
 
@@ -427,6 +435,8 @@ Side modules:
 
 ```text
 GET  /                              HTML dashboard
+GET  /assets/dashboard.css          Dashboard stylesheet
+GET  /assets/dashboard.js           Dashboard JavaScript
 GET  /health                        Health and database existence
 GET  /api/dashboard                 Latest dashboard payload
 GET  /api/dashboard?run_id=...      Specific run payload
@@ -484,7 +494,7 @@ CRYPTO_SCREENER_REPORT_DIR=/data/reports
 
 ### Local Backend, Railway Frontend Pattern
 
-Some cloud regions can receive HTTP 451 from Binance futures endpoints. If Railway cannot collect Binance data directly, run the screener locally through Codex Automation and sync SQLite to Railway:
+Some cloud regions can receive HTTP 451 from Binance futures endpoints. If Railway cannot collect Binance data directly, run the screener on a machine that can reach Binance and sync SQLite to Railway:
 
 ```bash
 python3 -m crypto_screener.cli --config config/default.json --out-dir reports
@@ -505,21 +515,6 @@ Environment knobs:
 | `CRYPTO_SCREENER_DB_PATH` | `/data/crypto_screener.sqlite3` | Remote Railway DB path |
 | `RAILWAY_SYNC_CHUNK_SIZE` | `50000` | Upload chunk size |
 
-## Codex Automation
-
-Recommended automation pattern:
-
-1. Run the screener locally.
-2. Read the generated Markdown report.
-3. Optionally sync SQLite to Railway.
-4. Return a concise market-bias and watchlist summary.
-
-Automation prompt shape:
-
-```text
-Use $crypto-screener to run the local crypto quant daily screener from /Users/adtzy/Personal/crypto-screener with config/default.json. Generate the report, read the latest Markdown output under reports, and return a concise market-bias, factor-regime, sector-rotation, long/short, and crowding summary with the report paths. Do not place trades. If Railway dashboard sync is needed, run scripts/sync_sqlite_to_railway.sh data/crypto_screener.sqlite3 after a successful run.
-```
-
 ## Testing And Validation
 
 Run the full test suite:
@@ -537,12 +532,7 @@ python3 -m py_compile crypto_screener/*.py
 Validate dashboard JavaScript syntax:
 
 ```bash
-python3 - <<'PY' | node --check
-from crypto_screener.dashboard import DASHBOARD_HTML
-start = DASHBOARD_HTML.index('<script>') + len('<script>')
-end = DASHBOARD_HTML.index('</script>', start)
-print(DASHBOARD_HTML[start:end])
-PY
+node --check crypto_screener/dashboard_static/dashboard.js
 ```
 
 Local dashboard smoke check:
@@ -550,6 +540,8 @@ Local dashboard smoke check:
 ```bash
 PORT=8097 HOST=127.0.0.1 python3 -m crypto_screener.dashboard
 curl -fsS http://127.0.0.1:8097/health
+curl -fsS http://127.0.0.1:8097/assets/dashboard.css
+curl -fsS http://127.0.0.1:8097/assets/dashboard.js
 curl -fsS http://127.0.0.1:8097/api/dashboard
 ```
 
