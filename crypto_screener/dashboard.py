@@ -679,13 +679,14 @@ DASHBOARD_HTML = r"""<!doctype html>
     h2 { margin: 0; font-size: 14px; }
     .count { color: var(--muted); font-size: 12px; }
     .table-wrap { width: 100%; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; min-width: 820px; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; }
     th, td { padding: 9px 10px; border-bottom: 1px solid #edf1f6; text-align: right; font-size: 12px; vertical-align: top; }
     th { color: var(--muted); font-weight: 650; background: #fbfcfe; white-space: nowrap; }
-    td:first-child, th:first-child, td.reason, th.reason { text-align: left; }
-    td.reason { color: #3b4351; min-width: 300px; max-width: 460px; }
+    td:first-child, th:first-child, td.reason-cell { text-align: left; }
+    tr.reason-row td { border-bottom: 1px solid #dfe6ef; background: #fcfdff; }
+    td.reason-cell { color: #3b4351; padding: 0 10px 12px; }
     .symbol { font-weight: 760; font-size: 13px; }
-    .tag {
+    .tag, .source-tag, .status-pill, .quality-flag-chip {
       display: inline-flex;
       align-items: center;
       height: 22px;
@@ -693,9 +694,14 @@ DASHBOARD_HTML = r"""<!doctype html>
       padding: 0 8px;
       font-size: 12px;
       font-weight: 700;
+    }
+    .tag {
       background: #edf7f5;
       color: var(--teal);
     }
+    .source-stack { display: flex; justify-content: flex-end; gap: 4px; flex-wrap: wrap; }
+    .source-tag { background: #eef4ff; color: var(--blue); }
+    .source-tag:nth-child(2n) { background: #edf7f5; color: var(--teal); }
     .reason-head { display: inline-flex; align-items: center; gap: 6px; }
     .help-tip {
       position: relative;
@@ -736,7 +742,14 @@ DASHBOARD_HTML = r"""<!doctype html>
       transition: opacity 120ms ease, transform 120ms ease;
     }
     .help-tip:hover::after, .help-tip:focus::after { opacity: 1; transform: translateY(0); }
-    .reason-stack { display: flex; flex-wrap: wrap; gap: 5px; max-width: 460px; }
+    .reason-line {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      width: 100%;
+    }
+    .reason-stack { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
     .reason-part {
       display: inline-flex;
       align-items: baseline;
@@ -755,11 +768,53 @@ DASHBOARD_HTML = r"""<!doctype html>
     .reason-part.warn strong { color: var(--amber); }
     .reason-part.bad strong { color: var(--red); }
     .reason-part.quality { flex-basis: 100%; border-style: dashed; background: #fff7ed; }
+    .provider-list { padding: 10px 12px 12px; display: grid; gap: 8px; }
+    .provider-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 30px;
+      font-size: 13px;
+    }
+    .provider-row strong { min-width: 0; overflow-wrap: anywhere; }
+    .status-pill { height: 24px; background: #ecfdf3; color: var(--green); }
+    .status-pill.warn { background: #fff7ed; color: var(--amber); }
+    .status-pill.bad { background: #fef3f2; color: var(--red); }
+    .provider-count { color: var(--muted); font-size: 12px; text-align: right; min-width: 38px; }
     .list { padding: 10px 12px 12px; display: grid; gap: 8px; }
     .list-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
     .list-row span:last-child { color: var(--muted); text-align: right; }
-    .quality-flags { padding: 10px 12px; display: grid; gap: 8px; }
-    .flag-row { font-size: 12px; color: #3b4351; line-height: 1.4; }
+    .quality-flags { padding: 10px 12px 12px; display: grid; gap: 10px; }
+    .quality-card {
+      display: grid;
+      gap: 7px;
+      padding: 9px;
+      border: 1px solid #f2d6c4;
+      border-radius: 8px;
+      background: #fffaf5;
+    }
+    .quality-card-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      font-size: 13px;
+    }
+    .quality-card-head span { color: var(--muted); font-size: 12px; text-align: right; }
+    .quality-flag-list { display: flex; flex-wrap: wrap; gap: 5px; }
+    .quality-flag-chip {
+      height: auto;
+      min-height: 24px;
+      border-radius: 6px;
+      background: #fff;
+      border: 1px solid #f0c9b2;
+      color: #7c2d12;
+      line-height: 1.25;
+      white-space: normal;
+    }
+    .quality-flag-chip.bad { border-color: #f3b6b0; color: var(--red); }
+    .quality-flag-chip.warn { border-color: #f2d08d; color: var(--amber); }
     .empty { padding: 28px 12px; color: var(--muted); text-align: center; }
     @media (max-width: 1100px) {
       .metrics { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
@@ -772,6 +827,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       select, button { width: 100%; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .value { font-size: 19px; }
+      .reason-line { grid-template-columns: 1fr; gap: 6px; }
     }
   </style>
 </head>
@@ -856,6 +912,11 @@ DASHBOARD_HTML = r"""<!doctype html>
         </span>
       `).join("")}</div>`;
     }
+    function sourceTags(source) {
+      return String(source || "-").split("+").map((part) => part.trim()).filter(Boolean).map((part) => (
+        `<span class="source-tag">${esc(part)}</span>`
+      )).join("");
+    }
     function rowsTable(rows) {
       if (!rows || rows.length === 0) return `<div class="empty">No matches</div>`;
       const body = rows.map((row) => `
@@ -868,19 +929,69 @@ DASHBOARD_HTML = r"""<!doctype html>
           <td class="${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</td>
           <td>${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</td>
           <td>${fmtUsd(row.quote_volume_usd)}</td>
-          <td><span class="tag">${esc(row.data_source)}</span></td>
-          <td class="reason">${reasonView(row)}</td>
+          <td><div class="source-stack">${sourceTags(row.data_source)}</div></td>
+        </tr>
+        <tr class="reason-row">
+          <td class="reason-cell" colspan="9">
+            <div class="reason-line">
+              ${reasonHeader()}
+              ${reasonView(row)}
+            </div>
+          </td>
         </tr>`).join("");
       return `<div class="table-wrap"><table>
-        <thead><tr><th>Symbol</th><th>Score</th><th>Q</th><th>24h</th><th>OI 24h</th><th>Funding</th><th>L/S</th><th>Volume</th><th>Source</th><th class="reason">${reasonHeader()}</th></tr></thead>
+        <thead><tr><th>Symbol</th><th>Score</th><th>Q</th><th>24h</th><th>OI 24h</th><th>Funding</th><th>L/S</th><th>Volume</th><th>Source</th></tr></thead>
         <tbody>${body}</tbody>
       </table></div>`;
     }
     function providerList(providers) {
       const entries = Object.entries(providers || {});
       if (entries.length === 0) return `<div class="empty">No providers</div>`;
-      return `<div class="list">${entries.map(([name, details]) => `
-        <div class="list-row"><strong>${esc(name)}</strong><span>${esc(details.status || "-")} ${details.rows === undefined ? "" : `/${details.rows}`}</span></div>
+      return `<div class="provider-list">${entries.map(([name, details]) => {
+        const providerStatus = String(details.status || "-");
+        const tone = providerStatus === "ok" ? "" : providerStatus === "skipped" || providerStatus === "disabled" ? "warn" : "bad";
+        return `
+        <div class="provider-row">
+          <strong>${esc(name)}</strong>
+          <span class="status-pill ${tone}">${esc(providerStatus)}</span>
+          <span class="provider-count">${details.rows === undefined ? "-" : esc(details.rows)}</span>
+        </div>`;
+      }).join("")}</div>`;
+    }
+    function qualityFlagChip(flag) {
+      const [rawLabel, rawValue = ""] = String(flag || "").split(":");
+      const labels = {
+        extreme_24h_price_change: "Price 24h",
+        extreme_24h_oi_change: "OI 24h",
+        extreme_24h_volume_change: "Volume 24h",
+        extreme_funding_rate: "Funding",
+        thin_coinglass_exchange_coverage: "Thin coverage",
+        price_deviates_from_binance: "Price vs Binance",
+        price_deviates_from_index: "Price vs Index",
+        stale_low_quote_volume: "Low volume",
+        invalid_price: "Invalid price",
+        invalid_open_interest: "Invalid OI",
+        weird_symbol: "Symbol",
+        weird_contract_symbol: "Contract",
+      };
+      const label = labels[rawLabel] || rawLabel.replace(/_/g, " ");
+      const tone = rawLabel.includes("extreme") || rawLabel.includes("invalid") || rawLabel.includes("deviates") ? "bad" : "warn";
+      return `<span class="quality-flag-chip ${tone}" title="${esc(flag)}">${esc(label)}${rawValue ? ` <strong>${esc(rawValue)}</strong>` : ""}</span>`;
+    }
+    function qualityFlagView(flags) {
+      return (flags || []).map(qualityFlagChip).join("");
+    }
+    function qualityBlock(quality) {
+      const flags = quality?.flagged_rows || [];
+      if (flags.length === 0) return `<div class="quality-flags"><div class="quality-card"><div class="quality-card-head"><strong>All clear</strong><span>sanity checks passed</span></div></div></div>`;
+      return `<div class="quality-flags">${flags.map((row) => `
+        <div class="quality-card">
+          <div class="quality-card-head">
+            <strong>${esc(row.symbol)}</strong>
+            <span>${fmtPct(row.price_change_24h_pct)} / OI ${fmtPct(row.oi_change_24h_pct)}</span>
+          </div>
+          <div class="quality-flag-list">${qualityFlagView(row.flags)}</div>
+        </div>
       `).join("")}</div>`;
     }
     function sectorList(context) {
@@ -891,13 +1002,6 @@ DASHBOARD_HTML = r"""<!doctype html>
         <div class="label">Leaders</div>${leaders.slice(0, 5).map(line).join("") || `<div class="empty">No leaders</div>`}
         <div class="label">Laggards</div>${laggards.slice(0, 5).map(line).join("") || `<div class="empty">No laggards</div>`}
       </div>`;
-    }
-    function qualityBlock(quality) {
-      const flags = quality?.flagged_rows || [];
-      if (flags.length === 0) return `<div class="quality-flags"><div class="flag-row">All displayed rows passed sanity checks.</div></div>`;
-      return `<div class="quality-flags">${flags.map((row) => `
-        <div class="flag-row"><strong>${esc(row.symbol)}</strong> ${fmtPct(row.price_change_24h_pct)} / OI ${fmtPct(row.oi_change_24h_pct)}<br>${esc((row.flags || []).join(", "))}</div>
-      `).join("")}</div>`;
     }
     function runsBlock(runs) {
       if (!runs || runs.length === 0) return `<div class="empty">No runs</div>`;

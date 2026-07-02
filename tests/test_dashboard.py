@@ -79,6 +79,11 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("reasonTooltip", DASHBOARD_HTML)
         self.assertIn("help-tip", DASHBOARD_HTML)
         self.assertIn("reason_parts", DASHBOARD_HTML)
+        self.assertIn('class="reason-row"', DASHBOARD_HTML)
+        self.assertIn('colspan="9"', DASHBOARD_HTML)
+        self.assertIn("sourceTags(row.data_source)", DASHBOARD_HTML)
+        self.assertIn("qualityFlagChip", DASHBOARD_HTML)
+        self.assertNotIn("<th class=\"reason\">", DASHBOARD_HTML)
 
     def test_existing_runs_table_gets_dashboard_columns(self):
         with tempfile.TemporaryDirectory() as tmpdir:
