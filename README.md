@@ -1,23 +1,106 @@
 # Crypto Quant Daily Screener
 
-Signal-only crypto market report for manual chart review. It does not place trades.
+Signal-only crypto futures screener and dashboard for manual chart review.
 
-Version 2 is a daily quant screening pipeline:
+The project screens liquid Binance USD-M perpetual markets, optionally enriches them with CoinGlass futures data, adds CoinGecko market context, stores every run in SQLite, and renders a daily operator dashboard for long, short, crowded-position fade, and squeeze-risk review.
 
-1. Collect a liquid USD-M perpetual universe from Binance public endpoints.
-2. Optionally enrich the top symbols with CoinGlass futures data when `COINGLASS_API_KEY` is set.
-3. Pull global market and category context from CoinGecko.
-4. Persist each run to SQLite so later runs can calculate factor IC against forward returns.
-5. Rank long, short, crowded-long, and squeeze-risk watchlists for manual chart confirmation.
+It does not place trades, connect to an exchange account, request broker keys, or automate execution. Treat every output as a shortlist for manual TradingView review.
 
-## Run
+## What This Is For
+
+Use this project at the start of the trading day to answer:
+
+- What is the current crypto market bias?
+- Which coins deserve manual chart review first?
+- Is a setup long, short, crowded-long fade, or short-squeeze risk?
+- Which factors drove the score?
+- Is the data clean enough to trust?
+- How has this symbol behaved across prior saved runs?
+
+The dashboard is designed around this workflow:
+
+1. Open the dashboard.
+2. Start with the `Chart Next` tab.
+3. Filter by quality, source, volume, OI, or funding.
+4. Select a row to inspect the detail rail.
+5. Open the symbol in TradingView and confirm structure manually.
+
+## Current Capabilities
+
+- Binance USD-M perpetual universe collection.
+- Binance public fallback data for price, volume, spread, funding, open interest, and depth.
+- Optional CoinGlass enrichment for futures pairs and cross-exchange coverage.
+- CoinGecko global market context and sector/category rotation.
+- Data-quality guards for suspicious provider rows and extreme outliers.
+- SQLite history for previous runs, factor IC learning, dashboard run selection, and sparklines.
+- Markdown, JSON, and CSV report artifacts.
+- Local and Railway-hosted dashboard.
+- Railway SQLite sync helper for local-run/cloud-dashboard workflow.
+
+## Project Layout
+
+```text
+.
+|-- config/default.json              # Main screening, provider, quality, factor, report config
+|-- crypto_screener/
+|   |-- cli.py                       # CLI entrypoint
+|   |-- pipeline.py                  # Collect -> score -> save -> report orchestration
+|   |-- collector.py                 # Provider collection and enrichment orchestration
+|   |-- binance.py                   # Binance USD-M public client
+|   |-- coinglass.py                 # CoinGlass API client
+|   |-- coingecko.py                 # CoinGecko API client
+|   |-- quality.py                   # Sanity filters and trust scoring
+|   |-- factors.py                   # Factor construction, IC weighting, regime inference
+|   |-- scoring.py                   # Shared numeric helpers and scoring primitives
+|   |-- report.py                    # Markdown/JSON/CSV report writer
+|   |-- storage.py                   # SQLite schema, snapshots, labeled history records
+|   `-- dashboard.py                 # Stdlib HTTP dashboard and dashboard JSON API
+|-- reports/.gitkeep                 # Report output directory placeholder
+|-- scripts/sync_sqlite_to_railway.sh # Upload local SQLite DB to Railway volume
+|-- tests/                           # Unit tests for scoring, quality, dashboard contracts
+|-- railway.json                     # Railway start and healthcheck config
+`-- requirements.txt                 # Intentional: stdlib-only runtime
+```
+
+The screener and dashboard use the Python standard library only. There are no required third-party Python packages.
+
+## Requirements
+
+- Python 3.10 or newer.
+- Internet access to market data providers.
+- Optional Railway CLI for deployment and database sync.
+- Optional API keys for CoinGlass and CoinGecko.
+
+No exchange account or trading API key is needed.
+
+## Quick Start
+
+From the repository root:
 
 ```bash
-cd /Users/adtzy/Personal/crypto-screener
 python3 -m crypto_screener.cli --config config/default.json --out-dir reports
 ```
 
-Fast smoke test:
+The command prints a compact run summary:
+
+```text
+run_id=20260702-121038-5eb8149d
+screened_symbols=80
+bias=risk-on
+factor_regime=mixed
+weight_mode=ic
+long_candidates=12
+short_candidates=12
+crowded_longs=4
+squeeze_risks=9
+markdown=reports/crypto-quant-daily-YYYYMMDD-HHMMSS.md
+json=reports/crypto-quant-daily-YYYYMMDD-HHMMSS.json
+csv=reports/crypto-quant-daily-YYYYMMDD-HHMMSS.csv
+```
+
+## Fast Smoke Run
+
+Use this when checking the pipeline quickly or avoiding paid-provider usage:
 
 ```bash
 python3 -m crypto_screener.cli \
@@ -26,16 +109,40 @@ python3 -m crypto_screener.cli \
   --top-symbols 25 \
   --depth-symbols 5 \
   --report-limit 8 \
-  --disable-coinglass
+  --disable-coinglass \
+  --no-save
+```
+
+`--no-save` prevents the smoke run from polluting SQLite history.
+
+## CLI Options
+
+```text
+--config PATH                 Config JSON path. Default: config/default.json
+--out-dir DIR                 Report output directory. Default: reports
+--top-symbols N               Override universe.top_symbols_by_volume
+--depth-symbols N             Override providers.binance.depth_symbols
+--report-limit N              Override report.limit
+--min-quote-volume-usd N      Override universe.min_quote_volume_usd
+--max-spread-bps N            Override universe.max_spread_bps
+--max-coinglass-symbols N     Override providers.coinglass.max_symbols
+--disable-coinglass           Skip CoinGlass even when COINGLASS_API_KEY is set
+--no-save                     Generate reports without saving this run to SQLite
 ```
 
 ## API Keys
 
-CoinGlass is optional but recommended:
+### CoinGlass
+
+CoinGlass is optional but recommended because it improves futures context and cross-exchange coverage.
 
 ```bash
 export COINGLASS_API_KEY="..."
 ```
+
+If unset, the screener still runs with Binance public futures data and CoinGecko context. Provider status will show CoinGlass as skipped.
+
+### CoinGecko
 
 CoinGecko is optional. The public endpoint often works without a key, but a Demo key can be supplied:
 
@@ -43,48 +150,135 @@ CoinGecko is optional. The public endpoint often works without a key, but a Demo
 export COINGECKO_API_KEY="..."
 ```
 
-SoSoValue is reserved in config for ETF-flow and sector-index data once official API access is available:
+### SoSoValue
+
+SoSoValue is currently reserved in config for future ETF-flow and sector-index integration. The code does not currently call it.
 
 ```bash
 export SOSOVALUE_API_KEY="..."
 ```
 
-## Output
+## Default Configuration
 
-Each run writes timestamped files into `reports/`:
+The main config is `config/default.json`.
 
-- Markdown daily report
-- JSON payload
-- CSV ranked rows
+Key defaults:
 
-Snapshots are stored in `data/crypto_screener.sqlite3`. The first runs use prior factor weights. After enough labeled snapshots exist, the report switches factor weights toward rolling Spearman IC against the configured forward-return horizon.
+| Area | Default |
+|---|---|
+| Universe | Binance USD-M `USDT` perpetual contracts |
+| Symbols | Top 80 by quote volume |
+| Minimum 24h quote volume | `$20M` |
+| Maximum spread | `15 bps` |
+| Binance depth fetch | Top 20 symbols |
+| Binance OI history | `1h`, 25 points |
+| CoinGlass max symbols | 30 |
+| CoinGlass request delay | 2.1 seconds |
+| CoinGecko categories | 12 |
+| Report rows per section | 12 |
+| Core symbols | BTC, ETH, SOL |
+| SQLite path | `data/crypto_screener.sqlite3` |
 
-## Dashboard
+Stablecoins and dollar-like base assets are excluded by default.
 
-Run the local SQLite-backed dashboard:
+## Data Providers
 
-```bash
-python3 -m crypto_screener.dashboard
+### Binance USD-M Futures
+
+Primary fallback provider. The screener uses public endpoints for:
+
+- Exchange metadata.
+- 24h ticker.
+- Book ticker.
+- Premium index and funding.
+- Current open interest.
+- Open-interest history.
+- Order book depth for the most liquid symbols.
+
+### CoinGlass
+
+Optional enrichment. Current usage focuses on futures pairs market data, aggregated across configured exchanges:
+
+- Binance
+- OKX
+- Bybit
+- Bitget
+- Gate
+- Hyperliquid
+
+If CoinGlass returns suspicious values, the data-quality layer can exclude the row from ranking.
+
+### CoinGecko
+
+Used for broader market context:
+
+- Total market cap.
+- Market cap 24h change.
+- BTC and ETH dominance.
+- Category leaders and laggards.
+
+## Pipeline Flow
+
+```text
+load config
+  -> collect Binance USD-M universe
+  -> collect CoinGecko global and category context
+  -> optionally enrich top symbols with CoinGlass
+  -> apply data-quality sanity checks
+  -> load prior SQLite history for factor IC labels
+  -> compute factors, weights, scores, and market regime
+  -> save snapshot to SQLite
+  -> write Markdown, JSON, and CSV reports
 ```
 
-Runtime environment:
+## Reports
 
-- `PORT`: web port, default `8080`
-- `CRYPTO_SCREENER_CONFIG`: config path, default `config/default.json`
-- `CRYPTO_SCREENER_DB_PATH`: SQLite path, default from config
-- `CRYPTO_SCREENER_REPORT_DIR`: report output path, default `reports`
-- `CRYPTO_DASHBOARD_AUTO_REFRESH_SECONDS`: when set above `0`, the web process refreshes the screener whenever the latest SQLite run is older than this many seconds
-- `CRYPTO_DASHBOARD_REFRESH_TOKEN`: optional token for protected manual refresh calls
+Every normal run writes timestamped artifacts to `reports/`:
 
-Railway uses `railway.json` to start `python -m crypto_screener.dashboard`. For persistent cloud history, mount a Railway volume and point `CRYPTO_SCREENER_DB_PATH` and `CRYPTO_SCREENER_REPORT_DIR` at that mount.
-
-Binance futures endpoints can reject Railway cloud regions with HTTP 451. In that case, keep the local Codex Automation as the data backend and sync the generated SQLite database to the Railway volume after each local run:
-
-```bash
-scripts/sync_sqlite_to_railway.sh data/crypto_screener.sqlite3
+```text
+reports/crypto-quant-daily-YYYYMMDD-HHMMSS.md
+reports/crypto-quant-daily-YYYYMMDD-HHMMSS.json
+reports/crypto-quant-daily-YYYYMMDD-HHMMSS.csv
 ```
 
-## Factors
+### Markdown Sections
+
+- Market Bias
+- Provider Status
+- Data Quality
+- Factor Regime
+- Dominance And Sector Rotation
+- BTC / ETH / SOL Core Read
+- Top Long Watchlist
+- Top Short Watchlist
+- Crowded Longs To Fade
+- Crowded Shorts / Squeeze Risk
+- Manual Chart Checklist
+
+### CSV Fields
+
+The CSV includes symbol, provider, price, 24h price change, quote volume, open interest, OI change, funding, long/short ratio, liquidation fields where available, spread, depth, factor score, long/short/crowding scores, trust state, quality score, and flags.
+
+## SQLite Storage
+
+Saved snapshots live in `data/crypto_screener.sqlite3` unless overridden.
+
+Tables:
+
+- `runs`: one row per screener run with config, provider status, market context, regime, and factor weights.
+- `market_rows`: one row per symbol per run with full row JSON, factors, scores, price, and generated time.
+
+SQLite is used for:
+
+- Dashboard run selection.
+- Recent-run history.
+- Per-symbol sparklines.
+- Factor IC learning against forward returns.
+- Persisting cloud dashboard state through Railway volume sync.
+
+## Factor Model
+
+The screener builds normalized cross-sectional factors from the trusted rows in each run.
 
 Directional factors:
 
@@ -96,26 +290,336 @@ Directional factors:
 - `liquidation_imbalance`
 - `btc_relative_strength`
 
-Quality factors:
+Quality/context factors:
 
 - `liquidity_30d`
 - `volume_expansion_24h`
 
-The report is intended to narrow the universe. Final entries still require manual chart structure, key level, invalidation, and BTC regime checks.
+### Weighting
+
+On early runs, the model uses configured prior weights from `config/default.json`.
+
+After enough labeled SQLite history exists, it can switch individual factor weights toward rolling Spearman IC against forward returns:
+
+- Forward-return horizon: `24h`
+- IC window: `30d`
+- Minimum observations: `30`
+- Minimum absolute IC: `0.02`
+- Maximum absolute raw IC weight: `0.35`
+
+The report and dashboard show whether the run used prior or IC-informed factor weighting.
+
+## Watchlists
+
+The model creates five base lists:
+
+- `Longs`: trusted rows with positive directional factor score, ranked by `long_score`.
+- `Shorts`: trusted rows with negative directional factor score, ranked by `short_score`.
+- `Squeeze Risk`: crowded short conditions ranked by `squeeze_risk_score`.
+- `Long Fades`: crowded long conditions ranked by `crowded_long_score`.
+- `Core`: BTC, ETH, SOL regime read.
+
+The dashboard also builds:
+
+- `Chart Next`: a deduplicated priority queue across all lists, sorted by chart priority.
+
+Chart priority combines the relevant score with data quality and trust state. It is not an entry signal; it is a workflow sort for manual review.
 
 ## Data Quality
 
-Rows with critical sanity flags are excluded from factor normalization and watchlist ranking. The report keeps them visible in the Data Quality section so suspicious provider data can be inspected manually.
+Rows with critical sanity flags are excluded from factor normalization and ranking.
 
 Default guards:
 
-- absolute 24h price change above 300%
-- absolute 24h OI change above 300%
-- absolute 24h volume change above 1000%
-- absolute funding rate above 2%
-- post-enrichment quote volume below $10M
-- missing or nonpositive price/volume fields
-- malformed symbol or contract/quote mismatch
-- CoinGlass price deviates from Binance fallback by more than 25%
-- CoinGlass price deviates from index price by more than 25%
-- CoinGlass enrichment has fewer than 2 configured exchange venues
+- Absolute 24h price change above `300%`.
+- Absolute 24h OI change above `300%`.
+- Absolute 24h volume change above `1000%`.
+- Absolute funding rate above `2%`.
+- Quote volume below `$10M` after enrichment.
+- Missing or nonpositive price/volume fields.
+- Malformed base symbol.
+- Contract/quote mismatch.
+- CoinGlass price deviates from Binance fallback by more than `25%`.
+- CoinGlass price deviates from index price by more than `25%`.
+- CoinGlass enrichment has fewer than 2 configured exchange venues.
+
+Flagged rows remain visible in the report and dashboard Data Quality panel so provider anomalies can be inspected manually.
+
+## Dashboard
+
+Run locally:
+
+```bash
+python3 -m crypto_screener.dashboard
+```
+
+Open:
+
+```text
+http://127.0.0.1:8080/
+```
+
+The dashboard is a stdlib HTTP server with embedded HTML/CSS/JS. It reads SQLite and does not require a frontend build step.
+
+### Dashboard UI
+
+The top strip shows:
+
+- Market bias.
+- Factor regime.
+- Market cap 24h.
+- BTC dominance.
+- Trusted/excluded row count.
+- Provider status.
+
+The main watchlist surface has tabs:
+
+- Chart Next
+- Longs
+- Shorts
+- Squeeze Risk
+- Long Fades
+- Core
+
+Filters:
+
+- Symbol/setup text search.
+- Minimum quality.
+- Provider source.
+- Minimum volume.
+- OI positive only.
+- Negative funding only.
+
+Selecting a row opens the detail rail with:
+
+- TradingView link using Binance USDT perpetual format, for example `BINANCE:BTCUSDT.P`.
+- Setup type.
+- Score and chart priority.
+- Data quality.
+- 24h and OI 24h.
+- Funding and long/short ratio.
+- Volume and open interest.
+- Reason chips.
+- Factor breakdown bars.
+- SQLite history sparklines.
+
+Side modules:
+
+- Providers.
+- Data Quality.
+- Sector Rotation.
+- Recent Runs.
+
+### Dashboard Environment
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `8080` | Dashboard web port |
+| `HOST` | `0.0.0.0` | Bind host |
+| `CRYPTO_SCREENER_CONFIG` | `config/default.json` | Config file path |
+| `CRYPTO_SCREENER_DB_PATH` | Config `storage_path` | SQLite database path |
+| `CRYPTO_SCREENER_REPORT_DIR` | `reports` | Report output path for refresh runs |
+| `CRYPTO_DASHBOARD_LIMIT` | Config `report.limit` | Rows per watchlist |
+| `CRYPTO_DASHBOARD_AUTO_REFRESH_SECONDS` | `0` | Auto-run screener when latest run is older than this many seconds |
+| `CRYPTO_DASHBOARD_REFRESH_TOKEN` | unset | Enables protected manual refresh API |
+
+### Dashboard API
+
+```text
+GET  /                              HTML dashboard
+GET  /health                        Health and database existence
+GET  /api/dashboard                 Latest dashboard payload
+GET  /api/dashboard?run_id=...      Specific run payload
+POST /api/refresh                   Queue screener refresh when token is configured
+```
+
+Manual refresh requires `CRYPTO_DASHBOARD_REFRESH_TOKEN` and either:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $CRYPTO_DASHBOARD_REFRESH_TOKEN" \
+  http://127.0.0.1:8080/api/refresh
+```
+
+or:
+
+```bash
+curl -X POST \
+  -H "X-Refresh-Token: $CRYPTO_DASHBOARD_REFRESH_TOKEN" \
+  http://127.0.0.1:8080/api/refresh
+```
+
+## Railway Deployment
+
+`railway.json` configures Railway to run:
+
+```bash
+python -m crypto_screener.dashboard
+```
+
+with `/health` as the healthcheck path.
+
+Typical deploy:
+
+```bash
+railway up --detach --message "Update crypto dashboard"
+```
+
+Useful checks:
+
+```bash
+railway deployment list --json
+railway logs
+curl -fsS https://<your-railway-domain>/health
+```
+
+### Railway Volume
+
+For persistent dashboard history, mount a Railway volume and use paths under `/data`:
+
+```bash
+CRYPTO_SCREENER_DB_PATH=/data/crypto_screener.sqlite3
+CRYPTO_SCREENER_REPORT_DIR=/data/reports
+```
+
+### Local Backend, Railway Frontend Pattern
+
+Some cloud regions can receive HTTP 451 from Binance futures endpoints. If Railway cannot collect Binance data directly, run the screener locally through Codex Automation and sync SQLite to Railway:
+
+```bash
+python3 -m crypto_screener.cli --config config/default.json --out-dir reports
+scripts/sync_sqlite_to_railway.sh data/crypto_screener.sqlite3
+```
+
+The sync script:
+
+1. Gzips and base64-encodes the local SQLite database.
+2. Uploads it in chunks over `railway ssh`.
+3. Runs `pragma quick_check` on the remote temp DB.
+4. Atomically moves it into `CRYPTO_SCREENER_DB_PATH`.
+
+Environment knobs:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CRYPTO_SCREENER_DB_PATH` | `/data/crypto_screener.sqlite3` | Remote Railway DB path |
+| `RAILWAY_SYNC_CHUNK_SIZE` | `50000` | Upload chunk size |
+
+## Codex Automation
+
+Recommended automation pattern:
+
+1. Run the screener locally.
+2. Read the generated Markdown report.
+3. Optionally sync SQLite to Railway.
+4. Return a concise market-bias and watchlist summary.
+
+Automation prompt shape:
+
+```text
+Use $crypto-screener to run the local crypto quant daily screener from /Users/adtzy/Personal/crypto-screener with config/default.json. Generate the report, read the latest Markdown output under reports, and return a concise market-bias, factor-regime, sector-rotation, long/short, and crowding summary with the report paths. Do not place trades. If Railway dashboard sync is needed, run scripts/sync_sqlite_to_railway.sh data/crypto_screener.sqlite3 after a successful run.
+```
+
+## Testing And Validation
+
+Run the full test suite:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+Compile all package modules:
+
+```bash
+python3 -m py_compile crypto_screener/*.py
+```
+
+Validate dashboard JavaScript syntax:
+
+```bash
+python3 - <<'PY' | node --check
+from crypto_screener.dashboard import DASHBOARD_HTML
+start = DASHBOARD_HTML.index('<script>') + len('<script>')
+end = DASHBOARD_HTML.index('</script>', start)
+print(DASHBOARD_HTML[start:end])
+PY
+```
+
+Local dashboard smoke check:
+
+```bash
+PORT=8097 HOST=127.0.0.1 python3 -m crypto_screener.dashboard
+curl -fsS http://127.0.0.1:8097/health
+curl -fsS http://127.0.0.1:8097/api/dashboard
+```
+
+## Troubleshooting
+
+### CoinGlass is skipped
+
+Expected when `COINGLASS_API_KEY` is unset. The screener will still complete with Binance and CoinGecko.
+
+### CoinGlass rate limits or slow runs
+
+Reduce the enriched symbol count or keep the default delay:
+
+```bash
+python3 -m crypto_screener.cli \
+  --config config/default.json \
+  --out-dir reports \
+  --max-coinglass-symbols 15
+```
+
+### Binance returns HTTP 451 on Railway
+
+Run data collection locally and sync SQLite to Railway. Keep Railway as the dashboard host.
+
+### Dashboard says no saved runs
+
+Check the database path:
+
+```bash
+ls -lh data/crypto_screener.sqlite3
+echo "$CRYPTO_SCREENER_DB_PATH"
+```
+
+Then run a normal save-enabled screener:
+
+```bash
+python3 -m crypto_screener.cli --config config/default.json --out-dir reports
+```
+
+### Dashboard refresh is forbidden
+
+`POST /api/refresh` only works when `CRYPTO_DASHBOARD_REFRESH_TOKEN` is set and the request sends the matching token.
+
+### Suspicious symbols appear in Data Quality
+
+This is expected. The quality layer keeps flagged rows visible for inspection, but excludes untrusted rows from factor normalization and ranking.
+
+### History sparklines say more runs are needed
+
+The selected symbol has fewer than two saved rows in SQLite for the chosen run. Let scheduled runs accumulate or select a newer run with more history.
+
+## Manual Chart Checklist
+
+Before acting on any watchlist row:
+
+- Confirm higher-timeframe trend.
+- Identify key support/resistance and invalidation.
+- Check whether BTC regime agrees with the alt setup.
+- Reject entries extended far from invalidation.
+- Treat funding and long/short crowding as context, not standalone entries.
+- Size down or skip when provider quality is degraded.
+
+## Safety Boundary
+
+This repository is for market analysis and manual review only. It does not and should not:
+
+- Place orders.
+- Hold exchange trading credentials.
+- Manage positions.
+- Decide trade sizing.
+- Replace manual chart confirmation.
+
+Keep the workflow signal-only unless this boundary is intentionally redesigned.
