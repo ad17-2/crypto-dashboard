@@ -32,6 +32,15 @@ FACTOR_LABELS = {
     "btc_relative_strength": "BTC Relative",
 }
 
+WATCHLIST_LABELS = {
+    "chart_next": "Chart Next",
+    "long": "Longs",
+    "short": "Shorts",
+    "squeeze_risks": "Squeeze Risk",
+    "crowded_longs": "Long Fades",
+    "core": "Core",
+}
+
 
 @dataclass(frozen=True)
 class DashboardSettings:
@@ -147,12 +156,17 @@ def build_dashboard_payload(db_path: Path, run_id: str | None = None, limit: int
                 (selected["run_id"],),
             ).fetchall()
         ]
+        history = _history_by_symbol(
+            conn,
+            [str(row.get("symbol")) for row in rows if row.get("symbol")],
+            selected["generated_at"],
+        )
 
     context = _loads_json(selected["context_json"], {})
     provider_status = _loads_json(selected["provider_status_json"], {})
     regime = _loads_json(selected["regime_json"], {})
     factor_weights = _loads_json(selected["factor_weights_json"], {})
-    sections = _sections(rows, limit)
+    sections = _sections(rows, limit, history)
 
     return {
         "status": "ok",
@@ -169,6 +183,7 @@ def build_dashboard_payload(db_path: Path, run_id: str | None = None, limit: int
         "factor_weights": factor_weights,
         "quality": _quality_summary(rows),
         "sections": sections,
+        "watchlists": _watchlists(sections, limit),
     }
 
 
@@ -250,34 +265,84 @@ def _selected_run(conn, run_id: str | None):
     ).fetchone()
 
 
-def _sections(rows: list[dict[str, Any]], limit: int) -> dict[str, list[dict[str, Any]]]:
+def _sections(
+    rows: list[dict[str, Any]],
+    limit: int,
+    history: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    history = history or {}
     core_symbols = ["BTC", "ETH", "SOL"]
     core_by_symbol = {row.get("symbol"): row for row in rows if row.get("symbol") in core_symbols}
     return {
-        "core": [_dashboard_row(core_by_symbol[symbol], "factor_score", "long") for symbol in core_symbols if symbol in core_by_symbol],
+        "core": [
+            _dashboard_row(core_by_symbol[symbol], "factor_score", "core", history.get(symbol, []))
+            for symbol in core_symbols
+            if symbol in core_by_symbol
+        ],
         "long": [
-            _dashboard_row(row, "long_score", "long")
+            _dashboard_row(row, "long_score", "long", history.get(str(row.get("symbol")), []))
             for row in top_by(rows, "long_score", limit, predicate=lambda item: (item.get("factor_score") or 0) > 0)
         ],
         "short": [
-            _dashboard_row(row, "short_score", "short")
+            _dashboard_row(row, "short_score", "short", history.get(str(row.get("symbol")), []))
             for row in top_by(rows, "short_score", limit, predicate=lambda item: (item.get("factor_score") or 0) < 0)
         ],
         "crowded_longs": [
-            _dashboard_row(row, "crowded_long_score", "fade-long")
+            _dashboard_row(row, "crowded_long_score", "fade-long", history.get(str(row.get("symbol")), []))
             for row in top_by(rows, "crowded_long_score", limit, predicate=_is_crowded_long)
         ],
         "squeeze_risks": [
-            _dashboard_row(row, "squeeze_risk_score", "squeeze-risk")
+            _dashboard_row(row, "squeeze_risk_score", "squeeze-risk", history.get(str(row.get("symbol")), []))
             for row in top_by(rows, "squeeze_risk_score", limit, predicate=_is_crowded_short)
         ],
     }
 
 
-def _dashboard_row(row: dict[str, Any], score_field: str, side: str) -> dict[str, Any]:
+def _watchlists(sections: dict[str, list[dict[str, Any]]], limit: int) -> list[dict[str, Any]]:
+    chart_next = _chart_next_rows(sections, limit)
+    ordered = [
+        ("chart_next", chart_next),
+        ("long", sections.get("long", [])),
+        ("short", sections.get("short", [])),
+        ("squeeze_risks", sections.get("squeeze_risks", [])),
+        ("crowded_longs", sections.get("crowded_longs", [])),
+        ("core", sections.get("core", [])),
+    ]
+    return [
+        {
+            "id": key,
+            "label": WATCHLIST_LABELS[key],
+            "rows": rows,
+        }
+        for key, rows in ordered
+    ]
+
+
+def _chart_next_rows(sections: dict[str, list[dict[str, Any]]], limit: int) -> list[dict[str, Any]]:
+    candidates: dict[str, dict[str, Any]] = {}
+    for key in ("long", "short", "squeeze_risks", "crowded_longs", "core"):
+        for row in sections.get(key, []):
+            symbol = str(row.get("symbol") or "")
+            current = candidates.get(symbol)
+            if current is None or (row.get("priority") or 0) > (current.get("priority") or 0):
+                candidates[symbol] = row
+    return sorted(candidates.values(), key=lambda item: item.get("priority") or 0, reverse=True)[: max(limit, 12)]
+
+
+def _dashboard_row(row: dict[str, Any], score_field: str, side: str, history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    scores = row.get("scores", {})
+    factors = row.get("factors", {})
+    score = row.get(score_field)
+    setup = _setup_label(row, side)
+    priority = _chart_priority(row, score_field, score)
     return {
         "symbol": row.get("symbol"),
-        "score": row.get(score_field),
+        "side": side,
+        "setup": setup,
+        "setup_tone": _setup_tone(side),
+        "score_field": score_field,
+        "score": score,
+        "priority": priority,
         "quality": row.get("data_quality_score", 100),
         "price_usd": row.get("price_usd"),
         "price_change_24h_pct": row.get("price_change_24h_pct"),
@@ -285,11 +350,133 @@ def _dashboard_row(row: dict[str, Any], score_field: str, side: str) -> dict[str
         "funding_rate_pct": row.get("funding_rate_pct"),
         "long_short_ratio": row.get("long_short_ratio"),
         "quote_volume_usd": row.get("quote_volume_usd"),
+        "open_interest_usd": row.get("open_interest_usd"),
         "data_source": row.get("data_source"),
         "is_trusted": row.get("is_trusted", True),
+        "data_quality_flags": row.get("data_quality_flags", []),
+        "scores": {
+            key: scores.get(key)
+            for key in ("factor_score", "long_score", "short_score", "crowded_long_score", "squeeze_risk_score")
+        },
+        "factor_parts": _factor_parts(factors),
+        "primary_driver": _primary_driver(factors),
+        "history": history or [],
         "reason": reason_for(row, side),
         "reason_parts": _reason_parts(row, side),
     }
+
+
+def _history_by_symbol(conn, symbols: list[str], generated_at: str, limit: int = 16) -> dict[str, list[dict[str, Any]]]:
+    unique_symbols = sorted({symbol for symbol in symbols if symbol})
+    if not unique_symbols:
+        return {}
+    placeholders = ",".join("?" for _ in unique_symbols)
+    rows = conn.execute(
+        f"""
+        SELECT symbol, generated_at, row_json
+        FROM market_rows
+        WHERE symbol IN ({placeholders})
+          AND generated_at <= ?
+        ORDER BY symbol ASC, generated_at DESC
+        """,
+        [*unique_symbols, generated_at],
+    ).fetchall()
+
+    by_symbol: dict[str, list[dict[str, Any]]] = {symbol: [] for symbol in unique_symbols}
+    for db_row in rows:
+        symbol = db_row["symbol"]
+        if len(by_symbol.get(symbol, [])) >= limit:
+            continue
+        item = _loads_json(db_row["row_json"], {})
+        scores = item.get("scores", {})
+        by_symbol.setdefault(symbol, []).append(
+            {
+                "generated_at": db_row["generated_at"],
+                "price_usd": item.get("price_usd"),
+                "price_change_24h_pct": item.get("price_change_24h_pct"),
+                "oi_change_24h_pct": item.get("oi_change_24h_pct"),
+                "funding_rate_pct": item.get("funding_rate_pct"),
+                "long_short_ratio": item.get("long_short_ratio"),
+                "quote_volume_usd": item.get("quote_volume_usd"),
+                "factor_score": scores.get("factor_score"),
+                "long_score": scores.get("long_score"),
+                "short_score": scores.get("short_score"),
+                "crowded_long_score": scores.get("crowded_long_score"),
+                "squeeze_risk_score": scores.get("squeeze_risk_score"),
+            }
+        )
+    return {symbol: list(reversed(points)) for symbol, points in by_symbol.items()}
+
+
+def _setup_label(row: dict[str, Any], side: str) -> str:
+    price_change = to_float(row.get("price_change_24h_pct")) or 0.0
+    oi_change = to_float(row.get("oi_change_24h_pct")) or 0.0
+    funding = to_float(row.get("funding_rate_pct")) or 0.0
+    ls_ratio = to_float(row.get("long_short_ratio"))
+    if side == "core":
+        return "Core Regime Read"
+    if side == "fade-long":
+        return "Crowded Long Fade"
+    if side == "squeeze-risk":
+        return "Short Squeeze Risk"
+    if side == "long":
+        if price_change > 0 and oi_change > 0:
+            return "OI Momentum Long"
+        if price_change < 0 and oi_change <= 0:
+            return "Reversal Long"
+        if funding < 0:
+            return "Funding Tailwind Long"
+        return "Long Candidate"
+    if side == "short":
+        if price_change < 0 and oi_change > 0:
+            return "OI Breakdown Short"
+        if price_change > 0 and oi_change <= 0:
+            return "Reversal Short"
+        if funding > 0.01 or (ls_ratio is not None and ls_ratio > 1.2):
+            return "Crowding Short"
+        return "Short Candidate"
+    return "Watchlist"
+
+
+def _setup_tone(side: str) -> str:
+    if side == "long":
+        return "pos"
+    if side == "short":
+        return "neg"
+    if side in {"fade-long", "squeeze-risk"}:
+        return "warn"
+    return "neutral"
+
+
+def _chart_priority(row: dict[str, Any], score_field: str, score: Any) -> float:
+    numeric_score = abs(to_float(score) or 0.0) * (100.0 if score_field == "factor_score" else 1.0)
+    quality = to_float(row.get("data_quality_score"))
+    quality_multiplier = max(0.0, min(1.0, (100.0 if quality is None else quality) / 100.0))
+    if row.get("is_trusted", True) is False:
+        quality_multiplier *= 0.35
+    return round(numeric_score * quality_multiplier, 2)
+
+
+def _factor_parts(factors: dict[str, Any]) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    for name in DIRECTIONAL_FACTORS:
+        value = to_float(factors.get(name))
+        if value is None:
+            continue
+        parts.append(
+            {
+                "name": name,
+                "label": FACTOR_LABELS.get(name, name.replace("_", " ").title()),
+                "value": round(value, 4),
+                "tone": _reason_tone(value),
+            }
+        )
+    return sorted(parts, key=lambda item: abs(item["value"]), reverse=True)
+
+
+def _primary_driver(factors: dict[str, Any]) -> dict[str, Any] | None:
+    parts = _factor_parts(factors)
+    return parts[0] if parts else None
 
 
 def _reason_parts(row: dict[str, Any], side: str) -> list[dict[str, Any]]:
@@ -660,12 +847,6 @@ DASHBOARD_HTML = r"""<!doctype html>
     .bad { color: var(--red); }
     .warn { color: var(--amber); }
     .accent { color: var(--teal); }
-    .grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr);
-      gap: 12px;
-      align-items: start;
-    }
     .panel { overflow: hidden; margin-bottom: 12px; }
     .panel-head {
       display: flex;
@@ -678,32 +859,6 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
     h2 { margin: 0; font-size: 14px; }
     .count { color: var(--muted); font-size: 12px; }
-    .market-list { width: 100%; overflow: hidden; }
-    .market-head, .asset-row {
-      display: grid;
-      grid-template-columns: minmax(68px, 1.15fr) minmax(0, .58fr) minmax(0, .38fr) minmax(0, .72fr) minmax(0, .78fr) minmax(0, .86fr) minmax(0, .48fr) minmax(0, .86fr) minmax(88px, 1fr);
-      align-items: center;
-      column-gap: 9px;
-    }
-    .market-head {
-      padding: 9px 20px;
-      border-bottom: 1px solid #edf1f6;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-      background: #fbfcfe;
-    }
-    .market-head div { min-width: 0; overflow-wrap: anywhere; text-align: right; }
-    .market-head div:first-child { text-align: left; }
-    .market-row { border-bottom: 1px solid #dfe6ef; }
-    .market-row:last-child { border-bottom: 0; }
-    .asset-row {
-      padding: 16px 20px 12px;
-    }
-    .asset-metric { min-width: 0; overflow-wrap: anywhere; text-align: right; font-size: 13px; }
-    .asset-metric.left { text-align: left; }
-    .asset-metric[data-label]::before { display: none; }
-    .reason-cell { color: #3b4351; background: #fcfdff; border-top: 1px solid #edf1f6; padding: 10px 20px 14px; }
     .symbol-link {
       color: var(--ink);
       font-size: 13px;
@@ -758,12 +913,6 @@ DASHBOARD_HTML = r"""<!doctype html>
       line-height: 1.45;
       box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
       pointer-events: none;
-    }
-    .reason-line {
-      display: flex;
-      gap: 12px;
-      align-items: start;
-      width: 100%;
     }
     .reason-stack { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; max-width: 100%; }
     .reason-part {
@@ -833,34 +982,277 @@ DASHBOARD_HTML = r"""<!doctype html>
     .quality-flag-chip.bad { border-color: #f3b6b0; color: var(--red); }
     .quality-flag-chip.warn { border-color: #f2d08d; color: var(--amber); }
     .empty { padding: 28px 12px; color: var(--muted); text-align: center; }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 390px;
+      gap: 12px;
+      align-items: start;
+    }
+    .watch-panel { overflow: visible; }
+    .watch-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+    .watch-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 10px 12px 0;
+    }
+    .tab-btn {
+      height: 30px;
+      border-radius: 999px;
+      padding: 0 10px;
+      border-color: #d8e0eb;
+      background: #f8fafc;
+      color: #344054;
+      font-size: 12px;
+    }
+    .tab-btn.active { background: #eaf1ff; border-color: #b8cdfc; color: var(--blue); }
+    .filter-input, .filter-select {
+      height: 32px;
+      min-width: 132px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 0 9px;
+      font: inherit;
+      font-size: 12px;
+    }
+    .filter-input { min-width: 180px; }
+    .filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 32px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: #344054;
+      background: #fff;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .filter-toggle input { margin: 0; }
+    .watch-table { width: 100%; overflow: hidden; }
+    .watch-head, .watch-row {
+      display: grid;
+      grid-template-columns: minmax(96px, 1.05fr) minmax(130px, 1.25fr) minmax(74px, .65fr) minmax(44px, .4fr) minmax(62px, .55fr) minmax(70px, .6fr) minmax(76px, .68fr) minmax(50px, .45fr) minmax(84px, .78fr) minmax(96px, .82fr) minmax(84px, .78fr);
+      gap: 8px;
+      align-items: center;
+    }
+    .watch-head {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 9px 12px;
+      border-bottom: 1px solid #edf1f6;
+      background: #fbfcfe;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-align: right;
+    }
+    .watch-head div:first-child, .watch-head div:nth-child(2) { text-align: left; }
+    .watch-row {
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid #edf1f6;
+      background: #fff;
+      padding: 10px 12px;
+      color: var(--ink);
+      font: inherit;
+      text-align: right;
+      cursor: pointer;
+    }
+    .watch-row:hover, .watch-row.active { background: #f8fafc; }
+    .watch-row.active { box-shadow: inset 3px 0 0 var(--blue); }
+    .watch-cell { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+    .watch-cell.left { text-align: left; }
+    .watch-symbol { display: grid; gap: 2px; }
+    .driver-line { color: var(--muted); font-size: 11px; }
+    .setup-badge {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid #d9e2ec;
+      background: #f8fafc;
+      color: #344054;
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1.25;
+      text-align: left;
+    }
+    .setup-badge.pos { border-color: #bbf7d0; background: #f0fdf4; color: var(--green); }
+    .setup-badge.neg { border-color: #fecaca; background: #fff1f2; color: var(--red); }
+    .setup-badge.warn { border-color: #fde68a; background: #fffbeb; color: var(--amber); }
+    .quality-badge {
+      display: inline-flex;
+      justify-content: center;
+      min-width: 36px;
+      border-radius: 999px;
+      padding: 3px 7px;
+      background: #ecfdf3;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .quality-badge.warn { background: #fff7ed; color: var(--amber); }
+    .quality-badge.bad { background: #fef3f2; color: var(--red); }
+    .sparkline {
+      display: block;
+      width: 92px;
+      height: 28px;
+      margin-left: auto;
+    }
+    .sparkline polyline { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .sparkline polyline.good { stroke: var(--green); }
+    .sparkline polyline.bad { stroke: var(--red); }
+    .sparkline polyline.neutral { stroke: #64748b; }
+    .sparkline .axis { stroke: #dbe1ea; stroke-width: 1; }
+    .detail-rail {
+      display: grid;
+      gap: 12px;
+      position: sticky;
+      top: 12px;
+    }
+    .detail-body { padding: 12px; display: grid; gap: 12px; }
+    .detail-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .detail-symbol { font-size: 20px; font-weight: 800; line-height: 1.1; }
+    .detail-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .detail-link {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      padding: 0 8px;
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 760;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .detail-metric {
+      min-width: 0;
+      border: 1px solid #edf1f6;
+      border-radius: 8px;
+      padding: 8px;
+      background: #fbfcfe;
+    }
+    .detail-metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+    .factor-list { display: grid; gap: 8px; }
+    .factor-row {
+      display: grid;
+      grid-template-columns: minmax(90px, 1fr) minmax(0, 1.2fr) 48px;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .factor-track {
+      height: 8px;
+      border-radius: 999px;
+      background: #eef2f7;
+      overflow: hidden;
+    }
+    .factor-fill { height: 100%; border-radius: 999px; background: #94a3b8; }
+    .factor-fill.pos { background: var(--green); }
+    .factor-fill.neg { background: var(--red); }
+    .module-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .module-panel summary {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      list-style: none;
+      font-size: 13px;
+      font-weight: 760;
+      background: #fbfcfe;
+    }
+    .module-panel summary::-webkit-details-marker { display: none; }
+    .module-panel summary span { color: var(--muted); font-size: 12px; font-weight: 650; }
+    .provider-dots { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+    .provider-dot {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 22px;
+      border-radius: 999px;
+      padding: 0 7px;
+      background: #ecfdf3;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 760;
+    }
+    .provider-dot.warn { background: #fff7ed; color: var(--amber); }
+    .provider-dot.bad { background: #fef3f2; color: var(--red); }
+    .history-block { display: grid; gap: 8px; }
+    .history-line {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
     @media (max-width: 1100px) {
       .metrics { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
-      .grid { grid-template-columns: 1fr; }
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .detail-rail { position: static; }
     }
     @media (max-width: 900px) {
-      .market-head { display: none; }
-      .asset-row { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
-      .asset-metric { text-align: left; }
-      .asset-metric[data-label]::before {
+      .source-stack { justify-content: flex-start; }
+      .watch-head { display: none; }
+      .watch-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        text-align: left;
+      }
+      .watch-cell::before {
         content: attr(data-label);
         display: block;
         margin-bottom: 2px;
         color: var(--muted);
         font-size: 11px;
-        line-height: 1.2;
       }
-      .source-stack { justify-content: flex-start; }
+      .sparkline { margin-left: 0; }
     }
     @media (max-width: 680px) {
       .shell { width: min(100vw - 20px, 1480px); padding-top: 14px; }
       .topbar { flex-direction: column; align-items: stretch; }
       .actions { justify-content: stretch; }
       select, button { width: 100%; }
+      .filter-input, .filter-select, .filter-toggle { width: 100%; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .value { font-size: 19px; }
-      .asset-row { padding: 14px 14px 10px; }
-      .reason-cell { padding: 10px 14px 14px; }
-      .reason-line { flex-direction: column; gap: 7px; }
+      .detail-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -877,24 +1269,46 @@ DASHBOARD_HTML = r"""<!doctype html>
       </div>
     </div>
     <section class="metrics" id="metrics"></section>
-    <section class="grid">
-      <div>
-        <div class="panel" id="corePanel"></div>
-        <div class="panel" id="longPanel"></div>
-        <div class="panel" id="shortPanel"></div>
-        <div class="panel" id="squeezePanel"></div>
-        <div class="panel" id="fadePanel"></div>
-      </div>
-      <aside>
-        <div class="panel" id="providerPanel"></div>
-        <div class="panel" id="qualityPanel"></div>
-        <div class="panel" id="sectorPanel"></div>
-        <div class="panel" id="runsPanel"></div>
+    <section class="dashboard-grid">
+      <section class="panel watch-panel" aria-label="Watchlist workbench">
+        <div class="panel-head">
+          <h2>Watchlist</h2>
+          <span class="count" id="watchCount">-</span>
+        </div>
+        <div class="watch-tabs" id="watchTabs"></div>
+        <div class="watch-controls">
+          <input class="filter-input" id="symbolFilter" type="search" placeholder="Filter symbol or setup" aria-label="Filter symbol or setup">
+          <select class="filter-select" id="qualityFilter" aria-label="Minimum quality">
+            <option value="0">Q 0+</option>
+            <option value="50">Q 50+</option>
+            <option value="75">Q 75+</option>
+            <option value="90">Q 90+</option>
+          </select>
+          <select class="filter-select" id="sourceFilter" aria-label="Source">
+            <option value="all">All sources</option>
+          </select>
+          <select class="filter-select" id="volumeFilter" aria-label="Minimum volume">
+            <option value="0">Any volume</option>
+            <option value="20000000">$20M+</option>
+            <option value="100000000">$100M+</option>
+            <option value="1000000000">$1B+</option>
+          </select>
+          <label class="filter-toggle"><input id="positiveOiFilter" type="checkbox"> OI &gt; 0</label>
+          <label class="filter-toggle"><input id="negativeFundingFilter" type="checkbox"> Funding &lt; 0</label>
+        </div>
+        <div class="watch-table" id="watchTable"></div>
+      </section>
+      <aside class="detail-rail">
+        <div class="panel" id="detailPanel"></div>
+        <div id="providerPanel"></div>
+        <div id="qualityPanel"></div>
+        <div id="sectorPanel"></div>
+        <div id="runsPanel"></div>
       </aside>
     </section>
   </main>
   <script>
-    const state = { selectedRun: null };
+    const state = { selectedRun: null, data: null, activeWatchlist: "chart_next", selectedKey: null };
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? "-").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const clsFor = (value) => Number(value || 0) > 0 ? "good" : Number(value || 0) < 0 ? "bad" : "";
@@ -925,8 +1339,8 @@ DASHBOARD_HTML = r"""<!doctype html>
     function panel(title, count, body) {
       return `<div class="panel-head"><h2>${esc(title)}</h2><span class="count">${esc(count)}</span></div>${body}`;
     }
-    function reasonHeader() {
-      return `<span class="reason-head">Reason <span class="help-tip" tabindex="0" aria-label="${esc(reasonTooltip)}" data-tooltip="${esc(reasonTooltip)}">?</span></span>`;
+    function reasonHelp() {
+      return `<span class="help-tip" tabindex="0" aria-label="${esc(reasonTooltip)}" data-tooltip="${esc(reasonTooltip)}">?</span>`;
     }
     let tooltipEl = null;
     function ensureTooltip() {
@@ -1026,34 +1440,213 @@ DASHBOARD_HTML = r"""<!doctype html>
       if (!tvSymbol) return esc(symbol || "-");
       return `<a class="symbol-link" href="${tradingViewUrl(symbol)}" target="_blank" rel="noopener noreferrer" title="Open ${esc(tvSymbol)} on TradingView">${esc(symbol)}</a>`;
     }
-    function rowsTable(rows) {
-      if (!rows || rows.length === 0) return `<div class="empty">No matches</div>`;
-      const body = rows.map((row) => `
-        <div class="market-row">
-          <div class="asset-row">
-            <div class="asset-metric left" data-label="Symbol">${symbolLink(row.symbol)}</div>
-            <div class="asset-metric" data-label="Score">${fmtNum(row.score)}</div>
-            <div class="asset-metric" data-label="Q">${esc(row.quality ?? 100)}</div>
-            <div class="asset-metric ${clsFor(row.price_change_24h_pct)}" data-label="24h">${fmtPct(row.price_change_24h_pct)}</div>
-            <div class="asset-metric ${clsFor(row.oi_change_24h_pct)}" data-label="OI 24h">${fmtPct(row.oi_change_24h_pct)}</div>
-            <div class="asset-metric ${clsFor(row.funding_rate_pct)}" data-label="Funding">${fmtPct(row.funding_rate_pct, 4)}</div>
-            <div class="asset-metric" data-label="L/S">${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</div>
-            <div class="asset-metric" data-label="Volume">${fmtUsd(row.quote_volume_usd)}</div>
-            <div class="asset-metric" data-label="Source"><div class="source-stack">${sourceTags(row.data_source)}</div></div>
-          </div>
-          <div class="reason-cell">
-            <div class="reason-line">
-              ${reasonHeader()}
-              ${reasonView(row)}
-            </div>
-          </div>
-        </div>`).join("");
-      return `<div class="market-list">
-        <div class="market-head">
-          <div>Symbol</div><div>Score</div><div>Q</div><div>24h</div><div>OI 24h</div><div>Funding</div><div>L/S</div><div>Volume</div><div>Source</div>
-        </div>
-        ${body}
+    function rowKey(row) {
+      return `${row.symbol || "-"}:${row.side || "-"}:${row.score_field || "-"}`;
+    }
+    function numeric(value) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    }
+    function qualityTone(value) {
+      const q = numeric(value);
+      if (q === null || q < 75) return "bad";
+      if (q < 90) return "warn";
+      return "";
+    }
+    function setupBadge(row) {
+      return `<span class="setup-badge ${esc(row.setup_tone || "neutral")}">${esc(row.setup || "Watchlist")}</span>`;
+    }
+    function scoreText(row) {
+      return `<strong>${fmtNum(row.score)}</strong><div class="driver-line">P ${fmtNum(row.priority)}</div>`;
+    }
+    function sourceParts(source) {
+      return String(source || "-").split("+").map((part) => part.trim()).filter(Boolean);
+    }
+    function watchlistsFrom(data) {
+      if (Array.isArray(data.watchlists) && data.watchlists.length) return data.watchlists;
+      return [
+        { id: "long", label: "Longs", rows: data.sections?.long || [] },
+        { id: "short", label: "Shorts", rows: data.sections?.short || [] },
+        { id: "squeeze_risks", label: "Squeeze Risk", rows: data.sections?.squeeze_risks || [] },
+        { id: "crowded_longs", label: "Long Fades", rows: data.sections?.crowded_longs || [] },
+        { id: "core", label: "Core", rows: data.sections?.core || [] },
+      ];
+    }
+    function activeWatchlist(data) {
+      const lists = watchlistsFrom(data);
+      return lists.find((list) => list.id === state.activeWatchlist) || lists[0] || { id: "-", label: "Watchlist", rows: [] };
+    }
+    function filterValues() {
+      return {
+        query: ($("symbolFilter")?.value || "").trim().toLowerCase(),
+        quality: Number($("qualityFilter")?.value || 0),
+        source: $("sourceFilter")?.value || "all",
+        volume: Number($("volumeFilter")?.value || 0),
+        positiveOi: Boolean($("positiveOiFilter")?.checked),
+        negativeFunding: Boolean($("negativeFundingFilter")?.checked),
+      };
+    }
+    function rowMatches(row, filters) {
+      if ((Number(row.quality || 0)) < filters.quality) return false;
+      if ((Number(row.quote_volume_usd || 0)) < filters.volume) return false;
+      if (filters.positiveOi && !(Number(row.oi_change_24h_pct || 0) > 0)) return false;
+      if (filters.negativeFunding && !(Number(row.funding_rate_pct || 0) < 0)) return false;
+      if (filters.source !== "all" && !sourceParts(row.data_source).map((part) => part.toLowerCase()).includes(filters.source)) return false;
+      if (filters.query) {
+        const haystack = [
+          row.symbol,
+          row.setup,
+          row.primary_driver?.label,
+          row.reason,
+          row.data_source,
+        ].join(" ").toLowerCase();
+        if (!haystack.includes(filters.query)) return false;
+      }
+      return true;
+    }
+    function filteredRows(rows) {
+      const filters = filterValues();
+      return (rows || []).filter((row) => rowMatches(row, filters));
+    }
+    function updateSourceOptions(data) {
+      const select = $("sourceFilter");
+      if (!select) return;
+      const current = select.value || "all";
+      const sources = new Set();
+      watchlistsFrom(data).forEach((list) => list.rows.forEach((row) => {
+        sourceParts(row.data_source).forEach((source) => sources.add(source.toLowerCase()));
+      }));
+      select.innerHTML = `<option value="all">All sources</option>${Array.from(sources).sort().map((source) => (
+        `<option value="${esc(source)}">${esc(source)}</option>`
+      )).join("")}`;
+      select.value = sources.has(current) ? current : "all";
+    }
+    function providerDots(providers) {
+      const entries = Object.entries(providers || {});
+      if (!entries.length) return "-";
+      return `<div class="provider-dots">${entries.map(([name, details]) => {
+        const status = String(details.status || "-");
+        const tone = status === "ok" ? "" : status === "skipped" || status === "disabled" ? "warn" : "bad";
+        return `<span class="provider-dot ${tone}" title="${esc(status)}${details.rows === undefined ? "" : ` / ${esc(details.rows)} rows`}">${esc(name)}</span>`;
+      }).join("")}</div>`;
+    }
+    function metricCard(label, body, klass = "") {
+      return `<article class="metric"><div class="label">${esc(label)}</div><div class="value ${klass}">${body}</div></article>`;
+    }
+    function renderTabs(data) {
+      const lists = watchlistsFrom(data);
+      if (!lists.some((list) => list.id === state.activeWatchlist)) {
+        state.activeWatchlist = lists[0]?.id || "chart_next";
+      }
+      $("watchTabs").innerHTML = lists.map((list) => {
+        const active = list.id === state.activeWatchlist ? " active" : "";
+        return `<button class="tab-btn${active}" type="button" data-tab="${esc(list.id)}">${esc(list.label)} <span>${esc(list.rows.length)}</span></button>`;
+      }).join("");
+    }
+    function sparkline(points, key) {
+      const values = (points || []).map((point) => numeric(point[key])).filter((value) => value !== null);
+      if (values.length < 2) return `<span class="driver-line">Need history</span>`;
+      const width = 92;
+      const height = 28;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const span = max - min || 1;
+      const coords = values.map((value, index) => {
+        const x = values.length === 1 ? width : (index / (values.length - 1)) * width;
+        const y = height - ((value - min) / span) * (height - 4) - 2;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(" ");
+      const tone = values[values.length - 1] > values[0] ? "good" : values[values.length - 1] < values[0] ? "bad" : "neutral";
+      return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" aria-hidden="true"><line class="axis" x1="0" y1="${height - 2}" x2="${width}" y2="${height - 2}"></line><polyline class="${tone}" points="${coords}"></polyline></svg>`;
+    }
+    function renderWatchTable(data) {
+      const list = activeWatchlist(data);
+      const rows = filteredRows(list.rows);
+      const selectedStillVisible = rows.some((row) => rowKey(row) === state.selectedKey);
+      if (!selectedStillVisible) state.selectedKey = rows[0] ? rowKey(rows[0]) : null;
+      $("watchCount").textContent = `${rows.length} / ${list.rows.length}`;
+      if (!rows.length) {
+        $("watchTable").innerHTML = `<div class="empty">No rows match the current filters</div>`;
+        renderDetail(null);
+        return;
+      }
+      $("watchTable").innerHTML = `<div class="watch-head">
+        <div>Symbol</div><div>Setup</div><div>Score</div><div>Q</div><div>24h</div><div>OI 24h</div><div>Funding</div><div>L/S</div><div>Volume</div><div>Trend</div><div>Source</div>
+      </div>${rows.map((row) => {
+        const key = rowKey(row);
+        const active = key === state.selectedKey ? " active" : "";
+        return `<div class="watch-row${active}" role="button" tabindex="0" data-key="${esc(key)}">
+          <div class="watch-cell left watch-symbol" data-label="Symbol">${symbolLink(row.symbol)}<span class="driver-line">${esc(row.primary_driver?.label || row.side || "-")}</span></div>
+          <div class="watch-cell left" data-label="Setup">${setupBadge(row)}</div>
+          <div class="watch-cell" data-label="Score">${scoreText(row)}</div>
+          <div class="watch-cell" data-label="Q"><span class="quality-badge ${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</span></div>
+          <div class="watch-cell ${clsFor(row.price_change_24h_pct)}" data-label="24h">${fmtPct(row.price_change_24h_pct)}</div>
+          <div class="watch-cell ${clsFor(row.oi_change_24h_pct)}" data-label="OI 24h">${fmtPct(row.oi_change_24h_pct)}</div>
+          <div class="watch-cell ${clsFor(row.funding_rate_pct)}" data-label="Funding">${fmtPct(row.funding_rate_pct, 4)}</div>
+          <div class="watch-cell" data-label="L/S">${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</div>
+          <div class="watch-cell" data-label="Volume">${fmtUsd(row.quote_volume_usd)}</div>
+          <div class="watch-cell" data-label="Trend">${sparkline(row.history, row.score_field || "factor_score")}</div>
+          <div class="watch-cell" data-label="Source"><div class="source-stack">${sourceTags(row.data_source)}</div></div>
+        </div>`;
+      }).join("")}`;
+      renderDetail(rows.find((row) => rowKey(row) === state.selectedKey) || rows[0]);
+    }
+    function factorBars(row) {
+      const parts = row?.factor_parts || [];
+      if (!parts.length) return `<div class="empty">No factor data</div>`;
+      const maxAbs = Math.max(...parts.map((part) => Math.abs(Number(part.value || 0))), 1);
+      return `<div class="factor-list">${parts.map((part) => {
+        const width = Math.round((Math.abs(Number(part.value || 0)) / maxAbs) * 100);
+        return `<div class="factor-row">
+          <span>${esc(part.label)}</span>
+          <span class="factor-track"><span class="factor-fill ${esc(part.tone || "neutral")}" style="width:${width}%"></span></span>
+          <strong class="${part.value > 0 ? "good" : part.value < 0 ? "bad" : ""}">${fmtNum(part.value, 2)}</strong>
+        </div>`;
+      }).join("")}</div>`;
+    }
+    function historyBlock(row) {
+      if (!row || !Array.isArray(row.history) || row.history.length < 2) {
+        return `<div class="driver-line">More saved runs needed for multi-point trend lines.</div>`;
+      }
+      return `<div class="history-block">
+        <div class="history-line"><span>Score</span>${sparkline(row.history, row.score_field || "factor_score")}</div>
+        <div class="history-line"><span>OI 24h</span>${sparkline(row.history, "oi_change_24h_pct")}</div>
+        <div class="history-line"><span>Funding</span>${sparkline(row.history, "funding_rate_pct")}</div>
       </div>`;
+    }
+    function renderDetail(row) {
+      if (!row) {
+        $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="empty">Select a watchlist row</div>`);
+        return;
+      }
+      const flags = row.data_quality_flags || [];
+      $("detailPanel").innerHTML = panel("Selected Coin", esc(row.setup || ""), `<div class="detail-body">
+        <div class="detail-title">
+          <div>
+            <div class="detail-symbol">${symbolLink(row.symbol)}</div>
+            <div class="driver-line">${esc(row.primary_driver?.label || "No dominant driver")} / ${esc(row.side || "-")}</div>
+          </div>
+          <div class="detail-actions">
+            <a class="detail-link" href="${tradingViewUrl(row.symbol)}" target="_blank" rel="noopener noreferrer">TradingView</a>
+          </div>
+        </div>
+        <div>${setupBadge(row)}</div>
+        <div class="detail-grid">
+          <div class="detail-metric"><span class="label">Score / Priority</span><strong>${fmtNum(row.score)} / ${fmtNum(row.priority)}</strong></div>
+          <div class="detail-metric"><span class="label">Quality</span><strong class="${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</strong></div>
+          <div class="detail-metric"><span class="label">24h / OI</span><strong><span class="${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</span> / <span class="${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</span></strong></div>
+          <div class="detail-metric"><span class="label">Funding / L/S</span><strong><span class="${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</span> / ${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</strong></div>
+          <div class="detail-metric"><span class="label">Volume</span><strong>${fmtUsd(row.quote_volume_usd)}</strong></div>
+          <div class="detail-metric"><span class="label">Open Interest</span><strong>${fmtUsd(row.open_interest_usd)}</strong></div>
+        </div>
+        <div class="label">Reason ${reasonHelp()}</div>
+        ${reasonView(row)}
+        <div class="label">Factor Breakdown</div>
+        ${factorBars(row)}
+        <div class="label">History</div>
+        ${historyBlock(row)}
+        ${flags.length ? `<div class="quality-flag-list">${qualityFlagView(flags)}</div>` : ""}
+      </div>`);
     }
     function providerList(providers) {
       const entries = Object.entries(providers || {});
@@ -1105,6 +1698,37 @@ DASHBOARD_HTML = r"""<!doctype html>
         </div>
       `).join("")}</div>`;
     }
+    function modulePanel(title, subtitle, body, open = false) {
+      return `<details class="module-panel" ${open ? "open" : ""}>
+        <summary><strong>${esc(title)}</strong><span>${esc(subtitle || "")}</span></summary>
+        ${body}
+      </details>`;
+    }
+    function providerHasIssue(providers) {
+      return Object.values(providers || {}).some((details) => {
+        const status = String(details.status || "-");
+        return status !== "ok";
+      });
+    }
+    function renderSideModules(data) {
+      const providerIssue = providerHasIssue(data.provider_status);
+      const providerEntries = Object.keys(data.provider_status || {}).length;
+      $("providerPanel").innerHTML = modulePanel(
+        "Providers",
+        providerIssue ? "needs attention" : `${providerEntries} ok`,
+        providerList(data.provider_status),
+        providerIssue
+      );
+      const excluded = data.quality?.excluded_count || 0;
+      $("qualityPanel").innerHTML = modulePanel(
+        "Data Quality",
+        `${excluded} excluded`,
+        qualityBlock(data.quality),
+        excluded > 0
+      );
+      $("sectorPanel").innerHTML = modulePanel("Sector Rotation", "leaders / laggards", sectorList(data.market_context || {}), true);
+      $("runsPanel").innerHTML = modulePanel("Recent Runs", `${(data.runs || []).length} loaded`, runsBlock(data.runs), false);
+    }
     function sectorList(context) {
       const leaders = context?.categories?.leaders || [];
       const laggards = context?.categories?.laggards || [];
@@ -1129,11 +1753,17 @@ DASHBOARD_HTML = r"""<!doctype html>
       if (data.status !== "ok") {
         $("generated").textContent = "No saved screener runs";
         $("metrics").innerHTML = metric("Database", data.database || "-");
-        ["corePanel","longPanel","shortPanel","squeezePanel","fadePanel","providerPanel","qualityPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = panel(id, "", `<div class="empty">No data</div>`));
+        $("watchTabs").innerHTML = "";
+        $("watchCount").textContent = "-";
+        $("watchTable").innerHTML = `<div class="empty">No data</div>`;
+        $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="empty">No data</div>`);
+        ["providerPanel","qualityPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = modulePanel(id, "", `<div class="empty">No data</div>`));
         return;
       }
       state.selectedRun = data.run.run_id;
+      state.data = data;
       runOptions(data.runs, data.run.run_id);
+      updateSourceOptions(data);
       const c = data.market_context || {};
       const r = data.regime || {};
       $("generated").textContent = `${data.run.generated_at} / ${data.run.row_count} symbols`;
@@ -1142,21 +1772,49 @@ DASHBOARD_HTML = r"""<!doctype html>
         metric("Factor Regime", r.label || "unknown", "small"),
         metric("Market Cap 24h", fmtPct(c.market_cap_change_24h_pct), clsFor(c.market_cap_change_24h_pct)),
         metric("BTC Dominance", fmtPct(c.btc_dominance_pct, 2).replace("+", "")),
-        metric("Trusted", data.quality.trusted_count),
-        metric("Excluded", data.quality.excluded_count, data.quality.excluded_count ? "warn" : "good"),
+        metric("Trusted / Excluded", `${data.quality.trusted_count} / ${data.quality.excluded_count}`, data.quality.excluded_count ? "warn" : "good"),
+        metricCard("Providers", providerDots(data.provider_status), "small"),
       ].join("");
-      $("corePanel").innerHTML = panel("BTC / ETH / SOL", `${data.sections.core.length} rows`, rowsTable(data.sections.core));
-      $("longPanel").innerHTML = panel("Top Long Watchlist", `${data.sections.long.length} rows`, rowsTable(data.sections.long));
-      $("shortPanel").innerHTML = panel("Top Short Watchlist", `${data.sections.short.length} rows`, rowsTable(data.sections.short));
-      $("squeezePanel").innerHTML = panel("Crowded Shorts / Squeeze Risk", `${data.sections.squeeze_risks.length} rows`, rowsTable(data.sections.squeeze_risks));
-      $("fadePanel").innerHTML = panel("Crowded Longs To Fade", `${data.sections.crowded_longs.length} rows`, rowsTable(data.sections.crowded_longs));
-      $("providerPanel").innerHTML = panel("Providers", "", providerList(data.provider_status));
-      $("qualityPanel").innerHTML = panel("Data Quality", `${data.quality.excluded_count} excluded`, qualityBlock(data.quality));
-      $("sectorPanel").innerHTML = panel("Sector Rotation", "", sectorList(c));
-      $("runsPanel").innerHTML = panel("Recent Runs", `${data.runs.length} loaded`, runsBlock(data.runs));
+      renderTabs(data);
+      renderWatchTable(data);
+      renderSideModules(data);
     }
     $("reload").addEventListener("click", () => load(state.selectedRun));
-    $("runSelect").addEventListener("change", (event) => load(event.target.value));
+    $("runSelect").addEventListener("change", (event) => {
+      state.selectedKey = null;
+      load(event.target.value);
+    });
+    $("watchTabs").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-tab]");
+      if (!button || !state.data) return;
+      state.activeWatchlist = button.dataset.tab;
+      state.selectedKey = null;
+      renderTabs(state.data);
+      renderWatchTable(state.data);
+    });
+    $("watchTable").addEventListener("click", (event) => {
+      if (event.target.closest("a")) return;
+      const row = event.target.closest("[data-key]");
+      if (!row || !state.data) return;
+      state.selectedKey = row.dataset.key;
+      renderWatchTable(state.data);
+    });
+    $("watchTable").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const row = event.target.closest("[data-key]");
+      if (!row || !state.data) return;
+      event.preventDefault();
+      state.selectedKey = row.dataset.key;
+      renderWatchTable(state.data);
+    });
+    ["symbolFilter", "qualityFilter", "sourceFilter", "volumeFilter", "positiveOiFilter", "negativeFundingFilter"].forEach((id) => {
+      $(id).addEventListener("input", () => {
+        if (state.data) renderWatchTable(state.data);
+      });
+      $(id).addEventListener("change", () => {
+        if (state.data) renderWatchTable(state.data);
+      });
+    });
     load().catch((error) => {
       $("generated").textContent = "Dashboard error";
       $("metrics").innerHTML = metric("Error", error.message || String(error), "bad");

@@ -1,3 +1,4 @@
+import copy
 import tempfile
 import unittest
 from pathlib import Path
@@ -64,6 +65,13 @@ class DashboardTests(unittest.TestCase):
             }
 
             save_snapshot(payload, config)
+            next_payload = copy.deepcopy(payload)
+            next_payload["run_id"] = "run-2"
+            next_payload["generated_at"] = "2026-07-02T12:00:00+07:00"
+            next_payload["rows"][0]["price_usd"] = 105
+            next_payload["rows"][0]["long_score"] = 35
+            next_payload["rows"][0]["scores"]["long_score"] = 35
+            save_snapshot(next_payload, config)
             dashboard = build_dashboard_payload(db_path, limit=5)
 
         self.assertEqual(dashboard["status"], "ok")
@@ -73,6 +81,12 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(dashboard["sections"]["long"][0]["symbol"], "BTC")
         self.assertTrue(dashboard["sections"]["long"][0]["reason_parts"])
         self.assertEqual(dashboard["sections"]["long"][0]["reason_parts"][0]["label"], "24h")
+        self.assertEqual(dashboard["watchlists"][0]["id"], "chart_next")
+        self.assertEqual(dashboard["watchlists"][1]["id"], "long")
+        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["setup"], "OI Momentum Long")
+        self.assertGreater(dashboard["watchlists"][1]["rows"][0]["priority"], 0)
+        self.assertTrue(dashboard["watchlists"][1]["rows"][0]["factor_parts"])
+        self.assertEqual(len(dashboard["watchlists"][1]["rows"][0]["history"]), 2)
         self.assertEqual(dashboard["runs"][0]["coinglass_status"], "-")
 
     def test_dashboard_reason_has_help_tooltip(self):
@@ -80,10 +94,16 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("help-tip", DASHBOARD_HTML)
         self.assertIn("tooltip-popover", DASHBOARD_HTML)
         self.assertIn("reason_parts", DASHBOARD_HTML)
-        self.assertIn('class="market-list"', DASHBOARD_HTML)
-        self.assertIn('class="market-row"', DASHBOARD_HTML)
-        self.assertIn('class="asset-row"', DASHBOARD_HTML)
-        self.assertIn('class="reason-cell"', DASHBOARD_HTML)
+        self.assertIn("watchTabs", DASHBOARD_HTML)
+        self.assertIn("watchTable", DASHBOARD_HTML)
+        self.assertIn("detailPanel", DASHBOARD_HTML)
+        self.assertIn("sparkline", DASHBOARD_HTML)
+        self.assertIn("filterValues", DASHBOARD_HTML)
+        self.assertIn("factorBars", DASHBOARD_HTML)
+        self.assertIn("module-panel", DASHBOARD_HTML)
+        self.assertIn('class="watch-row', DASHBOARD_HTML)
+        self.assertIn('class="watch-cell', DASHBOARD_HTML)
+        self.assertIn('class="detail-rail"', DASHBOARD_HTML)
         self.assertIn("sourceTags(row.data_source)", DASHBOARD_HTML)
         self.assertIn("tradingViewSymbol", DASHBOARD_HTML)
         self.assertIn("BINANCE:${base}USDT.P", DASHBOARD_HTML)
@@ -94,6 +114,7 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("<table>", DASHBOARD_HTML)
         self.assertNotIn('class="row-cell"', DASHBOARD_HTML)
         self.assertNotIn('colspan="9"', DASHBOARD_HTML)
+        self.assertNotIn("function rowsTable", DASHBOARD_HTML)
         self.assertNotIn("<th class=\"reason\">", DASHBOARD_HTML)
         self.assertNotIn('class="reason-row"', DASHBOARD_HTML)
 
