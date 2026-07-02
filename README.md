@@ -78,6 +78,12 @@ Runtime environment:
 
 Railway uses `railway.json` to start `python -m crypto_screener.dashboard`. For persistent cloud history, mount a Railway volume and point `CRYPTO_SCREENER_DB_PATH` and `CRYPTO_SCREENER_REPORT_DIR` at that mount.
 
+Binance futures endpoints can reject Railway cloud regions with HTTP 451. In that case, keep the local Codex Automation as the data backend and sync the generated SQLite database to the Railway volume after each local run:
+
+```bash
+scripts/sync_sqlite_to_railway.sh data/crypto_screener.sqlite3
+```
+
 ## Factors
 
 Directional factors:
