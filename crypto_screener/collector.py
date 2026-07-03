@@ -10,6 +10,7 @@ from .coinglass import CoinGlassClient
 from .providers import ProviderError
 from .quality import apply_data_quality
 from .scoring import funding_annualized_pct, to_float
+from .technicals import technical_snapshot
 
 
 def collect_market(config: dict[str, Any]) -> dict[str, Any]:
@@ -76,6 +77,7 @@ def collect_coinglass_futures(config: dict[str, Any], status: dict[str, Any] | N
 
     rows.sort(key=lambda row: row.get("quote_volume_usd") or 0.0, reverse=True)
     rows = rows[:top_symbols]
+    _append_coinglass_technicals(rows, client, provider_cfg, status)
 
     if status is not None:
         status["coinglass"] = {
@@ -87,6 +89,53 @@ def collect_coinglass_futures(config: dict[str, Any], status: dict[str, Any] | N
             "note": "CoinGlass futures pairs-markets primary data",
         }
     return rows
+
+
+def _append_coinglass_technicals(
+    rows: list[dict[str, Any]],
+    client: CoinGlassClient,
+    provider_cfg: dict[str, Any],
+    status: dict[str, Any] | None,
+) -> None:
+    technical_cfg = provider_cfg.get("technical_indicators", {})
+    if not technical_cfg.get("enabled", True):
+        if status is not None:
+            status["technicals"] = {"status": "disabled"}
+        return
+
+    interval = str(technical_cfg.get("interval", "4h"))
+    limit = int(technical_cfg.get("limit", 220))
+    max_symbols = int(technical_cfg.get("max_symbols", 40))
+    request_delay = float(technical_cfg.get("request_delay_seconds", provider_cfg.get("request_delay_seconds", 2.1)))
+    enriched = 0
+    errors: list[str] = []
+
+    for row in rows[:max_symbols]:
+        exchange = str(row.get("primary_exchange") or "")
+        contract_symbol = str(row.get("contract_symbol") or "")
+        if not exchange or not contract_symbol:
+            continue
+        try:
+            candles = client.price_history(exchange, contract_symbol, interval, limit)
+            snapshot = technical_snapshot(candles, interval)
+            if snapshot:
+                row.update(snapshot)
+                enriched += 1
+        except ProviderError as exc:
+            errors.append(f"{row.get('symbol', contract_symbol)}: {exc}")
+        finally:
+            if request_delay > 0:
+                time.sleep(request_delay)
+
+    if status is not None:
+        status["technicals"] = {
+            "status": "ok" if enriched else "error",
+            "rows": enriched,
+            "candidate_symbols": min(max_symbols, len(rows)),
+            "interval": interval,
+            "errors": errors[:5],
+            "note": "CoinGlass futures price OHLC technical indicators",
+        }
 
 
 def collect_coingecko_context(config: dict[str, Any], status: dict[str, Any]) -> dict[str, Any]:

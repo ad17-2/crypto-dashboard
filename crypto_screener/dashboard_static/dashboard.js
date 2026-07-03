@@ -2,7 +2,7 @@
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? "-").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const clsFor = (value) => Number(value || 0) > 0 ? "good" : Number(value || 0) < 0 ? "bad" : "";
-    const reasonTooltip = "Read left to right: 24h price move, OI positioning change, funding, L/S crowding, weighted factor score, then the strongest normalized factor drivers. Green is positive, red is negative. Crowding and excluded notes are context flags, not automatic trade instructions.";
+    const reasonTooltip = "Read left to right: 24h price move, OI positioning change, funding, L/S crowding, weighted factor score, confidence, 4h technical context, then the strongest normalized factor drivers. Green is positive, red is negative. Crowding and excluded notes are context flags, not automatic trade instructions.";
 
     function fmtNum(value, digits = 2) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
@@ -158,7 +158,8 @@
       return `<span class="setup-badge ${esc(row.setup_tone || "neutral")}">${esc(row.setup || "Watchlist")}</span>`;
     }
     function scoreText(row) {
-      return `<strong>${fmtNum(row.score)}</strong><div class="driver-line">P ${fmtNum(row.priority)}</div>`;
+      const confidence = row.confidence_score == null ? "" : ` / C ${fmtNum(row.confidence_score, 0)}`;
+      return `<strong>${fmtNum(row.score)}</strong><div class="driver-line">P ${fmtNum(row.priority)}${confidence}</div>`;
     }
     function sourceParts(source) {
       return String(source || "-").split("+").map((part) => part.trim()).filter(Boolean);
@@ -197,6 +198,7 @@
         const haystack = [
           row.symbol,
           row.setup,
+          row.technical_setup,
           row.primary_driver?.label,
           row.reason,
           row.data_source,
@@ -313,6 +315,21 @@
         <div class="history-line"><span>Score</span>${sparkline(row.history, row.score_field || "factor_score")}</div>
         <div class="history-line"><span>OI 24h</span>${sparkline(row.history, "oi_change_24h_pct")}</div>
         <div class="history-line"><span>Funding</span>${sparkline(row.history, "funding_rate_pct")}</div>
+        <div class="history-line"><span>RSI</span>${sparkline(row.history, "rsi_14")}</div>
+      </div>`;
+    }
+    function technicalBlock(row) {
+      const state = row?.technical_state || {};
+      if (!Object.keys(state).length && !row?.technical_setup) {
+        return `<div class="driver-line">No CoinGlass OHLC technical snapshot for this row.</div>`;
+      }
+      return `<div class="detail-grid tech-grid">
+        <div class="detail-metric"><span class="label">4h Setup</span><strong>${esc(row.technical_setup || "-")}</strong></div>
+        <div class="detail-metric"><span class="label">RSI / MACD</span><strong>${fmtNum(state.rsi_14, 1)} / <span class="${clsFor(state.macd_histogram_pct)}">${fmtPct(state.macd_histogram_pct, 3)}</span></strong></div>
+        <div class="detail-metric"><span class="label">ATR / BB Width</span><strong>${fmtPct(state.atr_14_pct, 2)} / ${fmtPct(state.bb_width_pct, 2).replace("+", "")}</strong></div>
+        <div class="detail-metric"><span class="label">BB Pos / EMA20 Dist</span><strong>${fmtNum(state.bb_position, 2)} / <span class="${clsFor(state.distance_ema20_pct)}">${fmtPct(state.distance_ema20_pct, 2)}</span></strong></div>
+        <div class="detail-metric"><span class="label">Trend / Momentum</span><strong><span class="${clsFor(state.technical_trend_score)}">${fmtNum(state.technical_trend_score, 2)}</span> / <span class="${clsFor(state.technical_momentum_score)}">${fmtNum(state.technical_momentum_score, 2)}</span></strong></div>
+        <div class="detail-metric"><span class="label">Candles</span><strong>${esc(state.technical_candle_count ?? "-")} ${esc(state.technical_interval || "")}</strong></div>
       </div>`;
     }
     function renderDetail(row) {
@@ -334,12 +351,15 @@
         <div>${setupBadge(row)}</div>
         <div class="detail-grid">
           <div class="detail-metric"><span class="label">Score / Priority</span><strong>${fmtNum(row.score)} / ${fmtNum(row.priority)}</strong></div>
+          <div class="detail-metric"><span class="label">Confidence</span><strong>${row.confidence_score == null ? "-" : fmtNum(row.confidence_score, 0)}</strong></div>
           <div class="detail-metric"><span class="label">Quality</span><strong class="${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</strong></div>
           <div class="detail-metric"><span class="label">24h / OI</span><strong><span class="${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</span> / <span class="${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</span></strong></div>
           <div class="detail-metric"><span class="label">Funding / L/S</span><strong><span class="${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</span> / ${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</strong></div>
           <div class="detail-metric"><span class="label">Volume</span><strong>${fmtUsd(row.quote_volume_usd)}</strong></div>
           <div class="detail-metric"><span class="label">Open Interest</span><strong>${fmtUsd(row.open_interest_usd)}</strong></div>
         </div>
+        <div class="label">Technical Context</div>
+        ${technicalBlock(row)}
         <div class="label">Reason ${reasonHelp()}</div>
         ${reasonView(row)}
         <div class="label">Factor Breakdown</div>

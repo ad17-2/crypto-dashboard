@@ -27,6 +27,17 @@ REPORT_FIELDS = [
     "depth_0_5pct_usd",
     "factor_score",
     "liquidity_quality",
+    "confidence_score",
+    "technical_setup",
+    "technical_interval",
+    "rsi_14",
+    "macd_histogram_pct",
+    "atr_14_pct",
+    "bb_position",
+    "bb_width_pct",
+    "distance_ema20_pct",
+    "technical_trend_score",
+    "technical_momentum_score",
     "long_score",
     "short_score",
     "crowded_long_score",
@@ -227,16 +238,18 @@ def _candidate_table(rows: list[dict[str, Any]], score_field: str, side: str) ->
         return "_No matches._"
 
     lines = [
-        "| Symbol | Score | Quality | 24h | OI 24h | Funding | L/S | Volume | Source | Reason |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "| Symbol | Score | Conf | Quality | Tech | 24h | OI 24h | Funding | L/S | Volume | Source | Reason |",
+        "|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in rows:
         score = row.get(score_field)
         lines.append(
-            "| {symbol} | {score:.2f} | {quality} | {price} | {oi} | {funding} | {ls} | {volume} | {source} | {reason} |".format(
+            "| {symbol} | {score:.2f} | {confidence} | {quality} | {tech} | {price} | {oi} | {funding} | {ls} | {volume} | {source} | {reason} |".format(
                 symbol=row.get("symbol", "-"),
                 score=score or 0.0,
+                confidence="-" if row.get("confidence_score") is None else f"{float(row['confidence_score']):.0f}",
                 quality=row.get("data_quality_score", 100),
+                tech=str(row.get("technical_setup") or "-").replace("|", "/"),
                 price=format_pct(row.get("price_change_24h_pct")),
                 oi=format_pct(row.get("oi_change_24h_pct")),
                 funding=format_pct(row.get("funding_rate_pct"), digits=4),

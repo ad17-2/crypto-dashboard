@@ -55,8 +55,16 @@ class DashboardTests(unittest.TestCase):
                         "short_score": 0,
                         "crowded_long_score": 0,
                         "squeeze_risk_score": 0,
-                        "scores": {"factor_score": 0.2, "long_score": 30},
-                        "factors": {"momentum_24h": 1.0},
+                        "confidence_score": 72,
+                        "technical_setup": "Trend Continuation",
+                        "technical_interval": "4h",
+                        "technical_candle_count": 220,
+                        "rsi_14": 61,
+                        "atr_14_pct": 2.1,
+                        "technical_trend_score": 0.8,
+                        "technical_momentum_score": 0.5,
+                        "scores": {"factor_score": 0.2, "long_score": 30, "confidence_score": 72},
+                        "factors": {"momentum_24h": 1.0, "technical_trend_4h": 0.8},
                     },
                     {
                         "symbol": "ODD",
@@ -99,10 +107,13 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(dashboard["sections"]["long"][0]["reason_parts"][0]["label"], "24h")
         self.assertEqual(dashboard["watchlists"][0]["id"], "chart_next")
         self.assertEqual(dashboard["watchlists"][1]["id"], "long")
-        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["setup"], "OI Momentum Long")
+        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["setup"], "Trend Continuation Long")
         self.assertGreater(dashboard["watchlists"][1]["rows"][0]["priority"], 0)
+        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["confidence_score"], 72)
+        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["technical_state"]["rsi_14"], 61)
         self.assertTrue(dashboard["watchlists"][1]["rows"][0]["factor_parts"])
         self.assertEqual(len(dashboard["watchlists"][1]["rows"][0]["history"]), 2)
+        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["history"][0]["confidence_score"], 72)
         self.assertEqual(dashboard["runs"][0]["coinglass_status"], "ok")
 
     def test_prune_old_runs_keeps_only_latest_snapshot(self):
@@ -124,11 +135,14 @@ class DashboardTests(unittest.TestCase):
 
             result = prune_old_runs(db_path, keep=1)
             dashboard = build_dashboard_payload(db_path, limit=5)
+            with connect(db_path) as conn:
+                factor_history_count = conn.execute("SELECT COUNT(*) AS count FROM factor_history").fetchone()["count"]
 
         self.assertEqual(result["kept_runs"], 1)
         self.assertEqual(result["deleted_runs"], 1)
         self.assertEqual(dashboard["run"]["run_id"], "run-2")
         self.assertEqual([run["run_id"] for run in dashboard["runs"]], ["run-2"])
+        self.assertEqual(factor_history_count, 2)
 
     def test_daily_refresh_due_after_scheduled_time_only_once_per_day(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -165,6 +179,8 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("help-tip", css)
         self.assertIn("tooltip-popover", css)
         self.assertIn("reason_parts", js)
+        self.assertIn("confidence_score", js)
+        self.assertIn("technicalBlock", js)
         self.assertIn("watchTabs", index)
         self.assertIn("watchTable", index)
         self.assertIn("detailPanel", index)

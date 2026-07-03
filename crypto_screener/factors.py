@@ -14,11 +14,14 @@ DIRECTIONAL_FACTORS = [
     "ls_ratio_contrarian",
     "liquidation_imbalance",
     "btc_relative_strength",
+    "technical_trend_4h",
+    "technical_momentum_4h",
 ]
 
 QUALITY_FACTORS = [
     "liquidity_30d",
     "volume_expansion_24h",
+    "volatility_expansion_4h",
 ]
 
 
@@ -30,6 +33,8 @@ DEFAULT_PRIORS = {
     "ls_ratio_contrarian": 0.12,
     "liquidation_imbalance": 0.10,
     "btc_relative_strength": 0.16,
+    "technical_trend_4h": 0.12,
+    "technical_momentum_4h": 0.08,
 }
 
 
@@ -78,6 +83,9 @@ def _raw_factors(
     depth = to_float(row.get("depth_0_5pct_usd"), 0.0) or 0.0
     spread = to_float(row.get("spread_bps"))
     volume_change = to_float(row.get("volume_change_percent_24h"))
+    technical_trend = to_float(row.get("technical_trend_score"))
+    technical_momentum = to_float(row.get("technical_momentum_score"))
+    atr_pct = to_float(row.get("atr_14_pct"))
 
     btc_change = _btc_change(rows, market_context)
     liq_total = long_liq + short_liq
@@ -104,8 +112,11 @@ def _raw_factors(
         "ls_ratio_contrarian": ls_contrarian,
         "liquidation_imbalance": ((short_liq - long_liq) / liq_total) * 100.0 if liq_total > 0 else None,
         "btc_relative_strength": price_change - btc_change if price_change is not None and btc_change is not None else None,
+        "technical_trend_4h": technical_trend,
+        "technical_momentum_4h": technical_momentum,
         "liquidity_30d": liquidity if quote_volume > 0 else None,
         "volume_expansion_24h": volume_change,
+        "volatility_expansion_4h": atr_pct,
     }
 
 
@@ -251,6 +262,7 @@ def _apply_scores(row: dict[str, Any], factors: dict[str, float], weights: dict[
         "short_score": round(max(short_score, 0.0), 2),
         "crowded_long_score": round(crowded_long_score, 2),
         "squeeze_risk_score": round(squeeze_risk_score, 2),
+        "confidence_score": round(_confidence_score(row, factors, directional_score, liquidity_quality), 0),
     }
     row.update(row["scores"])
 
@@ -263,6 +275,7 @@ def _apply_excluded_scores(row: dict[str, Any]) -> None:
         "short_score": 0.0,
         "crowded_long_score": 0.0,
         "squeeze_risk_score": 0.0,
+        "confidence_score": 0.0,
     }
     row.update(row["scores"])
 
@@ -280,6 +293,10 @@ def reason_for(row: dict[str, Any], side: str) -> str:
         parts.append(f"L/S {float(row['long_short_ratio']):.2f}")
     if scores.get("factor_score") is not None:
         parts.append(f"factor {scores['factor_score']:+.2f}")
+    if scores.get("confidence_score") is not None:
+        parts.append(f"confidence {scores['confidence_score']:.0f}")
+    if row.get("technical_setup"):
+        parts.append(f"tech {row['technical_setup']}")
 
     strongest = sorted(
         ((name, value) for name, value in factors.items() if name in DIRECTIONAL_FACTORS),
@@ -320,3 +337,46 @@ def _append_metric(parts: list[str], label: str, value: Any, fmt: str) -> None:
 def _quality_percentile(zscore: float) -> float:
     # Smooth z-score to a 0-100 quality range without scipy.
     return 100.0 / (1.0 + math.exp(-zscore))
+
+
+def _confidence_score(
+    row: dict[str, Any],
+    factors: dict[str, float],
+    directional_score: float,
+    liquidity_quality: float,
+) -> float:
+    data_quality = to_float(row.get("data_quality_score"), 100.0) or 100.0
+    trend = to_float(row.get("technical_trend_score"))
+    momentum = to_float(row.get("technical_momentum_score"))
+    factor_strength = clamp(abs(directional_score) / 1.25)
+    liquidity = clamp(liquidity_quality / 100.0)
+    quality = clamp(data_quality / 100.0)
+    technical_alignment = _technical_alignment(directional_score, trend, momentum)
+    driver_count = sum(1 for name in DIRECTIONAL_FACTORS if abs(factors.get(name, 0.0)) >= 0.5)
+    confirmation = clamp(driver_count / 3.0)
+
+    confidence = (
+        factor_strength * 0.30
+        + liquidity * 0.20
+        + quality * 0.20
+        + technical_alignment * 0.20
+        + confirmation * 0.10
+    ) * 100.0
+    if row.get("is_trusted", True) is False:
+        confidence *= 0.35
+    return clamp(confidence, 0.0, 100.0)
+
+
+def _technical_alignment(
+    directional_score: float,
+    trend_score: float | None,
+    momentum_score: float | None,
+) -> float:
+    technical_values = [value for value in (trend_score, momentum_score) if value is not None]
+    if not technical_values:
+        return 0.5
+    if directional_score == 0:
+        return 0.5
+    direction = 1.0 if directional_score > 0 else -1.0
+    aligned = sum(clamp((value * direction + 1.0) / 2.0) for value in technical_values)
+    return aligned / len(technical_values)

@@ -7,7 +7,7 @@ from typing import Any
 
 from .factors import DIRECTIONAL_FACTORS, reason_for
 from .report import top_by
-from .scoring import to_float
+from .scoring import clamp, to_float
 from .storage import connect
 
 
@@ -19,6 +19,8 @@ FACTOR_LABELS = {
     "ls_ratio_contrarian": "L/S",
     "liquidation_imbalance": "Liquidations",
     "btc_relative_strength": "BTC Relative",
+    "technical_trend_4h": "4h Trend",
+    "technical_momentum_4h": "4h Momentum",
 }
 
 WATCHLIST_LABELS = {
@@ -249,6 +251,7 @@ def _dashboard_row(row: dict[str, Any], score_field: str, side: str, history: li
         "score_field": score_field,
         "score": score,
         "priority": priority,
+        "confidence_score": row.get("confidence_score"),
         "quality": row.get("data_quality_score", 100),
         "primary_exchange": row.get("primary_exchange"),
         "contract_symbol": row.get("contract_symbol"),
@@ -259,12 +262,21 @@ def _dashboard_row(row: dict[str, Any], score_field: str, side: str, history: li
         "long_short_ratio": row.get("long_short_ratio"),
         "quote_volume_usd": row.get("quote_volume_usd"),
         "open_interest_usd": row.get("open_interest_usd"),
+        "technical_setup": row.get("technical_setup"),
+        "technical_state": _technical_state(row),
         "data_source": row.get("data_source"),
         "is_trusted": row.get("is_trusted", True),
         "data_quality_flags": row.get("data_quality_flags", []),
         "scores": {
             key: scores.get(key)
-            for key in ("factor_score", "long_score", "short_score", "crowded_long_score", "squeeze_risk_score")
+            for key in (
+                "factor_score",
+                "long_score",
+                "short_score",
+                "crowded_long_score",
+                "squeeze_risk_score",
+                "confidence_score",
+            )
         },
         "factor_parts": _factor_parts(factors),
         "primary_driver": _primary_driver(factors),
@@ -281,8 +293,8 @@ def _history_by_symbol(conn, symbols: list[str], generated_at: str, limit: int =
     placeholders = ",".join("?" for _ in unique_symbols)
     rows = conn.execute(
         f"""
-        SELECT symbol, generated_at, row_json
-        FROM market_rows
+        SELECT symbol, generated_at, price_usd, factors_json, scores_json, metrics_json
+        FROM factor_history
         WHERE symbol IN ({placeholders})
           AND generated_at <= ?
         ORDER BY symbol ASC, generated_at DESC
@@ -295,17 +307,22 @@ def _history_by_symbol(conn, symbols: list[str], generated_at: str, limit: int =
         symbol = db_row["symbol"]
         if len(by_symbol.get(symbol, [])) >= limit:
             continue
-        item = _loads_json(db_row["row_json"], {})
-        scores = item.get("scores", {})
+        item = _loads_json(db_row["metrics_json"], {})
+        factors = _loads_json(db_row["factors_json"], {})
+        scores = _loads_json(db_row["scores_json"], {})
         by_symbol.setdefault(symbol, []).append(
             {
                 "generated_at": db_row["generated_at"],
-                "price_usd": item.get("price_usd"),
+                "price_usd": db_row["price_usd"],
                 "price_change_24h_pct": item.get("price_change_24h_pct"),
                 "oi_change_24h_pct": item.get("oi_change_24h_pct"),
                 "funding_rate_pct": item.get("funding_rate_pct"),
                 "long_short_ratio": item.get("long_short_ratio"),
                 "quote_volume_usd": item.get("quote_volume_usd"),
+                "confidence_score": scores.get("confidence_score") or item.get("confidence_score"),
+                "technical_trend_4h": factors.get("technical_trend_4h"),
+                "technical_momentum_4h": factors.get("technical_momentum_4h"),
+                "rsi_14": item.get("rsi_14"),
                 "factor_score": scores.get("factor_score"),
                 "long_score": scores.get("long_score"),
                 "short_score": scores.get("short_score"),
@@ -313,10 +330,16 @@ def _history_by_symbol(conn, symbols: list[str], generated_at: str, limit: int =
                 "squeeze_risk_score": scores.get("squeeze_risk_score"),
             }
         )
+    if not any(by_symbol.values()):
+        return _legacy_history_by_symbol(conn, unique_symbols, generated_at, limit)
     return {symbol: list(reversed(points)) for symbol, points in by_symbol.items()}
 
 
 def _setup_label(row: dict[str, Any], side: str) -> str:
+    technical_setup = str(row.get("technical_setup") or "")
+    if technical_setup and side in {"long", "short"}:
+        suffix = "Long" if side == "long" else "Short"
+        return f"{technical_setup} {suffix}"
     price_change = to_float(row.get("price_change_24h_pct")) or 0.0
     oi_change = to_float(row.get("oi_change_24h_pct")) or 0.0
     funding = to_float(row.get("funding_rate_pct")) or 0.0
@@ -362,7 +385,9 @@ def _chart_priority(row: dict[str, Any], score_field: str, score: Any) -> float:
     quality_multiplier = max(0.0, min(1.0, (100.0 if quality is None else quality) / 100.0))
     if row.get("is_trusted", True) is False:
         quality_multiplier *= 0.35
-    return round(numeric_score * quality_multiplier, 2)
+    confidence = to_float(row.get("confidence_score"))
+    confidence_multiplier = 1.0 if confidence is None else 0.65 + (clamp(confidence / 100.0) * 0.35)
+    return round(numeric_score * quality_multiplier * confidence_multiplier, 2)
 
 
 def _factor_parts(factors: dict[str, Any]) -> list[dict[str, Any]]:
@@ -429,6 +454,34 @@ def _reason_parts(row: dict[str, Any], side: str) -> list[dict[str, Any]]:
             scores.get("factor_score"),
             "{:+.2f}",
             "Weighted directional model score before watchlist-specific ranking.",
+        )
+    if scores.get("confidence_score") is not None:
+        _append_reason_metric(
+            parts,
+            "Confidence",
+            scores.get("confidence_score"),
+            "{:.0f}",
+            "Composite setup confidence using factor strength, data quality, liquidity, and 4h technical alignment.",
+            neutral_value=50.0,
+        )
+    if row.get("technical_setup"):
+        parts.append(
+            {
+                "kind": "context",
+                "label": "Tech",
+                "value": row.get("technical_setup"),
+                "tone": _technical_tone(row),
+                "help": "4h CoinGlass OHLC technical state used as confirmation context.",
+            }
+        )
+    if row.get("rsi_14") is not None:
+        _append_reason_metric(
+            parts,
+            "RSI",
+            row.get("rsi_14"),
+            "{:.1f}",
+            "14-period RSI on the configured CoinGlass candle interval.",
+            neutral_value=50.0,
         )
 
     strongest = sorted(
@@ -512,6 +565,82 @@ def _reason_tone(value: float) -> str:
     if value < 0:
         return "neg"
     return "neutral"
+
+
+def _technical_state(row: dict[str, Any]) -> dict[str, Any]:
+    keys = [
+        "technical_interval",
+        "technical_candle_count",
+        "technical_close",
+        "ema_20",
+        "ema_50",
+        "ema_200",
+        "distance_ema20_pct",
+        "rsi_14",
+        "macd_histogram_pct",
+        "atr_14_pct",
+        "bb_position",
+        "bb_width_pct",
+        "technical_trend_score",
+        "technical_momentum_score",
+    ]
+    state = {key: row.get(key) for key in keys if row.get(key) is not None}
+    return state
+
+
+def _technical_tone(row: dict[str, Any]) -> str:
+    trend = to_float(row.get("technical_trend_score"))
+    momentum = to_float(row.get("technical_momentum_score"))
+    values = [value for value in (trend, momentum) if value is not None]
+    if not values:
+        return "neutral"
+    avg = sum(values) / len(values)
+    return _reason_tone(avg)
+
+
+def _legacy_history_by_symbol(
+    conn,
+    symbols: list[str],
+    generated_at: str,
+    limit: int,
+) -> dict[str, list[dict[str, Any]]]:
+    placeholders = ",".join("?" for _ in symbols)
+    rows = conn.execute(
+        f"""
+        SELECT symbol, generated_at, row_json
+        FROM market_rows
+        WHERE symbol IN ({placeholders})
+          AND generated_at <= ?
+        ORDER BY symbol ASC, generated_at DESC
+        """,
+        [*symbols, generated_at],
+    ).fetchall()
+
+    by_symbol: dict[str, list[dict[str, Any]]] = {symbol: [] for symbol in symbols}
+    for db_row in rows:
+        symbol = db_row["symbol"]
+        if len(by_symbol.get(symbol, [])) >= limit:
+            continue
+        item = _loads_json(db_row["row_json"], {})
+        scores = item.get("scores", {})
+        by_symbol.setdefault(symbol, []).append(
+            {
+                "generated_at": db_row["generated_at"],
+                "price_usd": item.get("price_usd"),
+                "price_change_24h_pct": item.get("price_change_24h_pct"),
+                "oi_change_24h_pct": item.get("oi_change_24h_pct"),
+                "funding_rate_pct": item.get("funding_rate_pct"),
+                "long_short_ratio": item.get("long_short_ratio"),
+                "quote_volume_usd": item.get("quote_volume_usd"),
+                "confidence_score": scores.get("confidence_score"),
+                "factor_score": scores.get("factor_score"),
+                "long_score": scores.get("long_score"),
+                "short_score": scores.get("short_score"),
+                "crowded_long_score": scores.get("crowded_long_score"),
+                "squeeze_risk_score": scores.get("squeeze_risk_score"),
+            }
+        )
+    return {symbol: list(reversed(points)) for symbol, points in by_symbol.items()}
 
 
 def _quality_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:

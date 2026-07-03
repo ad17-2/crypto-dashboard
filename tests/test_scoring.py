@@ -41,6 +41,8 @@ class ScoringTests(unittest.TestCase):
                 "quote_volume_usd": 100_000_000,
                 "long_liquidation_usd_24h": 1_000_000,
                 "short_liquidation_usd_24h": 2_000_000,
+                "technical_trend_score": 0.8,
+                "technical_momentum_score": 0.6,
             },
             {
                 "symbol": "SHORT",
@@ -51,6 +53,8 @@ class ScoringTests(unittest.TestCase):
                 "quote_volume_usd": 100_000_000,
                 "long_liquidation_usd_24h": 3_000_000,
                 "short_liquidation_usd_24h": 500_000,
+                "technical_trend_score": -0.7,
+                "technical_momentum_score": -0.5,
             },
             {
                 "symbol": "BTC",
@@ -66,6 +70,8 @@ class ScoringTests(unittest.TestCase):
         short_row = next(row for row in scored if row["symbol"] == "SHORT")
         self.assertGreater(long_row["long_score"], long_row["short_score"])
         self.assertGreater(short_row["short_score"], short_row["long_score"])
+        self.assertIn("technical_trend_4h", long_row["factors"])
+        self.assertGreater(long_row["confidence_score"], 0)
 
 
 if __name__ == "__main__":

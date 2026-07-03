@@ -35,7 +35,14 @@
         "Bitget",
         "Gate",
         "Hyperliquid"
-      ]
+      ],
+      "technical_indicators": {
+        "enabled": true,
+        "interval": "4h",
+        "limit": 220,
+        "max_symbols": 40,
+        "request_delay_seconds": 2.1
+      }
     },
     "coingecko": {
       "enabled": true,
@@ -77,7 +84,9 @@
       "funding_rate_contrarian": 0.16,
       "ls_ratio_contrarian": 0.12,
       "liquidation_imbalance": 0.1,
-      "btc_relative_strength": 0.16
+      "btc_relative_strength": 0.16,
+      "technical_trend_4h": 0.12,
+      "technical_momentum_4h": 0.08
     }
   },
   "report": {

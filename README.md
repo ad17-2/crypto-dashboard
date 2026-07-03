@@ -2,7 +2,7 @@
 
 Signal-only crypto futures screener and dashboard for manual chart review.
 
-The project screens liquid perpetual futures markets from CoinGlass, adds CoinGecko market context, stores every run in SQLite, and renders a daily operator dashboard for long, short, crowded-position fade, and squeeze-risk review.
+The project screens liquid perpetual futures markets from CoinGlass, adds CoinGecko market context, stores SQLite snapshots and compact factor history, and renders a daily operator dashboard for long, short, crowded-position fade, and squeeze-risk review.
 
 It does not place trades, connect to an exchange account, request broker keys, or automate execution. Treat every output as a shortlist for manual TradingView review.
 
@@ -29,9 +29,11 @@ The dashboard is designed around this workflow:
 
 - CoinGlass futures universe collection from supported exchange pairs.
 - CoinGlass pairs-market data for price, volume, funding, open interest, long/short volume, and liquidations.
+- CoinGlass OHLC price-history enrichment for 4h technical indicators.
 - CoinGecko global market context and sector/category rotation.
 - Data-quality guards for suspicious provider rows and extreme outliers.
-- SQLite history for previous runs, factor IC learning, dashboard run selection, and sparklines.
+- Confidence scoring that combines factor strength, liquidity, data quality, and 4h technical alignment.
+- SQLite storage with full latest-run dashboard rows plus compact factor history for IC learning and sparklines.
 - Markdown, JSON, and CSV report artifacts.
 - Local and Railway-hosted dashboard.
 - Railway SQLite sync helper for local-run/cloud-dashboard workflow.
@@ -180,6 +182,7 @@ Key defaults:
 | CoinGlass candidate symbols | 80 |
 | Minimum supported venues | 2 |
 | CoinGlass request delay | 2.1 seconds |
+| CoinGlass technical candles | 4h interval, 220 candles, top 40 rows |
 | CoinGecko categories | 12 |
 | Report rows per section | 12 |
 | Core symbols | BTC, ETH, SOL |
@@ -201,6 +204,8 @@ Required futures provider. Current usage builds a candidate universe from suppor
 
 If CoinGlass returns suspicious values, the data-quality layer can exclude the row from ranking.
 
+The provider also fetches 4h price-history candles for top rows and derives EMA trend, RSI, MACD histogram, ATR, Bollinger position, Bollinger width, and a compact technical setup label. The default interval is `4h` to stay compatible with the CoinGlass Hobbyist tier's price-history interval limits.
+
 ### CoinGecko
 
 Used for broader market context:
@@ -217,6 +222,7 @@ load config
   -> collect CoinGlass-supported futures universe
   -> collect CoinGecko global and category context
   -> aggregate CoinGlass pairs-market data by symbol
+  -> enrich top rows with CoinGlass 4h OHLC technicals
   -> apply data-quality sanity checks
   -> load prior SQLite history for factor IC labels
   -> compute factors, weights, scores, and market regime
@@ -258,7 +264,7 @@ python3 -m crypto_screener.cli --config config/default.json --out-dir reports --
 
 ### CSV Fields
 
-The CSV includes symbol, provider, price, 24h price change, quote volume, open interest, OI change, funding, long/short ratio, liquidation fields where available, factor score, long/short/crowding scores, trust state, quality score, and flags.
+The CSV includes symbol, provider, price, 24h price change, quote volume, open interest, OI change, funding, long/short ratio, liquidation fields where available, factor score, confidence, technical setup and indicators, long/short/crowding scores, trust state, quality score, and flags.
 
 ## SQLite Storage
 
@@ -268,14 +274,17 @@ Tables:
 
 - `runs`: one row per screener run with config, provider status, market context, regime, and factor weights.
 - `market_rows`: one row per symbol per run with full row JSON, factors, scores, price, and generated time.
+- `factor_history`: compact per-symbol factor, score, and indicator history retained independently from full dashboard row retention.
 
 SQLite is used for:
 
 - Dashboard run selection.
-- Recent-run history.
+- Recent-run history for retained full runs.
 - Per-symbol sparklines.
 - Factor IC learning against forward returns.
 - Persisting cloud dashboard state through Railway volume sync.
+
+When `CRYPTO_DASHBOARD_RETAIN_RUNS=1`, the dashboard keeps only the newest full snapshot in `runs` and `market_rows`, while `factor_history` remains available for rolling factor learning and lightweight sparklines.
 
 ## Factor Model
 
@@ -290,11 +299,14 @@ Directional factors:
 - `ls_ratio_contrarian`
 - `liquidation_imbalance`
 - `btc_relative_strength`
+- `technical_trend_4h`
+- `technical_momentum_4h`
 
 Quality/context factors:
 
 - `liquidity_30d`
 - `volume_expansion_24h`
+- `volatility_expansion_4h`
 
 ### Weighting
 
@@ -325,6 +337,8 @@ The dashboard also builds:
 - `Chart Next`: a deduplicated priority queue across all lists, sorted by chart priority.
 
 Chart priority combines the relevant score with data quality and trust state. It is not an entry signal; it is a workflow sort for manual review.
+
+Each row also has a `confidence_score` from 0 to 100. It rewards stronger directional factors, better liquidity, clean data, and alignment between the factor side and 4h technical trend/momentum. Treat confidence as a sorting aid, not a trade trigger.
 
 ## Data Quality
 
@@ -395,10 +409,12 @@ Selecting a row opens the detail rail with:
 - TradingView link using the row's primary CoinGlass venue where possible.
 - Setup type.
 - Score and chart priority.
+- Confidence score.
 - Data quality.
 - 24h and OI 24h.
 - Funding and long/short ratio.
 - Volume and open interest.
+- 4h technical setup, RSI, MACD histogram, ATR, Bollinger state, EMA20 distance, trend score, and momentum score.
 - Reason chips.
 - Factor breakdown bars.
 - SQLite history sparklines.

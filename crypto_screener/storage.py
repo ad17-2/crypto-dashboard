@@ -44,6 +44,22 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             ON market_rows(symbol, generated_at);
         CREATE INDEX IF NOT EXISTS idx_market_rows_time
             ON market_rows(generated_at);
+
+        CREATE TABLE IF NOT EXISTS factor_history (
+            run_id TEXT NOT NULL,
+            generated_at TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            price_usd REAL,
+            factors_json TEXT NOT NULL,
+            scores_json TEXT NOT NULL DEFAULT '{}',
+            metrics_json TEXT NOT NULL DEFAULT '{}',
+            PRIMARY KEY (run_id, symbol)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_factor_history_symbol_time
+            ON factor_history(symbol, generated_at);
+        CREATE INDEX IF NOT EXISTS idx_factor_history_time
+            ON factor_history(generated_at);
         """
     )
     _ensure_column(conn, "runs", "regime_json", "TEXT NOT NULL DEFAULT '{}'")
@@ -103,6 +119,22 @@ def save_snapshot(payload: dict[str, Any], config: dict[str, Any]) -> None:
                     json.dumps(row, sort_keys=True),
                 ),
             )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO factor_history
+                    (run_id, generated_at, symbol, price_usd, factors_json, scores_json, metrics_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    generated_at,
+                    row.get("symbol"),
+                    row.get("price_usd"),
+                    json.dumps(row.get("factors", {}), sort_keys=True),
+                    json.dumps(row.get("scores", {}), sort_keys=True),
+                    json.dumps(_history_metrics(row), sort_keys=True),
+                ),
+            )
         conn.commit()
 
 
@@ -155,15 +187,17 @@ def load_labeled_factor_records(config: dict[str, Any]) -> list[dict[str, Any]]:
     cutoff = datetime.now().astimezone() - timedelta(days=window_days + 3)
 
     with connect(db_path) as conn:
-        rows = conn.execute(
-            """
-            SELECT generated_at, symbol, price_usd, factors_json
-            FROM market_rows
-            WHERE generated_at >= ?
-            ORDER BY generated_at ASC
-            """,
-            (cutoff.isoformat(timespec="seconds"),),
-        ).fetchall()
+        rows = _load_factor_history_rows(conn, cutoff.isoformat(timespec="seconds"))
+        if not rows:
+            rows = conn.execute(
+                """
+                SELECT generated_at, symbol, price_usd, factors_json
+                FROM market_rows
+                WHERE generated_at >= ?
+                ORDER BY generated_at ASC
+                """,
+                (cutoff.isoformat(timespec="seconds"),),
+            ).fetchall()
 
     by_symbol: dict[str, list[dict[str, Any]]] = {}
     for db_row in rows:
@@ -199,6 +233,41 @@ def load_labeled_factor_records(config: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
     return records
+
+
+def _history_metrics(row: dict[str, Any]) -> dict[str, Any]:
+    keys = [
+        "price_change_24h_pct",
+        "oi_change_24h_pct",
+        "funding_rate_pct",
+        "long_short_ratio",
+        "quote_volume_usd",
+        "open_interest_usd",
+        "confidence_score",
+        "technical_setup",
+        "technical_interval",
+        "rsi_14",
+        "macd_histogram_pct",
+        "atr_14_pct",
+        "bb_position",
+        "bb_width_pct",
+        "distance_ema20_pct",
+        "technical_trend_score",
+        "technical_momentum_score",
+    ]
+    return {key: row.get(key) for key in keys if row.get(key) is not None}
+
+
+def _load_factor_history_rows(conn: sqlite3.Connection, cutoff: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT generated_at, symbol, price_usd, factors_json
+        FROM factor_history
+        WHERE generated_at >= ?
+        ORDER BY generated_at ASC
+        """,
+        (cutoff,),
+    ).fetchall()
 
 
 def _find_forward_row(

@@ -55,6 +55,18 @@ class CoinGlassClient:
         data = self.get_json("/api/futures/pairs-markets", {"symbol": symbol})
         return data if isinstance(data, list) else []
 
+    def price_history(self, exchange: str, symbol: str, interval: str, limit: int) -> list[dict[str, Any]]:
+        data = self.get_json(
+            "/api/futures/price/history",
+            {
+                "exchange": exchange,
+                "symbol": symbol,
+                "interval": interval,
+                "limit": limit,
+            },
+        )
+        return data if isinstance(data, list) else []
+
     def supported_coins(self) -> list[str]:
         data = self.get_json("/api/futures/supported-coins")
         return [str(item) for item in data] if isinstance(data, list) else []

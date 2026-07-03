@@ -1,6 +1,11 @@
 import unittest
 
-from crypto_screener.collector import _aggregate_coinglass_pairs, _coinglass_candidate_stats, _rank_coinglass_candidates
+from crypto_screener.collector import (
+    _aggregate_coinglass_pairs,
+    _append_coinglass_technicals,
+    _coinglass_candidate_stats,
+    _rank_coinglass_candidates,
+)
 
 
 class CollectorTests(unittest.TestCase):
@@ -84,6 +89,58 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(row["open_interest_usd"], 1500)
         self.assertAlmostEqual(row["long_short_ratio"], 1.5)
         self.assertEqual(row["coinglass_exchange_count"], 2)
+
+    def test_append_coinglass_technicals_enriches_rows(self):
+        rows = [
+            {
+                "symbol": "BTC",
+                "primary_exchange": "OKX",
+                "contract_symbol": "BTC-USDT-SWAP",
+            }
+        ]
+        status = {}
+        client = FakeCoinGlassClient()
+
+        _append_coinglass_technicals(
+            rows,
+            client,
+            {
+                "technical_indicators": {
+                    "enabled": True,
+                    "interval": "4h",
+                    "limit": 80,
+                    "max_symbols": 1,
+                    "request_delay_seconds": 0,
+                }
+            },
+            status,
+        )
+
+        self.assertEqual(client.calls, [("OKX", "BTC-USDT-SWAP", "4h", 80)])
+        self.assertEqual(status["technicals"]["status"], "ok")
+        self.assertEqual(rows[0]["technical_interval"], "4h")
+        self.assertIn("rsi_14", rows[0])
+
+
+class FakeCoinGlassClient:
+    def __init__(self):
+        self.calls = []
+
+    def price_history(self, exchange, symbol, interval, limit):
+        self.calls.append((exchange, symbol, interval, limit))
+        candles = []
+        for index in range(limit):
+            close = 100.0 + (index * 0.4)
+            candles.append(
+                {
+                    "time": index,
+                    "open": close - 0.2,
+                    "high": close + 0.5,
+                    "low": close - 0.5,
+                    "close": close,
+                }
+            )
+        return candles
 
 
 if __name__ == "__main__":
