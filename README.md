@@ -118,10 +118,11 @@ python3 -m crypto_screener.cli \
   --depth-symbols 5 \
   --report-limit 8 \
   --disable-coinglass \
+  --no-reports \
   --no-save
 ```
 
-`--no-save` prevents the smoke run from polluting SQLite history.
+`--no-reports` skips Markdown, JSON, and CSV artifacts. `--no-save` prevents the smoke run from polluting SQLite history.
 
 ## CLI Options
 
@@ -135,7 +136,8 @@ python3 -m crypto_screener.cli \
 --max-spread-bps N            Override universe.max_spread_bps
 --max-coinglass-symbols N     Override providers.coinglass.max_symbols
 --disable-coinglass           Skip CoinGlass even when COINGLASS_API_KEY is set
---no-save                     Generate reports without saving this run to SQLite
+--no-save                     Do not save this run to SQLite history
+--no-reports                  Save SQLite when enabled, but skip Markdown/JSON/CSV files
 ```
 
 ## API Keys
@@ -236,17 +238,25 @@ load config
   -> load prior SQLite history for factor IC labels
   -> compute factors, weights, scores, and market regime
   -> save snapshot to SQLite
-  -> write Markdown, JSON, and CSV reports
+  -> optionally write Markdown, JSON, and CSV reports
 ```
 
 ## Reports
 
-Every normal run writes timestamped artifacts to `reports/`:
+Report artifacts are optional. They are useful for sharing, debugging, and archival review, but the dashboard reads SQLite directly and does not need them.
+
+By default, a run writes timestamped artifacts to `reports/`:
 
 ```text
 reports/crypto-quant-daily-YYYYMMDD-HHMMSS.md
 reports/crypto-quant-daily-YYYYMMDD-HHMMSS.json
 reports/crypto-quant-daily-YYYYMMDD-HHMMSS.csv
+```
+
+Use `--no-reports` for dashboard-only scheduled runs that should update SQLite without creating files:
+
+```bash
+python3 -m crypto_screener.cli --config config/default.json --out-dir reports --no-reports
 ```
 
 ### Markdown Sections
@@ -426,7 +436,7 @@ Side modules:
 | `HOST` | `0.0.0.0` | Bind host |
 | `CRYPTO_SCREENER_CONFIG` | `config/default.json` | Config file path |
 | `CRYPTO_SCREENER_DB_PATH` | Config `storage_path` | SQLite database path |
-| `CRYPTO_SCREENER_REPORT_DIR` | `reports` | Report output path for refresh runs |
+| `CRYPTO_SCREENER_REPORT_DIR` | `reports` | Runtime work directory; dashboard refresh skips report files |
 | `CRYPTO_DASHBOARD_LIMIT` | Config `report.limit` | Rows per watchlist |
 | `CRYPTO_DASHBOARD_AUTO_REFRESH_SECONDS` | `0` | Auto-run screener when latest run is older than this many seconds |
 | `CRYPTO_DASHBOARD_REFRESH_TOKEN` | unset | Enables protected manual refresh API |
@@ -492,12 +502,20 @@ CRYPTO_SCREENER_DB_PATH=/data/crypto_screener.sqlite3
 CRYPTO_SCREENER_REPORT_DIR=/data/reports
 ```
 
+To let Railway refresh itself without report artifacts, set:
+
+```bash
+CRYPTO_DASHBOARD_AUTO_REFRESH_SECONDS=43200
+```
+
+That runs the screener when the latest SQLite snapshot is older than 12 hours. The dashboard refresh path saves SQLite only and does not write Markdown, JSON, or CSV files.
+
 ### Local Backend, Railway Frontend Pattern
 
 Some cloud regions can receive HTTP 451 from Binance futures endpoints. If Railway cannot collect Binance data directly, run the screener on a machine that can reach Binance and sync SQLite to Railway:
 
 ```bash
-python3 -m crypto_screener.cli --config config/default.json --out-dir reports
+python3 -m crypto_screener.cli --config config/default.json --out-dir reports --no-reports
 scripts/sync_sqlite_to_railway.sh data/crypto_screener.sqlite3
 ```
 

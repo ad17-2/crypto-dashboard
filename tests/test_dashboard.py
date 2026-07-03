@@ -4,6 +4,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from urllib.request import urlopen
 
 from crypto_screener.dashboard import (
@@ -184,6 +185,34 @@ class DashboardTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=5)
+
+    def test_dashboard_refresh_saves_sqlite_without_report_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            settings = DashboardSettings(
+                config_path=Path("config/default.json"),
+                db_path=Path(tmpdir) / "screener.sqlite3",
+                report_dir=Path(tmpdir) / "reports",
+                host="127.0.0.1",
+                port=0,
+                limit=5,
+                auto_refresh_seconds=0,
+                refresh_token=None,
+            )
+            runtime = RefreshRuntime(settings)
+            payload = {
+                "run_id": "run-refresh",
+                "generated_at": "2026-07-03T06:00:00+07:00",
+            }
+
+            with patch("crypto_screener.dashboard.run_pipeline", return_value=(payload, {})) as run_pipeline:
+                status = runtime.refresh("test")
+
+        self.assertEqual(status["state"], "ok")
+        self.assertEqual(status["run_id"], "run-refresh")
+        self.assertEqual(status["paths"], {})
+        run_pipeline.assert_called_once()
+        self.assertIs(run_pipeline.call_args.kwargs["save"], True)
+        self.assertIs(run_pipeline.call_args.kwargs["write_report_files"], False)
 
     def test_existing_runs_table_gets_dashboard_columns(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -10,7 +10,12 @@ from .report import now_jakarta, write_reports
 from .storage import load_labeled_factor_records, save_snapshot
 
 
-def run_pipeline(config: dict[str, Any], out_dir: Path, save: bool = True) -> tuple[dict[str, Any], dict[str, Path]]:
+def run_pipeline(
+    config: dict[str, Any],
+    out_dir: Path,
+    save: bool = True,
+    write_report_files: bool = True,
+) -> tuple[dict[str, Any], dict[str, Path]]:
     generated_at = now_jakarta()
     run_id = generated_at.strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:8]
 
@@ -34,5 +39,5 @@ def run_pipeline(config: dict[str, Any], out_dir: Path, save: bool = True) -> tu
     }
     if save:
         save_snapshot(payload, config)
-    paths = write_reports(payload, config, out_dir)
+    paths = write_reports(payload, config, out_dir) if write_report_files else {}
     return payload, paths

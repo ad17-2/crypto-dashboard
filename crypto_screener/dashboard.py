@@ -55,7 +55,7 @@ class RefreshRuntime:
                 "started_at": started_at.isoformat(timespec="seconds"),
             }
             config = _load_runtime_config(self.settings)
-            payload, paths = run_pipeline(config, self.settings.report_dir, save=True)
+            payload, paths = run_pipeline(config, self.settings.report_dir, save=True, write_report_files=False)
             finished_at = datetime.now(timezone.utc)
             self.status = {
                 "state": "ok",

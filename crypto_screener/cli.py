@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-coinglass-symbols", type=int, help="Override number of symbols enriched via CoinGlass.")
     parser.add_argument("--disable-coinglass", action="store_true", help="Skip CoinGlass even if COINGLASS_API_KEY is set.")
     parser.add_argument("--no-save", action="store_true", help="Do not write this run into SQLite history.")
+    parser.add_argument("--no-reports", action="store_true", help="Do not write Markdown, JSON, or CSV report files.")
     return parser.parse_args()
 
 
@@ -56,7 +57,7 @@ def main() -> int:
     args = parse_args()
     config = apply_overrides(load_config(Path(args.config)), args)
 
-    payload, paths = run_pipeline(config, Path(args.out_dir), save=not args.no_save)
+    payload, paths = run_pipeline(config, Path(args.out_dir), save=not args.no_save, write_report_files=not args.no_reports)
     rows = payload["rows"]
     limit = int(config.get("report", {}).get("limit", 12))
 
@@ -90,6 +91,8 @@ def main() -> int:
     print(f"short_candidates={short_count}")
     print(f"crowded_longs={fade_count}")
     print(f"squeeze_risks={squeeze_count}")
+    if not paths:
+        print("reports=skipped")
     for label, path in paths.items():
         print(f"{label}={path}")
     return 0
