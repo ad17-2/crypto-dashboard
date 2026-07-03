@@ -117,18 +117,29 @@
         `<span class="source-tag">${esc(part)}</span>`
       )).join("");
     }
-    function tradingViewSymbol(symbol) {
-      const base = String(symbol || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      return base ? `BINANCE:${base}USDT.P` : "";
+    function tradingViewExchange(exchange) {
+      const key = String(exchange || "").toLowerCase();
+      const map = {
+        okx: "OKX",
+        bybit: "BYBIT",
+        bitget: "BITGET",
+        gate: "GATEIO",
+        hyperliquid: "HYPERLIQUID",
+      };
+      return map[key] || "BYBIT";
     }
-    function tradingViewUrl(symbol) {
-      const tvSymbol = tradingViewSymbol(symbol);
+    function tradingViewSymbol(row) {
+      const base = String(row?.symbol || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      return base ? `${tradingViewExchange(row?.primary_exchange)}:${base}USDT.P` : "";
+    }
+    function tradingViewUrl(row) {
+      const tvSymbol = tradingViewSymbol(row);
       return tvSymbol ? `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol)}` : "#";
     }
-    function symbolLink(symbol) {
-      const tvSymbol = tradingViewSymbol(symbol);
-      if (!tvSymbol) return esc(symbol || "-");
-      return `<a class="symbol-link" href="${tradingViewUrl(symbol)}" target="_blank" rel="noopener noreferrer" title="Open ${esc(tvSymbol)} on TradingView">${esc(symbol)}</a>`;
+    function symbolLink(row) {
+      const tvSymbol = tradingViewSymbol(row);
+      if (!tvSymbol) return esc(row?.symbol || "-");
+      return `<a class="symbol-link" href="${tradingViewUrl(row)}" target="_blank" rel="noopener noreferrer" title="Open ${esc(tvSymbol)} on TradingView">${esc(row?.symbol)}</a>`;
     }
     function rowKey(row) {
       return `${row.symbol || "-"}:${row.side || "-"}:${row.score_field || "-"}`;
@@ -266,7 +277,7 @@
         const key = rowKey(row);
         const active = key === state.selectedKey ? " active" : "";
         return `<div class="watch-row${active}" role="button" tabindex="0" data-key="${esc(key)}">
-          <div class="watch-cell left watch-symbol" data-label="Symbol">${symbolLink(row.symbol)}<span class="driver-line">${esc(row.primary_driver?.label || row.side || "-")}</span></div>
+          <div class="watch-cell left watch-symbol" data-label="Symbol">${symbolLink(row)}<span class="driver-line">${esc(row.primary_driver?.label || row.side || "-")}</span></div>
           <div class="watch-cell left" data-label="Setup">${setupBadge(row)}</div>
           <div class="watch-cell" data-label="Score">${scoreText(row)}</div>
           <div class="watch-cell" data-label="Q"><span class="quality-badge ${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</span></div>
@@ -313,11 +324,11 @@
       $("detailPanel").innerHTML = panel("Selected Coin", esc(row.setup || ""), `<div class="detail-body">
         <div class="detail-title">
           <div>
-            <div class="detail-symbol">${symbolLink(row.symbol)}</div>
+            <div class="detail-symbol">${symbolLink(row)}</div>
             <div class="driver-line">${esc(row.primary_driver?.label || "No dominant driver")} / ${esc(row.side || "-")}</div>
           </div>
           <div class="detail-actions">
-            <a class="detail-link" href="${tradingViewUrl(row.symbol)}" target="_blank" rel="noopener noreferrer">TradingView</a>
+            <a class="detail-link" href="${tradingViewUrl(row)}" target="_blank" rel="noopener noreferrer">TradingView</a>
           </div>
         </div>
         <div>${setupBadge(row)}</div>
@@ -360,7 +371,6 @@
         extreme_24h_volume_change: "Volume 24h",
         extreme_funding_rate: "Funding",
         thin_coinglass_exchange_coverage: "Thin coverage",
-        price_deviates_from_binance: "Price vs Binance",
         price_deviates_from_index: "Price vs Index",
         stale_low_quote_volume: "Low volume",
         invalid_price: "Invalid price",

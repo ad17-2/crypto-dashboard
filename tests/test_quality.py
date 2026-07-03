@@ -10,9 +10,8 @@ class DataQualityTests(unittest.TestCase):
             "symbol": "TAIKO",
             "contract_symbol": "TAIKOUSDT",
             "quote_asset": "USDT",
-            "data_source": "coinglass+binance",
+            "data_source": "coinglass",
             "price_usd": 10,
-            "binance_price_usd": 10,
             "price_change_24h_pct": 11508.53,
             "oi_change_24h_pct": 465.43,
             "quote_volume_usd": 50_000_000,
@@ -26,7 +25,6 @@ class DataQualityTests(unittest.TestCase):
                 "max_abs_oi_change_24h_pct": 300,
                 "max_abs_volume_change_24h_pct": 1000,
                 "max_abs_funding_rate_pct": 2,
-                "max_price_deviation_from_binance_pct": 25,
                 "max_price_deviation_from_index_pct": 25,
                 "min_quote_volume_usd": 10_000_000,
                 "min_coinglass_exchange_count": 2,
@@ -42,9 +40,8 @@ class DataQualityTests(unittest.TestCase):
                 "symbol": "NORMAL",
                 "contract_symbol": "NORMALUSDT",
                 "quote_asset": "USDT",
-                "data_source": "coinglass+binance",
+                "data_source": "coinglass",
                 "price_usd": 10,
-                "binance_price_usd": 10,
                 "price_change_24h_pct": 5,
                 "oi_change_24h_pct": 4,
                 "funding_rate_pct": 0.01,
@@ -55,9 +52,8 @@ class DataQualityTests(unittest.TestCase):
                 "symbol": "EXTREME",
                 "contract_symbol": "EXTREMEUSDT",
                 "quote_asset": "USDT",
-                "data_source": "coinglass+binance",
+                "data_source": "coinglass",
                 "price_usd": 10,
-                "binance_price_usd": 10,
                 "price_change_24h_pct": 1200,
                 "oi_change_24h_pct": 500,
                 "funding_rate_pct": 0.01,
@@ -81,7 +77,7 @@ class DataQualityTests(unittest.TestCase):
             "symbol": "BAD/PAIR",
             "contract_symbol": "BADPAIRUSD",
             "quote_asset": "USDT",
-            "data_source": "binance",
+            "data_source": "coinglass",
             "price_usd": 0,
             "quote_volume_usd": 250_000,
             "open_interest_usd": -1,
@@ -96,24 +92,23 @@ class DataQualityTests(unittest.TestCase):
         self.assertTrue(any(flag.startswith("stale_low_quote_volume") for flag in row["data_quality_flags"]))
         self.assertTrue(any(flag.startswith("invalid_open_interest") for flag in row["data_quality_flags"]))
 
-    def test_index_and_binance_price_deviation_are_flagged(self):
+    def test_index_price_deviation_and_thin_coinglass_coverage_are_flagged(self):
         row = {
             "symbol": "TAIKO",
             "contract_symbol": "TAIKOUSDT",
             "quote_asset": "USDT",
-            "data_source": "coinglass+binance",
+            "data_source": "coinglass",
             "price_usd": 50,
             "index_price": 10,
-            "binance_price_usd": 10,
             "price_change_24h_pct": 5,
             "quote_volume_usd": 50_000_000,
-            "coinglass_exchange_count": 4,
+            "coinglass_exchange_count": 1,
         }
 
         apply_data_quality([row], {"data_quality": {}})
 
         self.assertTrue(any(flag.startswith("price_deviates_from_index") for flag in row["data_quality_flags"]))
-        self.assertTrue(any(flag.startswith("price_deviates_from_binance") for flag in row["data_quality_flags"]))
+        self.assertTrue(any(flag.startswith("thin_coinglass_exchange_coverage") for flag in row["data_quality_flags"]))
 
 
 if __name__ == "__main__":

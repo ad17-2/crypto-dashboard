@@ -6,7 +6,6 @@
     "contract_type": "PERPETUAL",
     "top_symbols_by_volume": 80,
     "min_quote_volume_usd": 20000000,
-    "max_spread_bps": 15,
     "exclude_base_assets": [
       "USDT",
       "USDC",
@@ -22,25 +21,15 @@
     ]
   },
   "providers": {
-    "binance": {
-      "enabled": true,
-      "base_url": "https://fapi.binance.com",
-      "depth_symbols": 20,
-      "depth_limit": 500,
-      "oi_period": "1h",
-      "oi_limit": 25,
-      "request_timeout_seconds": 12,
-      "per_symbol_delay_seconds": 0.05
-    },
     "coinglass": {
       "enabled": true,
       "base_url": "https://open-api-v4.coinglass.com",
       "api_key_env": "COINGLASS_API_KEY",
-      "max_symbols": 30,
+      "candidate_symbols": 80,
+      "min_exchange_count": 2,
       "request_delay_seconds": 2.1,
       "request_timeout_seconds": 12,
       "exchanges": [
-        "Binance",
         "OKX",
         "Bybit",
         "Bitget",
@@ -66,7 +55,6 @@
     "max_abs_oi_change_24h_pct": 300,
     "max_abs_volume_change_24h_pct": 1000,
     "max_abs_funding_rate_pct": 2,
-    "max_price_deviation_from_binance_pct": 25,
     "max_price_deviation_from_index_pct": 25,
     "min_quote_volume_usd": 10000000,
     "min_coinglass_exchange_count": 2

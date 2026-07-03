@@ -7,7 +7,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from .binance import ProviderError
+from .providers import ProviderError
 
 
 @dataclass(frozen=True)

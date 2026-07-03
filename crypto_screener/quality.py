@@ -10,7 +10,6 @@ DEFAULT_QUALITY_CONFIG = {
     "max_abs_oi_change_24h_pct": 300,
     "max_abs_volume_change_24h_pct": 1000,
     "max_abs_funding_rate_pct": 2,
-    "max_price_deviation_from_binance_pct": 25,
     "max_price_deviation_from_index_pct": 25,
     "min_quote_volume_usd": 10_000_000,
     "min_coinglass_exchange_count": 2,
@@ -94,16 +93,10 @@ def data_quality_flags(row: dict[str, Any], config: dict[str, Any]) -> list[str]
     if index_deviation is not None and abs(index_deviation) > float(config["max_price_deviation_from_index_pct"]):
         flags.append(f"price_deviates_from_index:{index_deviation:+.2f}%")
 
-    if row.get("data_source") == "coinglass+binance":
+    if row.get("data_source") == "coinglass":
         exchange_count = to_float(row.get("coinglass_exchange_count"), 0.0) or 0.0
         if exchange_count < float(config["min_coinglass_exchange_count"]):
             flags.append(f"thin_coinglass_exchange_coverage:{exchange_count:.0f}")
-
-        binance_price = to_float(row.get("binance_price_usd"))
-        current_price = to_float(row.get("price_usd"))
-        deviation = pct_change(binance_price, current_price)
-        if deviation is not None and abs(deviation) > float(config["max_price_deviation_from_binance_pct"]):
-            flags.append(f"price_deviates_from_binance:{deviation:+.2f}%")
 
     return flags
 
@@ -119,8 +112,14 @@ def _flag_contract_symbol(flags: list[str], row: dict[str, Any]) -> None:
     quote_asset = str(row.get("quote_asset") or "").strip()
     if symbol and not symbol.replace("-", "").isalnum():
         flags.append(f"weird_symbol:{symbol}")
-    if contract_symbol and quote_asset and not contract_symbol.endswith(quote_asset):
+    if contract_symbol and quote_asset and not _contract_symbol_matches_quote(row, contract_symbol, quote_asset):
         flags.append(f"weird_contract_symbol:{contract_symbol}")
+
+
+def _contract_symbol_matches_quote(row: dict[str, Any], contract_symbol: str, quote_asset: str) -> bool:
+    if contract_symbol.endswith(quote_asset):
+        return True
+    return row.get("data_source") == "coinglass" and quote_asset in contract_symbol.upper()
 
 
 def _flag_positive(flags: list[str], row: dict[str, Any], key: str, label: str) -> None:

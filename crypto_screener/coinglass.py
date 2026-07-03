@@ -7,7 +7,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from .binance import ProviderError
+from .providers import ProviderError
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,21 @@ class CoinGlassClient:
     def futures_pairs_markets(self, symbol: str) -> list[dict[str, Any]]:
         data = self.get_json("/api/futures/pairs-markets", {"symbol": symbol})
         return data if isinstance(data, list) else []
+
+    def supported_coins(self) -> list[str]:
+        data = self.get_json("/api/futures/supported-coins")
+        return [str(item) for item in data] if isinstance(data, list) else []
+
+    def supported_exchange_pairs(self, exchange: str | None = None) -> dict[str, list[dict[str, Any]]]:
+        params = {"exchange": exchange} if exchange else None
+        data = self.get_json("/api/futures/supported-exchange-pairs", params)
+        if not isinstance(data, dict):
+            return {}
+        return {
+            str(exchange_name): pairs
+            for exchange_name, pairs in data.items()
+            if isinstance(pairs, list)
+        }
 
     def open_interest_aggregated_history(
         self,

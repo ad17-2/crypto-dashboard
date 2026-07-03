@@ -12,7 +12,7 @@ class PipelineTests(unittest.TestCase):
         collected = {
             "rows": [{"symbol": "BTC"}],
             "market_context": {"btc_dominance_pct": 55},
-            "provider_status": {"binance": {"status": "ok"}},
+            "provider_status": {"coinglass": {"status": "ok"}},
         }
         scored = {
             "rows": [{"symbol": "BTC", "scores": {}, "factors": {}}],

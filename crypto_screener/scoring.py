@@ -36,16 +36,10 @@ def spread_bps(bid: float | None, ask: float | None) -> float | None:
     return ((ask - bid) / mid) * 10000.0
 
 
-def funding_rate_pct(rate: float | None) -> float | None:
-    if rate is None:
-        return None
-    return rate * 100.0
-
-
 def funding_annualized_pct(rate: float | None) -> float | None:
     if rate is None:
         return None
-    # Binance USD-M perpetual funding is normally every 8 hours.
+    # Perpetual funding is commonly 8-hourly; annualization assumes 3 periods/day.
     return rate * 3 * 365 * 100.0
 
 

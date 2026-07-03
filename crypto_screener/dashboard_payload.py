@@ -250,6 +250,8 @@ def _dashboard_row(row: dict[str, Any], score_field: str, side: str, history: li
         "score": score,
         "priority": priority,
         "quality": row.get("data_quality_score", 100),
+        "primary_exchange": row.get("primary_exchange"),
+        "contract_symbol": row.get("contract_symbol"),
         "price_usd": row.get("price_usd"),
         "price_change_24h_pct": row.get("price_change_24h_pct"),
         "oi_change_24h_pct": row.get("oi_change_24h_pct"),

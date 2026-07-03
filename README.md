@@ -2,7 +2,7 @@
 
 Signal-only crypto futures screener and dashboard for manual chart review.
 
-The project screens liquid Binance USD-M perpetual markets, optionally enriches them with CoinGlass futures data, adds CoinGecko market context, stores every run in SQLite, and renders a daily operator dashboard for long, short, crowded-position fade, and squeeze-risk review.
+The project screens liquid perpetual futures markets from CoinGlass, adds CoinGecko market context, stores every run in SQLite, and renders a daily operator dashboard for long, short, crowded-position fade, and squeeze-risk review.
 
 It does not place trades, connect to an exchange account, request broker keys, or automate execution. Treat every output as a shortlist for manual TradingView review.
 
@@ -27,9 +27,8 @@ The dashboard is designed around this workflow:
 
 ## Current Capabilities
 
-- Binance USD-M perpetual universe collection.
-- Binance public fallback data for price, volume, spread, funding, open interest, and depth.
-- Optional CoinGlass enrichment for futures pairs and cross-exchange coverage.
+- CoinGlass futures universe collection from supported exchange pairs.
+- CoinGlass pairs-market data for price, volume, funding, open interest, long/short volume, and liquidations.
 - CoinGecko global market context and sector/category rotation.
 - Data-quality guards for suspicious provider rows and extreme outliers.
 - SQLite history for previous runs, factor IC learning, dashboard run selection, and sparklines.
@@ -46,7 +45,6 @@ The dashboard is designed around this workflow:
 |   |-- cli.py                       # CLI entrypoint
 |   |-- pipeline.py                  # Collect -> score -> save -> report orchestration
 |   |-- collector.py                 # Provider collection and enrichment orchestration
-|   |-- binance.py                   # Binance USD-M public client
 |   |-- coinglass.py                 # CoinGlass API client
 |   |-- coingecko.py                 # CoinGecko API client
 |   |-- quality.py                   # Sanity filters and trust scoring
@@ -71,7 +69,8 @@ The screener and dashboard use the Python standard library only. There are no re
 - Python 3.10 or newer.
 - Internet access to market data providers.
 - Optional Railway CLI for deployment and database sync.
-- Optional API keys for CoinGlass and CoinGecko.
+- CoinGlass API key.
+- Optional CoinGecko API key.
 
 No exchange account or trading API key is needed.
 
@@ -115,9 +114,8 @@ python3 -m crypto_screener.cli \
   --config config/default.json \
   --out-dir reports \
   --top-symbols 25 \
-  --depth-symbols 5 \
   --report-limit 8 \
-  --disable-coinglass \
+  --coinglass-candidate-symbols 25 \
   --no-reports \
   --no-save
 ```
@@ -130,12 +128,10 @@ python3 -m crypto_screener.cli \
 --config PATH                 Config JSON path. Default: config/default.json
 --out-dir DIR                 Report output directory. Default: reports
 --top-symbols N               Override universe.top_symbols_by_volume
---depth-symbols N             Override providers.binance.depth_symbols
 --report-limit N              Override report.limit
 --min-quote-volume-usd N      Override universe.min_quote_volume_usd
---max-spread-bps N            Override universe.max_spread_bps
---max-coinglass-symbols N     Override providers.coinglass.max_symbols
---disable-coinglass           Skip CoinGlass even when COINGLASS_API_KEY is set
+--coinglass-candidate-symbols N
+                              Override providers.coinglass.candidate_symbols
 --no-save                     Do not save this run to SQLite history
 --no-reports                  Save SQLite when enabled, but skip Markdown/JSON/CSV files
 ```
@@ -144,13 +140,13 @@ python3 -m crypto_screener.cli \
 
 ### CoinGlass
 
-CoinGlass is optional but recommended because it improves futures context and cross-exchange coverage.
+CoinGlass is required for futures collection.
 
 ```bash
 export COINGLASS_API_KEY="..."
 ```
 
-If unset, the screener still runs with Binance public futures data and CoinGecko context. Provider status will show CoinGlass as skipped.
+If unset, the screener cannot collect futures rows.
 
 ### CoinGecko
 
@@ -176,13 +172,11 @@ Key defaults:
 
 | Area | Default |
 |---|---|
-| Universe | Binance USD-M `USDT` perpetual contracts |
-| Symbols | Top 80 by quote volume |
+| Universe | CoinGlass-supported `USDT` perpetual futures |
+| Symbols | Top 80 by aggregated CoinGlass quote volume |
 | Minimum 24h quote volume | `$20M` |
-| Maximum spread | `15 bps` |
-| Binance depth fetch | Top 20 symbols |
-| Binance OI history | `1h`, 25 points |
-| CoinGlass max symbols | 30 |
+| CoinGlass candidate symbols | 80 |
+| Minimum supported venues | 2 |
 | CoinGlass request delay | 2.1 seconds |
 | CoinGecko categories | 12 |
 | Report rows per section | 12 |
@@ -193,23 +187,10 @@ Stablecoins and dollar-like base assets are excluded by default.
 
 ## Data Providers
 
-### Binance USD-M Futures
-
-Primary fallback provider. The screener uses public endpoints for:
-
-- Exchange metadata.
-- 24h ticker.
-- Book ticker.
-- Premium index and funding.
-- Current open interest.
-- Open-interest history.
-- Order book depth for the most liquid symbols.
-
 ### CoinGlass
 
-Optional enrichment. Current usage focuses on futures pairs market data, aggregated across configured exchanges:
+Required futures provider. Current usage builds a candidate universe from supported exchange pairs, then aggregates futures pairs-market data across configured exchanges:
 
-- Binance
 - OKX
 - Bybit
 - Bitget
@@ -231,9 +212,9 @@ Used for broader market context:
 
 ```text
 load config
-  -> collect Binance USD-M universe
+  -> collect CoinGlass-supported futures universe
   -> collect CoinGecko global and category context
-  -> optionally enrich top symbols with CoinGlass
+  -> aggregate CoinGlass pairs-market data by symbol
   -> apply data-quality sanity checks
   -> load prior SQLite history for factor IC labels
   -> compute factors, weights, scores, and market regime
@@ -275,7 +256,7 @@ python3 -m crypto_screener.cli --config config/default.json --out-dir reports --
 
 ### CSV Fields
 
-The CSV includes symbol, provider, price, 24h price change, quote volume, open interest, OI change, funding, long/short ratio, liquidation fields where available, spread, depth, factor score, long/short/crowding scores, trust state, quality score, and flags.
+The CSV includes symbol, provider, price, 24h price change, quote volume, open interest, OI change, funding, long/short ratio, liquidation fields where available, factor score, long/short/crowding scores, trust state, quality score, and flags.
 
 ## SQLite Storage
 
@@ -357,7 +338,6 @@ Default guards:
 - Missing or nonpositive price/volume fields.
 - Malformed base symbol.
 - Contract/quote mismatch.
-- CoinGlass price deviates from Binance fallback by more than `25%`.
 - CoinGlass price deviates from index price by more than `25%`.
 - CoinGlass enrichment has fewer than 2 configured exchange venues.
 
@@ -410,7 +390,7 @@ Filters:
 
 Selecting a row opens the detail rail with:
 
-- TradingView link using Binance USDT perpetual format, for example `BINANCE:BTCUSDT.P`.
+- TradingView link using the row's primary CoinGlass venue where possible.
 - Setup type.
 - Score and chart priority.
 - Data quality.
@@ -512,7 +492,7 @@ That runs the screener when the latest SQLite snapshot is older than 12 hours. T
 
 ### Local Backend, Railway Frontend Pattern
 
-Some cloud regions can receive HTTP 451 from Binance futures endpoints. If Railway cannot collect Binance data directly, run the screener on a machine that can reach Binance and sync SQLite to Railway:
+If you prefer local collection with a cloud-hosted dashboard, run the screener locally and sync SQLite to Railway:
 
 ```bash
 python3 -m crypto_screener.cli --config config/default.json --out-dir reports --no-reports
@@ -565,24 +545,20 @@ curl -fsS http://127.0.0.1:8097/api/dashboard
 
 ## Troubleshooting
 
-### CoinGlass is skipped
+### CoinGlass API key is missing
 
-Expected when `COINGLASS_API_KEY` is unset. The screener will still complete with Binance and CoinGecko.
+Set `COINGLASS_API_KEY`. CoinGlass is required for futures collection.
 
 ### CoinGlass rate limits or slow runs
 
-Reduce the enriched symbol count or keep the default delay:
+Reduce the candidate symbol count or keep the default delay:
 
 ```bash
 python3 -m crypto_screener.cli \
   --config config/default.json \
   --out-dir reports \
-  --max-coinglass-symbols 15
+  --coinglass-candidate-symbols 25
 ```
-
-### Binance returns HTTP 451 on Railway
-
-Run data collection locally and sync SQLite to Railway. Keep Railway as the dashboard host.
 
 ### Dashboard says no saved runs
 

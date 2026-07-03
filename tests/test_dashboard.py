@@ -31,7 +31,7 @@ class DashboardTests(unittest.TestCase):
                     "btc_dominance_pct": 55.5,
                     "categories": {"leaders": [], "laggards": []},
                 },
-                "provider_status": {"binance": {"status": "ok", "rows": 2}},
+                "provider_status": {"coinglass": {"status": "ok", "rows": 2}},
                 "regime": {"bias": "risk-on", "label": "momentum"},
                 "factor_weights": {"mode": "prior"},
                 "rows": [
@@ -42,7 +42,8 @@ class DashboardTests(unittest.TestCase):
                         "oi_change_24h_pct": 2,
                         "funding_rate_pct": 0.01,
                         "quote_volume_usd": 100_000_000,
-                        "data_source": "binance",
+                        "data_source": "coinglass",
+                        "primary_exchange": "OKX",
                         "is_trusted": True,
                         "data_quality_score": 100,
                         "factor_score": 0.2,
@@ -60,7 +61,7 @@ class DashboardTests(unittest.TestCase):
                         "oi_change_24h_pct": 10,
                         "funding_rate_pct": 0.01,
                         "quote_volume_usd": 100_000_000,
-                        "data_source": "binance",
+                        "data_source": "coinglass",
                         "is_trusted": False,
                         "data_quality_score": 75,
                         "data_quality_flags": ["extreme_24h_price_change:+400.00%"],
@@ -98,7 +99,7 @@ class DashboardTests(unittest.TestCase):
         self.assertGreater(dashboard["watchlists"][1]["rows"][0]["priority"], 0)
         self.assertTrue(dashboard["watchlists"][1]["rows"][0]["factor_parts"])
         self.assertEqual(len(dashboard["watchlists"][1]["rows"][0]["history"]), 2)
-        self.assertEqual(dashboard["runs"][0]["coinglass_status"], "-")
+        self.assertEqual(dashboard["runs"][0]["coinglass_status"], "ok")
 
     def test_dashboard_static_assets_keep_watchlist_ui_contract(self):
         index = (DASHBOARD_STATIC_DIR / "index.html").read_text()
@@ -125,7 +126,8 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('class="detail-rail"', index)
         self.assertIn("sourceTags(row.data_source)", js)
         self.assertIn("tradingViewSymbol", js)
-        self.assertIn("BINANCE:${base}USDT.P", js)
+        self.assertIn("${tradingViewExchange(row?.primary_exchange)}:${base}USDT.P", js)
+        self.assertIn("GATEIO", js)
         self.assertIn("https://www.tradingview.com/chart/?symbol=", js)
         self.assertIn("rel=\"noopener noreferrer\"", js)
         self.assertIn("qualityFlagChip", js)

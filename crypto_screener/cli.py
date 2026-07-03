@@ -19,12 +19,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="config/default.json", help="Path to JSON config.")
     parser.add_argument("--out-dir", default="reports", help="Directory for report files.")
     parser.add_argument("--top-symbols", type=int, help="Override top symbols by 24h volume.")
-    parser.add_argument("--depth-symbols", type=int, help="Override number of symbols with order-book depth fetch.")
     parser.add_argument("--report-limit", type=int, help="Override number of rows per markdown section.")
     parser.add_argument("--min-quote-volume-usd", type=float, help="Override minimum 24h quote volume.")
-    parser.add_argument("--max-spread-bps", type=float, help="Override max bid/ask spread in bps.")
-    parser.add_argument("--max-coinglass-symbols", type=int, help="Override number of symbols enriched via CoinGlass.")
-    parser.add_argument("--disable-coinglass", action="store_true", help="Skip CoinGlass even if COINGLASS_API_KEY is set.")
+    parser.add_argument(
+        "--coinglass-candidate-symbols",
+        "--max-coinglass-symbols",
+        dest="coinglass_candidate_symbols",
+        type=int,
+        help="Override number of CoinGlass candidate symbols to query.",
+    )
     parser.add_argument("--no-save", action="store_true", help="Do not write this run into SQLite history.")
     parser.add_argument("--no-reports", action="store_true", help="Do not write Markdown, JSON, or CSV report files.")
     return parser.parse_args()
@@ -32,24 +35,17 @@ def parse_args() -> argparse.Namespace:
 
 def apply_overrides(config: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     universe = config.setdefault("universe", {})
-    binance = config.setdefault("providers", {}).setdefault("binance", {})
     coinglass = config.setdefault("providers", {}).setdefault("coinglass", {})
     report = config.setdefault("report", {})
 
     if args.top_symbols is not None:
         universe["top_symbols_by_volume"] = args.top_symbols
-    if args.depth_symbols is not None:
-        binance["depth_symbols"] = args.depth_symbols
     if args.report_limit is not None:
         report["limit"] = args.report_limit
     if args.min_quote_volume_usd is not None:
         universe["min_quote_volume_usd"] = args.min_quote_volume_usd
-    if args.max_spread_bps is not None:
-        universe["max_spread_bps"] = args.max_spread_bps
-    if args.max_coinglass_symbols is not None:
-        coinglass["max_symbols"] = args.max_coinglass_symbols
-    if args.disable_coinglass:
-        coinglass["enabled"] = False
+    if args.coinglass_candidate_symbols is not None:
+        coinglass["candidate_symbols"] = args.coinglass_candidate_symbols
     return config
 
 

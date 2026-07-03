@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from typing import Any
 
-from .binance import BinanceFuturesClient, ProviderError
 from .coingecko import CoinGeckoClient
 from .coinglass import CoinGlassClient
+from .providers import ProviderError
 from .quality import apply_data_quality
-from .scoring import funding_annualized_pct, funding_rate_pct, pct_change, spread_bps, to_float
+from .scoring import funding_annualized_pct, to_float
 
 
 def collect_market(config: dict[str, Any]) -> dict[str, Any]:
     status: dict[str, Any] = {}
-    rows = collect_binance_usdm(config, status)
+    rows = collect_coinglass_futures(config, status)
     market_context = collect_coingecko_context(config, status)
-    enrich_with_coinglass(rows, config, status)
     status["data_quality"] = apply_data_quality(rows, config)
     return {
         "rows": rows,
@@ -24,108 +24,16 @@ def collect_market(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def collect_binance_usdm(config: dict[str, Any], status: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    provider_cfg = config.get("providers", {}).get("binance", {})
-    universe_cfg = config.get("universe", {})
-    client = BinanceFuturesClient(
-        base_url=provider_cfg.get("base_url", "https://fapi.binance.com"),
-        timeout_seconds=float(provider_cfg.get("request_timeout_seconds", 12)),
-    )
-
-    exchange_info = client.exchange_info()
-    symbols = exchange_info.get("symbols", [])
-    quote_asset = universe_cfg.get("quote_asset", "USDT")
-    contract_type = universe_cfg.get("contract_type", "PERPETUAL")
-    excluded_bases = set(universe_cfg.get("exclude_base_assets", []))
-
-    valid_symbols: dict[str, dict[str, Any]] = {}
-    for item in symbols:
-        if item.get("status") != "TRADING":
-            continue
-        if item.get("quoteAsset") != quote_asset:
-            continue
-        if item.get("contractType") != contract_type:
-            continue
-        if item.get("baseAsset") in excluded_bases:
-            continue
-        valid_symbols[item["symbol"]] = item
-
-    tickers = _index_by_symbol(client.ticker_24hr())
-    book = _index_by_symbol(client.book_ticker())
-    premium = _index_by_symbol(client.premium_index())
-
-    min_volume = float(universe_cfg.get("min_quote_volume_usd", 20_000_000))
-    max_spread = float(universe_cfg.get("max_spread_bps", 15))
-
-    rows: list[dict[str, Any]] = []
-    for contract_symbol, meta in valid_symbols.items():
-        ticker = tickers.get(contract_symbol)
-        book_row = book.get(contract_symbol)
-        premium_row = premium.get(contract_symbol)
-        if not ticker or not book_row or not premium_row:
-            continue
-
-        quote_volume = to_float(ticker.get("quoteVolume"), 0.0) or 0.0
-        if quote_volume < min_volume:
-            continue
-
-        bid = to_float(book_row.get("bidPrice"))
-        ask = to_float(book_row.get("askPrice"))
-        spread = spread_bps(bid, ask)
-        if spread is None or spread > max_spread:
-            continue
-
-        mark_price = to_float(premium_row.get("markPrice")) or to_float(ticker.get("lastPrice"))
-        funding_rate = to_float(premium_row.get("lastFundingRate"))
-        rows.append(
-            {
-                "symbol": meta.get("baseAsset"),
-                "contract_symbol": contract_symbol,
-                "base_asset": meta.get("baseAsset"),
-                "quote_asset": quote_asset,
-                "primary_exchange": "Binance",
-                "data_source": "binance",
-                "price_usd": to_float(ticker.get("lastPrice")),
-                "mark_price": mark_price,
-                "price_change_24h_pct": to_float(ticker.get("priceChangePercent")),
-                "quote_volume_usd": quote_volume,
-                "bid": bid,
-                "ask": ask,
-                "spread_bps": spread,
-                "funding_rate_pct": funding_rate_pct(funding_rate),
-                "funding_annualized_pct": funding_annualized_pct(funding_rate),
-                "next_funding_time": premium_row.get("nextFundingTime"),
-            }
-        )
-
-    rows.sort(key=lambda row: row["quote_volume_usd"], reverse=True)
-    rows = rows[: int(universe_cfg.get("top_symbols_by_volume", 80))]
-
-    _append_binance_open_interest(rows, client, config)
-    _append_binance_depth(rows, client, config)
-
-    if status is not None:
-        status["binance"] = {
-            "status": "ok",
-            "rows": len(rows),
-            "note": "public Binance USD-M fallback data",
-        }
-    return rows
-
-
-def enrich_with_coinglass(rows: list[dict[str, Any]], config: dict[str, Any], status: dict[str, Any]) -> None:
+def collect_coinglass_futures(config: dict[str, Any], status: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     provider_cfg = config.get("providers", {}).get("coinglass", {})
+    universe_cfg = config.get("universe", {})
     if not provider_cfg.get("enabled", True):
-        status["coinglass"] = {"status": "disabled"}
-        return
+        raise ProviderError("CoinGlass provider is required for futures collection")
 
-    api_key = os.environ.get(provider_cfg.get("api_key_env", "COINGLASS_API_KEY"), "")
+    api_key_env = provider_cfg.get("api_key_env", "COINGLASS_API_KEY")
+    api_key = os.environ.get(api_key_env, "")
     if not api_key:
-        status["coinglass"] = {
-            "status": "skipped",
-            "reason": f"{provider_cfg.get('api_key_env', 'COINGLASS_API_KEY')} is not set",
-        }
-        return
+        raise ProviderError(f"{api_key_env} is required for CoinGlass-only futures collection")
 
     client = CoinGlassClient(
         api_key=api_key,
@@ -133,33 +41,52 @@ def enrich_with_coinglass(rows: list[dict[str, Any]], config: dict[str, Any], st
         timeout_seconds=float(provider_cfg.get("request_timeout_seconds", 12)),
     )
     exchanges = set(provider_cfg.get("exchanges", []))
-    max_symbols = int(provider_cfg.get("max_symbols", 30))
     request_delay = float(provider_cfg.get("request_delay_seconds", 2.1))
-    enriched = 0
-    errors: list[str] = []
+    top_symbols = int(universe_cfg.get("top_symbols_by_volume", 80))
+    candidate_limit = int(provider_cfg.get("candidate_symbols", top_symbols))
+    min_volume = float(universe_cfg.get("min_quote_volume_usd", 20_000_000))
+    quote_asset = str(universe_cfg.get("quote_asset", "USDT"))
+    min_exchange_count = int(provider_cfg.get("min_exchange_count", 2))
+    excluded_bases = {str(item).upper() for item in universe_cfg.get("exclude_base_assets", [])}
+    core_symbols = [str(item).upper() for item in config.get("report", {}).get("core_symbols", ["BTC", "ETH", "SOL"])]
 
-    for row in rows[:max_symbols]:
-        symbol = row["symbol"]
+    supported_pairs = client.supported_exchange_pairs()
+    candidate_stats = _coinglass_candidate_stats(
+        supported_pairs=supported_pairs,
+        exchanges=exchanges,
+        quote_asset=quote_asset,
+        min_exchange_count=min_exchange_count,
+        excluded_bases=excluded_bases,
+    )
+    candidates = _rank_coinglass_candidates(candidate_stats, core_symbols, candidate_limit)
+
+    rows: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for symbol in candidates:
         try:
             pairs = client.futures_pairs_markets(symbol)
-            aggregate = _aggregate_coinglass_pairs(pairs, exchanges)
-            if aggregate:
-                _preserve_binance_fields(row)
-                row.update(aggregate)
-                row["data_source"] = "coinglass+binance"
-                enriched += 1
+            aggregate = _aggregate_coinglass_pairs(pairs, exchanges, candidate_stats.get(symbol, {}), quote_asset)
+            if aggregate and (aggregate.get("quote_volume_usd") or 0.0) >= min_volume:
+                rows.append(aggregate)
         except ProviderError as exc:
             errors.append(f"{symbol}: {exc}")
         finally:
             if request_delay > 0:
                 time.sleep(request_delay)
 
-    status["coinglass"] = {
-        "status": "ok" if enriched else "error",
-        "rows": enriched,
-        "errors": errors[:5],
-        "note": "CoinGlass futures pairs-markets enrichment",
-    }
+    rows.sort(key=lambda row: row.get("quote_volume_usd") or 0.0, reverse=True)
+    rows = rows[:top_symbols]
+
+    if status is not None:
+        status["coinglass"] = {
+            "status": "ok" if rows else "error",
+            "rows": len(rows),
+            "candidate_symbols": len(candidates),
+            "supported_symbols": len(candidate_stats),
+            "errors": errors[:5],
+            "note": "CoinGlass futures pairs-markets primary data",
+        }
+    return rows
 
 
 def collect_coingecko_context(config: dict[str, Any], status: dict[str, Any]) -> dict[str, Any]:
@@ -197,77 +124,101 @@ def collect_coingecko_context(config: dict[str, Any], status: dict[str, Any]) ->
     return context
 
 
-def _append_binance_open_interest(rows: list[dict[str, Any]], client: BinanceFuturesClient, config: dict[str, Any]) -> None:
-    provider_cfg = config.get("providers", {}).get("binance", {})
-    oi_period = provider_cfg.get("oi_period", "1h")
-    oi_limit = int(provider_cfg.get("oi_limit", 25))
-    per_symbol_delay = float(provider_cfg.get("per_symbol_delay_seconds", 0.05))
-
-    for row in rows:
-        contract_symbol = row["contract_symbol"]
-        try:
-            oi_now = client.open_interest(contract_symbol)
-            current_oi = to_float(oi_now.get("openInterest"))
-            row["open_interest"] = current_oi
-            if current_oi is not None and row.get("mark_price") is not None:
-                row["open_interest_usd"] = current_oi * row["mark_price"]
-
-            oi_hist = client.open_interest_hist(contract_symbol, oi_period, oi_limit)
-            if oi_hist:
-                first_value = to_float(oi_hist[0].get("sumOpenInterestValue"))
-                last_value = to_float(oi_hist[-1].get("sumOpenInterestValue"))
-                row["open_interest_hist_oldest_usd"] = first_value
-                row["open_interest_hist_latest_usd"] = last_value
-                row["oi_change_24h_pct"] = pct_change(first_value, last_value)
-        except ProviderError as exc:
-            row["open_interest_error"] = str(exc)
-        finally:
-            client.polite_pause(per_symbol_delay)
-
-
-def _append_binance_depth(rows: list[dict[str, Any]], client: BinanceFuturesClient, config: dict[str, Any]) -> None:
-    provider_cfg = config.get("providers", {}).get("binance", {})
-    depth_symbols = int(provider_cfg.get("depth_symbols", 20))
-    depth_limit = int(provider_cfg.get("depth_limit", 500))
-    per_symbol_delay = float(provider_cfg.get("per_symbol_delay_seconds", 0.05))
-
-    for row in rows[:depth_symbols]:
-        mid = row.get("mark_price") or row.get("price_usd")
-        if not mid:
+def _coinglass_candidate_stats(
+    supported_pairs: dict[str, list[dict[str, Any]]],
+    exchanges: set[str],
+    quote_asset: str,
+    min_exchange_count: int,
+    excluded_bases: set[str],
+) -> dict[str, dict[str, Any]]:
+    stats: dict[str, dict[str, Any]] = {}
+    for exchange_name, pairs in supported_pairs.items():
+        if exchanges and exchange_name not in exchanges:
             continue
-        try:
-            order_book = client.depth(row["contract_symbol"], depth_limit)
-            bid_05, ask_05, min_05 = _depth_usd(order_book, mid, 0.005)
-            bid_10, ask_10, min_10 = _depth_usd(order_book, mid, 0.010)
-            row["bid_depth_0_5pct_usd"] = bid_05
-            row["ask_depth_0_5pct_usd"] = ask_05
-            row["depth_0_5pct_usd"] = min_05
-            row["bid_depth_1pct_usd"] = bid_10
-            row["ask_depth_1pct_usd"] = ask_10
-            row["depth_1pct_usd"] = min_10
-        except ProviderError as exc:
-            row["depth_error"] = str(exc)
-        finally:
-            client.polite_pause(per_symbol_delay)
+        for pair in pairs:
+            base_asset = str(pair.get("base_asset") or "").upper()
+            if not base_asset or base_asset in excluded_bases:
+                continue
+            if not _quote_matches(pair, quote_asset):
+                continue
+            if not _is_likely_perpetual(pair):
+                continue
+            item = stats.setdefault(
+                base_asset,
+                {
+                    "symbol": base_asset,
+                    "exchanges": set(),
+                    "instrument_count": 0,
+                    "max_leverage": 0.0,
+                },
+            )
+            item["exchanges"].add(exchange_name)
+            item["instrument_count"] += 1
+            item["max_leverage"] = max(item["max_leverage"], to_float(pair.get("max_leverage"), 0.0) or 0.0)
+
+    return {
+        symbol: item
+        for symbol, item in stats.items()
+        if len(item["exchanges"]) >= min_exchange_count
+    }
 
 
-def _aggregate_coinglass_pairs(pairs: list[dict[str, Any]], exchanges: set[str]) -> dict[str, Any]:
+def _rank_coinglass_candidates(
+    candidate_stats: dict[str, dict[str, Any]],
+    core_symbols: list[str],
+    limit: int,
+) -> list[str]:
+    ranked = sorted(
+        candidate_stats,
+        key=lambda symbol: (
+            len(candidate_stats[symbol].get("exchanges", [])),
+            candidate_stats[symbol].get("instrument_count", 0),
+            candidate_stats[symbol].get("max_leverage", 0.0),
+            symbol,
+        ),
+        reverse=True,
+    )
+    ordered: list[str] = []
+    for symbol in core_symbols + ranked:
+        if symbol in candidate_stats and symbol not in ordered:
+            ordered.append(symbol)
+        if len(ordered) >= limit:
+            break
+    return ordered
+
+
+def _aggregate_coinglass_pairs(
+    pairs: list[dict[str, Any]],
+    exchanges: set[str],
+    symbol_stats: dict[str, Any],
+    quote_asset: str,
+) -> dict[str, Any]:
     filtered = [
         pair
         for pair in pairs
-        if not exchanges or pair.get("exchange_name") in exchanges
+        if (not exchanges or pair.get("exchange_name") in exchanges)
+        and _pair_symbol_matches_quote(pair, quote_asset)
     ]
     if not filtered:
         return {}
 
+    primary = max(filtered, key=lambda pair: to_float(pair.get("volume_usd"), 0.0) or 0.0)
+    symbol = _base_from_pair(primary)
     total_volume = sum(to_float(pair.get("volume_usd"), 0.0) or 0.0 for pair in filtered)
     total_oi = sum(to_float(pair.get("open_interest_usd"), 0.0) or 0.0 for pair in filtered)
     long_volume = sum(to_float(pair.get("long_volume_usd"), 0.0) or 0.0 for pair in filtered)
     short_volume = sum(to_float(pair.get("short_volume_usd"), 0.0) or 0.0 for pair in filtered)
     long_liq = sum(to_float(pair.get("long_liquidation_usd_24h"), 0.0) or 0.0 for pair in filtered)
     short_liq = sum(to_float(pair.get("short_liquidation_usd_24h"), 0.0) or 0.0 for pair in filtered)
+    funding = _weighted_average(filtered, "funding_rate", "open_interest_usd")
 
     return {
+        "symbol": symbol,
+        "contract_symbol": primary.get("instrument_id") or f"{symbol}{quote_asset}",
+        "base_asset": symbol,
+        "quote_asset": quote_asset,
+        "primary_exchange": primary.get("exchange_name"),
+        "data_source": "coinglass",
         "price_usd": _weighted_average(filtered, "current_price", "volume_usd"),
         "index_price": _weighted_average(filtered, "index_price", "volume_usd"),
         "price_change_24h_pct": _weighted_average(filtered, "price_change_percent_24h", "volume_usd"),
@@ -275,7 +226,9 @@ def _aggregate_coinglass_pairs(pairs: list[dict[str, Any]], exchanges: set[str])
         "volume_change_percent_24h": _weighted_average(filtered, "volume_usd_change_percent_24h", "volume_usd"),
         "open_interest_usd": total_oi,
         "oi_change_24h_pct": _weighted_average(filtered, "open_interest_change_percent_24h", "open_interest_usd"),
-        "funding_rate_pct": _weighted_average(filtered, "funding_rate", "open_interest_usd"),
+        "funding_rate_pct": funding,
+        "funding_annualized_pct": funding_annualized_pct(funding / 100.0) if funding is not None else None,
+        "next_funding_time": primary.get("next_funding_time"),
         "long_volume_usd_24h": long_volume,
         "short_volume_usd_24h": short_volume,
         "long_short_ratio": (long_volume / short_volume) if short_volume > 0 else None,
@@ -283,20 +236,38 @@ def _aggregate_coinglass_pairs(pairs: list[dict[str, Any]], exchanges: set[str])
         "short_liquidation_usd_24h": short_liq,
         "open_interest_volume_ratio": (total_oi / total_volume) if total_volume > 0 else None,
         "coinglass_exchange_count": len({pair.get("exchange_name") for pair in filtered}),
+        "coinglass_instrument_count": symbol_stats.get("instrument_count"),
+        "coinglass_supported_exchange_count": len(symbol_stats.get("exchanges", [])),
     }
 
 
-def _preserve_binance_fields(row: dict[str, Any]) -> None:
-    for key in [
-        "price_usd",
-        "price_change_24h_pct",
-        "quote_volume_usd",
-        "open_interest_usd",
-        "oi_change_24h_pct",
-        "funding_rate_pct",
-    ]:
-        if key in row and f"binance_{key}" not in row:
-            row[f"binance_{key}"] = row[key]
+def _quote_matches(pair: dict[str, Any], quote_asset: str) -> bool:
+    return (
+        str(pair.get("quote_asset") or "").upper() == quote_asset
+        or str(pair.get("settlement_currency") or "").upper() == quote_asset
+    )
+
+
+def _pair_symbol_matches_quote(pair: dict[str, Any], quote_asset: str) -> bool:
+    symbol = str(pair.get("symbol") or "").upper()
+    instrument_id = str(pair.get("instrument_id") or "").upper()
+    return symbol.endswith(f"/{quote_asset}") or quote_asset in instrument_id
+
+
+def _is_likely_perpetual(pair: dict[str, Any]) -> bool:
+    instrument_id = str(pair.get("instrument_id") or "")
+    lowered = instrument_id.lower()
+    if "perp" in lowered or "swap" in lowered:
+        return True
+    return re.search(r"[_-]\d{6,8}$", instrument_id) is None
+
+
+def _base_from_pair(pair: dict[str, Any]) -> str:
+    symbol = str(pair.get("symbol") or "")
+    if "/" in symbol:
+        return symbol.split("/", 1)[0].upper()
+    instrument_id = str(pair.get("instrument_id") or "")
+    return re.sub(r"[^A-Z0-9].*$", "", instrument_id.upper()).replace("USDT", "")
 
 
 def _normalize_coingecko_global(global_data: dict[str, Any]) -> dict[str, Any]:
@@ -341,32 +312,3 @@ def _weighted_average(rows: list[dict[str, Any]], value_key: str, weight_key: st
         weighted_sum += value * weight
         total_weight += weight
     return weighted_sum / total_weight if total_weight > 0 else None
-
-
-def _index_by_symbol(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    return {item["symbol"]: item for item in items if "symbol" in item}
-
-
-def _depth_usd(order_book: dict[str, Any], mid: float, band_pct: float) -> tuple[float, float, float]:
-    bid_floor = mid * (1.0 - band_pct)
-    ask_ceiling = mid * (1.0 + band_pct)
-
-    bid_depth = 0.0
-    for price_raw, qty_raw in order_book.get("bids", []):
-        price = to_float(price_raw)
-        qty = to_float(qty_raw)
-        if price is None or qty is None:
-            continue
-        if price >= bid_floor:
-            bid_depth += price * qty
-
-    ask_depth = 0.0
-    for price_raw, qty_raw in order_book.get("asks", []):
-        price = to_float(price_raw)
-        qty = to_float(qty_raw)
-        if price is None or qty is None:
-            continue
-        if price <= ask_ceiling:
-            ask_depth += price * qty
-
-    return bid_depth, ask_depth, min(bid_depth, ask_depth)
