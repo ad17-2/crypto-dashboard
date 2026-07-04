@@ -17,6 +17,9 @@ from crypto_screener.dashboard import (
     RefreshRuntime,
     _daily_refresh_due,
     _parse_daily_refresh_time,
+    _parse_daily_refresh_times,
+    _scheduled_refresh_due,
+    _seconds_until_next_daily_check,
     build_dashboard_payload,
 )
 from crypto_screener.storage import connect, prune_old_runs, save_snapshot
@@ -202,6 +205,44 @@ class DashboardTests(unittest.TestCase):
             self.assertFalse(_daily_refresh_due(db_path, datetime(2026, 7, 3, 12, 0, tzinfo=zone), refresh_time))
             self.assertTrue(_daily_refresh_due(db_path, datetime(2026, 7, 4, 6, 0, tzinfo=zone), refresh_time))
 
+    def test_daily_refresh_supports_multiple_times_per_day(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "screener.sqlite3"
+            refresh_times = _parse_daily_refresh_times("15:10,07:10,11:10,07:10")
+            zone = ZoneInfo("Asia/Jakarta")
+
+            self.assertEqual([item.strftime("%H:%M") for item in refresh_times], ["07:10", "11:10", "15:10"])
+            self.assertFalse(_scheduled_refresh_due(db_path, datetime(2026, 7, 3, 7, 9, tzinfo=zone), refresh_times))
+            self.assertTrue(_scheduled_refresh_due(db_path, datetime(2026, 7, 3, 7, 10, tzinfo=zone), refresh_times))
+
+            save_snapshot(
+                {
+                    "run_id": "morning",
+                    "generated_at": "2026-07-03T07:15:00+07:00",
+                    "rows": [{"symbol": "BTC", "price_usd": 100}],
+                },
+                {"storage_path": str(db_path)},
+            )
+
+            self.assertFalse(_scheduled_refresh_due(db_path, datetime(2026, 7, 3, 10, 59, tzinfo=zone), refresh_times))
+            self.assertTrue(_scheduled_refresh_due(db_path, datetime(2026, 7, 3, 11, 10, tzinfo=zone), refresh_times))
+
+            save_snapshot(
+                {
+                    "run_id": "midday",
+                    "generated_at": "2026-07-03T11:20:00+07:00",
+                    "rows": [{"symbol": "BTC", "price_usd": 101}],
+                },
+                {"storage_path": str(db_path)},
+            )
+
+            self.assertFalse(_scheduled_refresh_due(db_path, datetime(2026, 7, 3, 15, 9, tzinfo=zone), refresh_times))
+            self.assertTrue(_scheduled_refresh_due(db_path, datetime(2026, 7, 3, 15, 10, tzinfo=zone), refresh_times))
+            self.assertEqual(
+                _seconds_until_next_daily_check(datetime(2026, 7, 3, 15, 11, tzinfo=zone), refresh_times),
+                1800.0,
+            )
+
     def test_dashboard_static_assets_keep_watchlist_ui_contract(self):
         index = (DASHBOARD_STATIC_DIR / "index.html").read_text()
         css = (DASHBOARD_STATIC_DIR / "dashboard.css").read_text()
@@ -269,7 +310,7 @@ class DashboardTests(unittest.TestCase):
                 port=0,
                 limit=5,
                 auto_refresh_seconds=0,
-                daily_refresh_time=None,
+                daily_refresh_times=(),
                 refresh_timezone="Asia/Jakarta",
                 retain_runs=0,
                 refresh_token=None,
@@ -320,7 +361,7 @@ class DashboardTests(unittest.TestCase):
                 port=0,
                 limit=5,
                 auto_refresh_seconds=0,
-                daily_refresh_time=None,
+                daily_refresh_times=(),
                 refresh_timezone="Asia/Jakarta",
                 retain_runs=1,
                 refresh_token=None,

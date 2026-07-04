@@ -37,7 +37,7 @@ class DashboardSettings:
     port: int
     limit: int
     auto_refresh_seconds: int
-    daily_refresh_time: local_time | None
+    daily_refresh_times: tuple[local_time, ...]
     refresh_timezone: str
     retain_runs: int
     refresh_token: str | None
@@ -108,7 +108,7 @@ def settings_from_env() -> DashboardSettings:
         port=int(os.environ.get("PORT", "8080")),
         limit=int(os.environ.get("CRYPTO_DASHBOARD_LIMIT", config.get("report", {}).get("limit", 12))),
         auto_refresh_seconds=int(os.environ.get("CRYPTO_DASHBOARD_AUTO_REFRESH_SECONDS", "0")),
-        daily_refresh_time=_parse_daily_refresh_time(
+        daily_refresh_times=_parse_daily_refresh_times(
             os.environ.get("CRYPTO_DASHBOARD_DAILY_REFRESH_TIME")
             or os.environ.get("CRYPTO_DASHBOARD_REFRESH_TIME")
             or ""
@@ -126,7 +126,7 @@ def _load_runtime_config(settings: DashboardSettings) -> dict[str, Any]:
 
 
 def start_auto_refresh(runtime: RefreshRuntime) -> None:
-    if runtime.settings.daily_refresh_time is not None:
+    if runtime.settings.daily_refresh_times:
         _start_daily_refresh(runtime)
         return
 
@@ -146,19 +146,19 @@ def start_auto_refresh(runtime: RefreshRuntime) -> None:
 
 def _start_daily_refresh(runtime: RefreshRuntime) -> None:
     zone = ZoneInfo(runtime.settings.refresh_timezone)
-    refresh_time = runtime.settings.daily_refresh_time
-    if refresh_time is None:
+    refresh_times = runtime.settings.daily_refresh_times
+    if not refresh_times:
         return
 
     def loop() -> None:
         while True:
             now = datetime.now(zone)
-            if _daily_refresh_due(runtime.settings.db_path, now, refresh_time):
+            if _scheduled_refresh_due(runtime.settings.db_path, now, refresh_times):
                 status = runtime.refresh("daily")
                 if status.get("state") != "ok":
                     time.sleep(300)
                     continue
-            time.sleep(_seconds_until_next_daily_check(datetime.now(zone), refresh_time))
+            time.sleep(_seconds_until_next_daily_check(datetime.now(zone), refresh_times))
 
     threading.Thread(target=loop, daemon=True).start()
 
@@ -171,6 +171,19 @@ def _parse_daily_refresh_time(raw: str) -> local_time | None:
     return local_time(hour=int(hour_text), minute=int(minute_text))
 
 
+def _parse_daily_refresh_times(raw: str) -> tuple[local_time, ...]:
+    times = []
+    for part in raw.split(","):
+        refresh_time = _parse_daily_refresh_time(part)
+        if refresh_time is not None and refresh_time not in times:
+            times.append(refresh_time)
+    return tuple(sorted(times))
+
+
+def _scheduled_refresh_due(db_path: Path, now: datetime, refresh_times: tuple[local_time, ...]) -> bool:
+    return any(_daily_refresh_due(db_path, now, refresh_time) for refresh_time in refresh_times)
+
+
 def _daily_refresh_due(db_path: Path, now: datetime, refresh_time: local_time) -> bool:
     target = _scheduled_datetime(now, refresh_time)
     if now < target:
@@ -181,10 +194,10 @@ def _daily_refresh_due(db_path: Path, now: datetime, refresh_time: local_time) -
     return latest.astimezone(now.tzinfo) < target
 
 
-def _seconds_until_next_daily_check(now: datetime, refresh_time: local_time) -> float:
-    target = _scheduled_datetime(now, refresh_time)
-    if now >= target:
-        target += timedelta(days=1)
+def _seconds_until_next_daily_check(now: datetime, refresh_times: tuple[local_time, ...]) -> float:
+    targets = [_scheduled_datetime(now, refresh_time) for refresh_time in refresh_times]
+    future_targets = [target for target in targets if target > now]
+    target = min(future_targets) if future_targets else min(targets) + timedelta(days=1)
     return max(60.0, min((target - now).total_seconds(), 1800.0))
 
 

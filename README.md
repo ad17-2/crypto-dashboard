@@ -526,7 +526,7 @@ Side modules:
 | `CRYPTO_SCREENER_REPORT_DIR` | `reports` | Runtime work directory; dashboard refresh skips report files |
 | `CRYPTO_DASHBOARD_LIMIT` | Config `report.limit` | Rows per watchlist |
 | `CRYPTO_DASHBOARD_AUTO_REFRESH_SECONDS` | `0` | Auto-run screener when latest run is older than this many seconds |
-| `CRYPTO_DASHBOARD_DAILY_REFRESH_TIME` | unset | Daily refresh time in `HH:MM`; takes precedence over interval refresh |
+| `CRYPTO_DASHBOARD_DAILY_REFRESH_TIME` | unset | Daily refresh time or comma-separated times in `HH:MM`; takes precedence over interval refresh |
 | `CRYPTO_DASHBOARD_REFRESH_TZ` | `Asia/Jakarta` | Timezone for daily refresh scheduling |
 | `CRYPTO_DASHBOARD_RETAIN_RUNS` | `0` | Keep only this many newest SQLite runs after each successful refresh; `0` disables pruning |
 | `CRYPTO_DASHBOARD_REFRESH_TOKEN` | unset | Enables protected manual refresh API |
@@ -592,15 +592,15 @@ CRYPTO_SCREENER_DB_PATH=/data/crypto_screener.sqlite3
 CRYPTO_SCREENER_REPORT_DIR=/data/reports
 ```
 
-To let Railway refresh itself once per day at 06:00 Asia/Jakarta, keeping only the latest saved run, set:
+To let Railway refresh itself three times per workday in Asia/Jakarta, keeping only the latest saved full run, set:
 
 ```bash
-CRYPTO_DASHBOARD_DAILY_REFRESH_TIME=06:00
+CRYPTO_DASHBOARD_DAILY_REFRESH_TIME=07:10,11:10,15:10
 CRYPTO_DASHBOARD_REFRESH_TZ=Asia/Jakarta
 CRYPTO_DASHBOARD_RETAIN_RUNS=1
 ```
 
-The daily scheduler runs the screener after the configured local time when the latest SQLite snapshot is older than that day's scheduled run. The dashboard refresh path saves SQLite only and does not write Markdown, JSON, or CSV files. If CoinGecko returns HTTP 429 during refresh, the CoinGecko client backs off with jitter and keeps retrying until the market and sector context request succeeds.
+The daily scheduler runs the screener after each configured local time when the latest SQLite snapshot is older than that scheduled run. The dashboard refresh path saves SQLite only and does not write Markdown, JSON, or CSV files. If CoinGecko returns HTTP 429 during refresh, the CoinGecko client backs off with jitter and keeps retrying until the market and sector context request succeeds.
 
 ### Local Backend, Railway Frontend Pattern
 
