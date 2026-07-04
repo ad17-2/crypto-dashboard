@@ -47,7 +47,7 @@ jobs:
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RAILWAY_PROJECT_ID: b8d5cc94-f757-4a1f-a673-5f8ff4998dff
-      RAILWAY_ENVIRONMENT_ID: 9c49219d-4db0-41f4-ac51-7399698b5bbf
+      RAILWAY_ENVIRONMENT_ID: 9f55bf69-76ce-4242-8629-e74be0650edb
       RAILWAY_SERVICE_ID: 1ca82e37-189e-484b-877a-9bb236fb2ca8
     steps:
       - name: Checkout

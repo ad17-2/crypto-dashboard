@@ -235,6 +235,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("detail-section", css)
         self.assertIn("module-grid", css)
         self.assertIn("sector-list", css)
+        self.assertIn("summary::after", css)
         self.assertIn("conflict-badge", css)
         self.assertIn("explanation-box", css)
         self.assertIn("Use Top Setups first -> filter -> inspect detail -> open TradingView.", js)
