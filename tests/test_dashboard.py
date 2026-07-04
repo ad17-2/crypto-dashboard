@@ -43,8 +43,13 @@ class DashboardTests(unittest.TestCase):
                     "mode": "prior",
                     "validation": {
                         "status": "limited",
+                        "horizon_hours": 12,
                         "observations": 8,
                         "model": {"hit_rate": 62.5},
+                        "factors": {
+                            "momentum_24h": {"hit_rate": 75.0, "observations": 4},
+                            "reversal_1d": {"hit_rate": 40.0, "observations": 4},
+                        },
                     },
                 },
                 "rows": [
@@ -116,23 +121,32 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(dashboard["regime"]["bias"], "risk-on")
         self.assertEqual(dashboard["market_context"]["breadth"]["label"], "selective-risk-on")
         self.assertEqual(dashboard["validation"]["status"], "limited")
+        self.assertEqual(dashboard["validation"]["model_hit_rate"], 62.5)
+        self.assertEqual(dashboard["validation"]["calibration_label"], "learning")
+        self.assertEqual(dashboard["validation"]["best_factors"][0]["label"], "Momentum")
+        self.assertEqual(dashboard["freshness"]["status"], "ok")
+        self.assertEqual(dashboard["sector_breadth"]["groups"][0]["sector"], "BTC / Store of Value")
         self.assertEqual(dashboard["quality"]["trusted_count"], 1)
         self.assertEqual(dashboard["quality"]["excluded_count"], 1)
         self.assertEqual(dashboard["sections"]["long"][0]["symbol"], "BTC")
         self.assertTrue(dashboard["sections"]["long"][0]["reason_parts"])
         self.assertEqual(dashboard["sections"]["long"][0]["reason_parts"][0]["label"], "24h")
         self.assertEqual(dashboard["watchlists"][0]["id"], "chart_next")
-        self.assertEqual(dashboard["watchlists"][1]["id"], "long")
-        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["setup"], "Trend Continuation Long")
-        self.assertGreater(dashboard["watchlists"][1]["rows"][0]["priority"], 0)
-        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["confidence_score"], 72)
-        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["signal_conflict_label"], "minor-conflict")
-        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["signal_conflict_score"], 24)
-        self.assertIn("Signals", [part["label"] for part in dashboard["watchlists"][1]["rows"][0]["reason_parts"]])
-        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["technical_state"]["rsi_14"], 61)
-        self.assertTrue(dashboard["watchlists"][1]["rows"][0]["factor_parts"])
-        self.assertEqual(len(dashboard["watchlists"][1]["rows"][0]["history"]), 2)
-        self.assertEqual(dashboard["watchlists"][1]["rows"][0]["history"][0]["confidence_score"], 72)
+        self.assertEqual(dashboard["watchlists"][1]["id"], "regime_fit")
+        self.assertEqual(dashboard["watchlists"][2]["id"], "long")
+        long_row = dashboard["watchlists"][2]["rows"][0]
+        self.assertEqual(long_row["setup"], "Trend Continuation Long")
+        self.assertGreater(long_row["priority"], 0)
+        self.assertEqual(long_row["confidence_score"], 72)
+        self.assertEqual(long_row["signal_conflict_label"], "minor-conflict")
+        self.assertEqual(long_row["signal_conflict_score"], 24)
+        self.assertEqual(long_row["sector"], "BTC / Store of Value")
+        self.assertIn("read", long_row["explanation"])
+        self.assertIn("Signals", [part["label"] for part in long_row["reason_parts"]])
+        self.assertEqual(long_row["technical_state"]["rsi_14"], 61)
+        self.assertTrue(long_row["factor_parts"])
+        self.assertEqual(len(long_row["history"]), 2)
+        self.assertEqual(long_row["history"][0]["confidence_score"], 72)
         self.assertEqual(dashboard["runs"][0]["coinglass_status"], "ok")
 
     def test_prune_old_runs_keeps_only_latest_snapshot(self):
@@ -206,10 +220,19 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("watchTabs", index)
         self.assertIn("watchTable", index)
         self.assertIn("detailPanel", index)
+        self.assertIn("validationPanel", index)
         self.assertIn("sparkline", js)
         self.assertIn("filterValues", js)
         self.assertIn("factorBars", js)
+        self.assertIn("validationBlock", js)
+        self.assertIn("freshnessBlock", js)
+        self.assertIn("conflictBlock", js)
+        self.assertIn("explanationBlock", js)
+        self.assertIn("sector_breadth", js)
+        self.assertIn("Regime Fit", js)
         self.assertIn("module-panel", css)
+        self.assertIn("conflict-badge", css)
+        self.assertIn("explanation-box", css)
         self.assertIn("Use Chart Next first -> filter -> inspect detail -> open TradingView.", js)
         self.assertIn("sector_rotation", js)
         self.assertIn('class="watch-row', js)

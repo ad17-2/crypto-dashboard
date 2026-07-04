@@ -13,6 +13,10 @@
       const n = Number(value);
       return `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
     }
+    function fmtRate(value, digits = 1) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return `${Number(value).toFixed(digits)}%`;
+    }
     function fmtUsd(value) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
       const n = Number(value);
@@ -157,6 +161,17 @@
     function setupBadge(row) {
       return `<span class="setup-badge ${esc(row.setup_tone || "neutral")}">${esc(row.setup || "Watchlist")}</span>`;
     }
+    function conflictTone(label) {
+      const normalized = String(label || "").toLowerCase();
+      if (normalized === "aligned" || normalized === "neutral") return "pos";
+      if (normalized === "high-conflict" || normalized === "excluded") return "bad";
+      if (normalized && normalized !== "unknown") return "warn";
+      return "neutral";
+    }
+    function conflictBadge(row) {
+      const label = row?.signal_conflict_label || "unknown";
+      return `<span class="conflict-badge ${conflictTone(label)}">${esc(label)}</span>`;
+    }
     function scoreText(row) {
       const confidence = row.confidence_score == null ? "" : ` / C ${fmtNum(row.confidence_score, 0)}`;
       return `<strong>${fmtNum(row.score)}</strong><div class="driver-line">P ${fmtNum(row.priority)}${confidence}</div>`;
@@ -167,6 +182,7 @@
     function watchlistsFrom(data) {
       if (Array.isArray(data.watchlists) && data.watchlists.length) return data.watchlists;
       return [
+        { id: "regime_fit", label: "Regime Fit", rows: data.sections?.regime_fit || [] },
         { id: "long", label: "Longs", rows: data.sections?.long || [] },
         { id: "short", label: "Shorts", rows: data.sections?.short || [] },
         { id: "squeeze_risks", label: "Squeeze Risk", rows: data.sections?.squeeze_risks || [] },
@@ -197,9 +213,12 @@
       if (filters.query) {
         const haystack = [
           row.symbol,
+          row.sector,
           row.setup,
           row.technical_setup,
+          row.signal_conflict_label,
           row.primary_driver?.label,
+          row.explanation?.read,
           row.reason,
           row.data_source,
         ].join(" ").toLowerCase();
@@ -280,7 +299,7 @@
         const active = key === state.selectedKey ? " active" : "";
         return `<div class="watch-row${active}" role="button" tabindex="0" data-key="${esc(key)}">
           <div class="watch-cell left watch-symbol" data-label="Symbol">${symbolLink(row)}<span class="driver-line">${esc(row.primary_driver?.label || row.side || "-")}</span></div>
-          <div class="watch-cell left" data-label="Setup">${setupBadge(row)}</div>
+          <div class="watch-cell left" data-label="Setup">${setupBadge(row)}<span class="driver-line">${esc(row.sector || "Other")} / ${esc(row.signal_conflict_label || "unknown")}</span></div>
           <div class="watch-cell" data-label="Score">${scoreText(row)}</div>
           <div class="watch-cell" data-label="Q"><span class="quality-badge ${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</span></div>
           <div class="watch-cell ${clsFor(row.price_change_24h_pct)}" data-label="24h">${fmtPct(row.price_change_24h_pct)}</div>
@@ -332,6 +351,37 @@
         <div class="detail-metric"><span class="label">Candles</span><strong>${esc(state.technical_candle_count ?? "-")} ${esc(state.technical_interval || "")}</strong></div>
       </div>`;
     }
+    function explanationBlock(row) {
+      const explanation = row?.explanation || {};
+      const confirm = Array.isArray(explanation.confirm) ? explanation.confirm : [];
+      const risk = Array.isArray(explanation.risk) ? explanation.risk : [];
+      if (!explanation.read && !confirm.length && !risk.length) {
+        return `<div class="driver-line">No token explanation available.</div>`;
+      }
+      const list = (items, klass) => items.length ? `<ul class="${klass}">${items.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "";
+      return `<div class="explanation-box">
+        ${explanation.read ? `<p>${esc(explanation.read)}</p>` : ""}
+        <div class="explanation-grid">
+          <div><div class="label">Confirm</div>${list(confirm, "explanation-list")}</div>
+          <div><div class="label">Risk</div>${list(risk, "explanation-list risk")}</div>
+        </div>
+      </div>`;
+    }
+    function conflictBlock(row) {
+      const conflicts = Array.isArray(row?.signal_conflicts) ? row.signal_conflicts : [];
+      if (!conflicts.length) {
+        return `<div class="conflict-summary">${conflictBadge(row)}<span>No material conflict detected.</span></div>`;
+      }
+      return `<div class="conflict-block">
+        <div class="conflict-summary">${conflictBadge(row)}<span>Score ${fmtNum(row.signal_conflict_score, 0)}</span></div>
+        ${conflicts.map((item) => `
+          <div class="conflict-row">
+            <strong>${esc(item.label || item.code || "Conflict")}</strong>
+            <span>${esc(item.detail || `severity ${fmtNum(item.severity, 2)}`)}</span>
+          </div>
+        `).join("")}
+      </div>`;
+    }
     function renderDetail(row) {
       if (!row) {
         $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="empty">Select a watchlist row</div>`);
@@ -348,16 +398,21 @@
             <a class="detail-link" href="${tradingViewUrl(row)}" target="_blank" rel="noopener noreferrer">TradingView</a>
           </div>
         </div>
-        <div>${setupBadge(row)}</div>
+        <div class="detail-badges">${setupBadge(row)}${conflictBadge(row)}</div>
         <div class="detail-grid">
           <div class="detail-metric"><span class="label">Score / Priority</span><strong>${fmtNum(row.score)} / ${fmtNum(row.priority)}</strong></div>
           <div class="detail-metric"><span class="label">Confidence</span><strong>${row.confidence_score == null ? "-" : fmtNum(row.confidence_score, 0)}</strong></div>
           <div class="detail-metric"><span class="label">Quality</span><strong class="${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</strong></div>
+          <div class="detail-metric"><span class="label">Sector</span><strong>${esc(row.sector || "Other")}</strong></div>
           <div class="detail-metric"><span class="label">24h / OI</span><strong><span class="${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</span> / <span class="${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</span></strong></div>
           <div class="detail-metric"><span class="label">Funding / L/S</span><strong><span class="${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</span> / ${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</strong></div>
           <div class="detail-metric"><span class="label">Volume</span><strong>${fmtUsd(row.quote_volume_usd)}</strong></div>
           <div class="detail-metric"><span class="label">Open Interest</span><strong>${fmtUsd(row.open_interest_usd)}</strong></div>
         </div>
+        <div class="label">How To Read This Coin</div>
+        ${explanationBlock(row)}
+        <div class="label">Signal Conflict</div>
+        ${conflictBlock(row)}
         <div class="label">Technical Context</div>
         ${technicalBlock(row)}
         <div class="label">Reason ${reasonHelp()}</div>
@@ -392,6 +447,7 @@
         extreme_funding_rate: "Funding",
         thin_coinglass_exchange_coverage: "Thin coverage",
         price_deviates_from_index: "Price vs Index",
+        price_deviates_from_binance: "Price vs Binance",
         stale_low_quote_volume: "Low volume",
         invalid_price: "Invalid price",
         invalid_open_interest: "Invalid OI",
@@ -446,18 +502,64 @@
         qualityBlock(data.quality),
         excluded > 0
       );
-      $("sectorPanel").innerHTML = modulePanel("Sector Rotation", "leaders / laggards", sectorList(data.market_context || {}), true);
-      $("runsPanel").innerHTML = modulePanel("Recent Runs", `${(data.runs || []).length} loaded`, runsBlock(data.runs), false);
+      $("validationPanel").innerHTML = modulePanel(
+        "Validation",
+        data.validation?.calibration_label || data.validation?.status || "unknown",
+        validationBlock(data.validation),
+        false
+      );
+      $("sectorPanel").innerHTML = modulePanel(
+        "Sector Rotation",
+        data.sector_breadth?.label || "leaders / laggards",
+        sectorList(data.market_context || {}, data.sector_breadth || {}),
+        true
+      );
+      $("runsPanel").innerHTML = modulePanel(
+        "Freshness / Runs",
+        data.freshness?.label || `${(data.runs || []).length} loaded`,
+        `${freshnessBlock(data.freshness)}${runsBlock(data.runs)}`,
+        false
+      );
     }
-    function sectorList(context) {
+    function validationBlock(validation) {
+      if (!validation || Object.keys(validation).length === 0) return `<div class="empty">No validation data</div>`;
+      const best = validation.best_factors?.[0];
+      const weak = validation.weakest_factors?.[0];
+      const buckets = validation.conflict_buckets || [];
+      return `<div class="list">
+        <div class="list-row"><strong>Status</strong><span>${esc(validation.status || "unknown")} / ${esc(validation.calibration_label || "learning")}</span></div>
+        <div class="list-row"><strong>Observations</strong><span>${esc(validation.observations ?? 0)} / ${esc(validation.horizon_hours ?? "-")}h</span></div>
+        <div class="list-row"><strong>Model Hit</strong><span>${fmtRate(validation.model_hit_rate)}</span></div>
+        <div class="list-row"><strong>Best Factor</strong><span>${best ? `${esc(best.label)} ${fmtRate(best.hit_rate)}` : "-"}</span></div>
+        <div class="list-row"><strong>Weak Factor</strong><span>${weak ? `${esc(weak.label)} ${fmtRate(weak.hit_rate)}` : "-"}</span></div>
+        <div class="label">Current Signal Mix</div>
+        ${buckets.slice(0, 4).map((bucket) => `<div class="list-row"><strong>${esc(bucket.label)}</strong><span>${esc(bucket.count)} / C ${fmtNum(bucket.avg_confidence, 0)}</span></div>`).join("") || `<div class="empty">No signal buckets</div>`}
+      </div>`;
+    }
+    function freshnessBlock(freshness) {
+      if (!freshness || freshness.status !== "ok") return `<div class="list"><div class="list-row"><strong>Freshness</strong><span>unknown</span></div></div>`;
+      return `<div class="list freshness-list">
+        <div class="list-row"><strong>Selected Run</strong><span>${esc(freshness.generated_at || "-")}</span></div>
+        <div class="list-row"><strong>Age</strong><span>${esc(freshness.label || "unknown")} / ${fmtNum(freshness.age_minutes, 1)}m</span></div>
+      </div>`;
+    }
+    function sectorGroupLine(item) {
+      return `<div class="list-row sector-row">
+        <strong>${esc(item.sector || "Other")}<small>${esc((item.symbols || []).slice(0, 4).join(", "))}</small></strong>
+        <span class="${clsFor(item.avg_return_24h_pct)}">${fmtPct(item.avg_return_24h_pct)} / ${fmtRate(item.advancer_pct, 0)}</span>
+      </div>`;
+    }
+    function sectorList(context, sectorBreadth) {
       const leaders = context?.categories?.leaders || [];
       const laggards = context?.categories?.laggards || [];
       const breadth = context?.breadth || {};
       const rotation = context?.sector_rotation || {};
+      const sectorGroups = sectorBreadth?.groups || [];
       const line = (item) => `<div class="list-row"><strong>${esc(item.name || item.id)}</strong><span class="${clsFor(item.market_cap_change_24h_pct)}">${fmtPct(item.market_cap_change_24h_pct)}</span></div>`;
       return `<div class="list">
         <div class="list-row"><strong>Breadth</strong><span>${esc(breadth.label || "unknown")} / ${fmtNum(breadth.score, 2)}</span></div>
         <div class="list-row"><strong>Sector Tape</strong><span>${esc(rotation.label || "unknown")}</span></div>
+        <div class="label">Mapped Futures Sectors</div>${sectorGroups.slice(0, 6).map(sectorGroupLine).join("") || `<div class="empty">No mapped sectors</div>`}
         <div class="label">Leaders</div>${leaders.slice(0, 5).map(line).join("") || `<div class="empty">No leaders</div>`}
         <div class="label">Laggards</div>${laggards.slice(0, 5).map(line).join("") || `<div class="empty">No laggards</div>`}
       </div>`;
@@ -481,7 +583,7 @@
         $("watchCount").textContent = "-";
         $("watchTable").innerHTML = `<div class="empty">No data</div>`;
         $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="empty">No data</div>`);
-        ["providerPanel","qualityPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = modulePanel(id, "", `<div class="empty">No data</div>`));
+        ["providerPanel","qualityPanel","validationPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = modulePanel(id, "", `<div class="empty">No data</div>`));
         return;
       }
       state.selectedRun = data.run.run_id;
@@ -490,7 +592,7 @@
       updateSourceOptions(data);
       const c = data.market_context || {};
       const r = data.regime || {};
-      $("generated").textContent = `${data.run.generated_at} / ${data.run.row_count} symbols · Use Chart Next first -> filter -> inspect detail -> open TradingView.`;
+      $("generated").textContent = `${data.run.generated_at} / ${data.run.row_count} symbols · Use Chart Next first -> filter -> inspect detail -> open TradingView. Freshness: ${data.freshness?.label || "unknown"}.`;
       $("metrics").innerHTML = [
         metric("Bias", r.bias || "unknown", "accent"),
         metric("Factor Regime", r.label || "unknown", "small"),

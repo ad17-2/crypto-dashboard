@@ -29,11 +29,103 @@ FACTOR_LABELS = {
 
 WATCHLIST_LABELS = {
     "chart_next": "Chart Next",
+    "regime_fit": "Regime Fit",
     "long": "Longs",
     "short": "Shorts",
     "squeeze_risks": "Squeeze Risk",
     "crowded_longs": "Long Fades",
     "core": "Core",
+}
+
+SYMBOL_SECTORS = {
+    "BTC": "BTC / Store of Value",
+    "ETH": "Majors / Smart Contract",
+    "SOL": "Majors / Smart Contract",
+    "BNB": "Exchange / L1",
+    "XRP": "Payments",
+    "BCH": "Payments",
+    "LTC": "Payments",
+    "XLM": "Payments",
+    "ADA": "L1 / L0",
+    "AVAX": "L1 / L0",
+    "DOT": "L1 / L0",
+    "ATOM": "L1 / L0",
+    "NEAR": "L1 / L0",
+    "APT": "L1 / L0",
+    "SUI": "L1 / L0",
+    "SEI": "L1 / L0",
+    "TON": "L1 / L0",
+    "ICP": "L1 / L0",
+    "KAS": "L1 / L0",
+    "ARB": "Layer 2",
+    "OP": "Layer 2",
+    "STRK": "Layer 2",
+    "ZK": "Layer 2",
+    "MANTA": "Layer 2",
+    "METIS": "Layer 2",
+    "MATIC": "Layer 2",
+    "POL": "Layer 2",
+    "LINK": "Oracle / Data",
+    "PYTH": "Oracle / Data",
+    "API3": "Oracle / Data",
+    "AAVE": "DeFi",
+    "UNI": "DeFi",
+    "CRV": "DeFi",
+    "COMP": "DeFi",
+    "MKR": "DeFi",
+    "ENA": "DeFi",
+    "PENDLE": "DeFi",
+    "LDO": "DeFi",
+    "RUNE": "DeFi",
+    "INJ": "DeFi",
+    "JUP": "DeFi",
+    "DYDX": "Exchange / Perps",
+    "HYPE": "Exchange / Perps",
+    "OKB": "Exchange / Perps",
+    "BGB": "Exchange / Perps",
+    "TAO": "AI / Compute",
+    "RENDER": "AI / Compute",
+    "RNDR": "AI / Compute",
+    "FET": "AI / Compute",
+    "OCEAN": "AI / Compute",
+    "AGIX": "AI / Compute",
+    "WLD": "AI / Compute",
+    "ARKM": "AI / Compute",
+    "AI": "AI / Compute",
+    "GRT": "AI / Compute",
+    "AIOZ": "AI / Compute",
+    "DOGE": "Meme",
+    "SHIB": "Meme",
+    "PEPE": "Meme",
+    "WIF": "Meme",
+    "BONK": "Meme",
+    "FLOKI": "Meme",
+    "MEME": "Meme",
+    "BOME": "Meme",
+    "TURBO": "Meme",
+    "MOG": "Meme",
+    "POPCAT": "Meme",
+    "FARTCOIN": "Meme",
+    "PENGU": "Meme",
+    "IMX": "Gaming / Metaverse",
+    "SAND": "Gaming / Metaverse",
+    "MANA": "Gaming / Metaverse",
+    "AXS": "Gaming / Metaverse",
+    "GALA": "Gaming / Metaverse",
+    "PIXEL": "Gaming / Metaverse",
+    "APE": "Gaming / Metaverse",
+    "YGG": "Gaming / Metaverse",
+    "ONDO": "RWA",
+    "OM": "RWA",
+    "CFG": "RWA",
+    "HNT": "DePIN",
+    "IOTX": "DePIN",
+    "AKT": "DePIN",
+    "FIL": "DePIN / Storage",
+    "AR": "DePIN / Storage",
+    "STX": "BTC Ecosystem",
+    "ORDI": "BTC Ecosystem",
+    "SATS": "BTC Ecosystem",
 }
 
 
@@ -81,7 +173,9 @@ def build_dashboard_payload(db_path: Path, run_id: str | None = None, limit: int
     provider_status = _loads_json(selected["provider_status_json"], {})
     regime = _loads_json(selected["regime_json"], {})
     factor_weights = _loads_json(selected["factor_weights_json"], {})
-    sections = _sections(rows, limit, history)
+    sections = _sections(rows, limit, history, regime)
+    sector_breadth = _sector_breadth(rows)
+    freshness = _freshness_summary(selected["generated_at"])
 
     return {
         "status": "ok",
@@ -96,7 +190,9 @@ def build_dashboard_payload(db_path: Path, run_id: str | None = None, limit: int
         "market_context": context,
         "provider_status": provider_status,
         "factor_weights": factor_weights,
-        "validation": factor_weights.get("validation", {}),
+        "validation": _validation_summary(factor_weights.get("validation", {}), rows, sections),
+        "freshness": freshness,
+        "sector_breadth": sector_breadth,
         "quality": _quality_summary(rows),
         "sections": sections,
         "watchlists": _watchlists(sections, limit),
@@ -185,8 +281,10 @@ def _sections(
     rows: list[dict[str, Any]],
     limit: int,
     history: dict[str, list[dict[str, Any]]] | None = None,
+    regime: dict[str, Any] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     history = history or {}
+    regime = regime or {}
     core_symbols = ["BTC", "ETH", "SOL"]
     core_by_symbol = {row.get("symbol"): row for row in rows if row.get("symbol") in core_symbols}
     return {
@@ -199,6 +297,7 @@ def _sections(
             _dashboard_row(row, "long_score", "long", history.get(str(row.get("symbol")), []))
             for row in top_by(rows, "long_score", limit, predicate=lambda item: (item.get("factor_score") or 0) > 0)
         ],
+        "regime_fit": _regime_fit_rows(rows, limit, history, regime),
         "short": [
             _dashboard_row(row, "short_score", "short", history.get(str(row.get("symbol")), []))
             for row in top_by(rows, "short_score", limit, predicate=lambda item: (item.get("factor_score") or 0) < 0)
@@ -218,6 +317,7 @@ def _watchlists(sections: dict[str, list[dict[str, Any]]], limit: int) -> list[d
     chart_next = _chart_next_rows(sections, limit)
     ordered = [
         ("chart_next", chart_next),
+        ("regime_fit", sections.get("regime_fit", [])),
         ("long", sections.get("long", [])),
         ("short", sections.get("short", [])),
         ("squeeze_risks", sections.get("squeeze_risks", [])),
@@ -236,7 +336,7 @@ def _watchlists(sections: dict[str, list[dict[str, Any]]], limit: int) -> list[d
 
 def _chart_next_rows(sections: dict[str, list[dict[str, Any]]], limit: int) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
-    for key in ("long", "short", "squeeze_risks", "crowded_longs", "core"):
+    for key in ("regime_fit", "long", "short", "squeeze_risks", "crowded_longs", "core"):
         for row in sections.get(key, []):
             symbol = str(row.get("symbol") or "")
             current = candidates.get(symbol)
@@ -245,14 +345,86 @@ def _chart_next_rows(sections: dict[str, list[dict[str, Any]]], limit: int) -> l
     return sorted(candidates.values(), key=lambda item: item.get("priority") or 0, reverse=True)[: max(limit, 12)]
 
 
+def _regime_fit_rows(
+    rows: list[dict[str, Any]],
+    limit: int,
+    history: dict[str, list[dict[str, Any]]],
+    regime: dict[str, Any],
+) -> list[dict[str, Any]]:
+    ranked: list[tuple[float, dict[str, Any], str]] = []
+    for row in rows:
+        if row.get("is_trusted", True) is False:
+            continue
+        score_field, side = _regime_fit_score_field(row, regime)
+        factor_score = to_float(row.get("factor_score"), 0.0) or 0.0
+        if side == "long" and factor_score <= 0:
+            continue
+        if side == "short" and factor_score >= 0:
+            continue
+        base_score = to_float(row.get(score_field), 0.0) or 0.0
+        if base_score <= 0:
+            continue
+        conflict_score = to_float(row.get("signal_conflict_score"), 0.0) or 0.0
+        if str(row.get("signal_conflict_label") or "") == "high-conflict" and conflict_score >= 70:
+            continue
+        confidence = to_float(row.get("confidence_score"), 0.0) or 0.0
+        quality = to_float(row.get("data_quality_score"), 100.0) or 100.0
+        regime_alignment = to_float(row.get("regime_alignment_score"), 0.0) or 0.0
+        breadth_alignment = to_float(row.get("breadth_alignment_score"), 0.0) or 0.0
+        fit_score = (
+            base_score
+            + max(0.0, regime_alignment) * 8.0
+            + max(0.0, breadth_alignment) * 6.0
+            + confidence * 0.18
+            + quality * 0.05
+            - conflict_score * 0.22
+        )
+        ranked.append((fit_score, row, side))
+
+    selected: list[dict[str, Any]] = []
+    for fit_score, row, side in sorted(ranked, key=lambda item: item[0], reverse=True)[:limit]:
+        item = dict(row)
+        item["regime_fit_score"] = round(max(0.0, fit_score), 2)
+        selected.append(
+            _dashboard_row(
+                item,
+                "regime_fit_score",
+                side,
+                history.get(str(row.get("symbol")), []),
+            )
+        )
+    return selected
+
+
+def _regime_fit_score_field(row: dict[str, Any], regime: dict[str, Any]) -> tuple[str, str]:
+    bias = str(regime.get("bias") or "mixed")
+    label = str(regime.get("label") or "mixed")
+    factor_score = to_float(row.get("factor_score"), 0.0) or 0.0
+    if label == "crowding-contrarian":
+        crowded_score = to_float(row.get("crowded_long_score"), 0.0) or 0.0
+        squeeze_score = to_float(row.get("squeeze_risk_score"), 0.0) or 0.0
+        if crowded_score >= squeeze_score:
+            return "crowded_long_score", "fade-long"
+        return "squeeze_risk_score", "squeeze-risk"
+    if bias == "risk-off":
+        return "short_score", "short"
+    if bias == "risk-on":
+        return "long_score", "long"
+    if factor_score < 0:
+        return "short_score", "short"
+    return "long_score", "long"
+
+
 def _dashboard_row(row: dict[str, Any], score_field: str, side: str, history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     scores = row.get("scores", {})
     factors = row.get("factors", {})
     score = row.get(score_field)
     setup = _setup_label(row, side)
     priority = _chart_priority(row, score_field, score)
+    sector = _sector_for_symbol(row.get("symbol"))
     return {
         "symbol": row.get("symbol"),
+        "sector": sector,
         "side": side,
         "setup": setup,
         "setup_tone": _setup_tone(side),
@@ -299,7 +471,247 @@ def _dashboard_row(row: dict[str, Any], score_field: str, side: str, history: li
         "history": history or [],
         "reason": reason_for(row, side),
         "reason_parts": _reason_parts(row, side),
+        "explanation": _token_explanation(row, side, setup, sector),
     }
+
+
+def _token_explanation(row: dict[str, Any], side: str, setup: str, sector: str) -> dict[str, Any]:
+    symbol = str(row.get("symbol") or "-")
+    driver = _primary_driver(row.get("factors", {}))
+    driver_text = f"{driver['label']} {driver['value']:+.2f}" if driver else "mixed factors"
+    conflict_label = str(row.get("signal_conflict_label") or "unknown")
+    quality_flags = row.get("data_quality_flags") or []
+    funding = to_float(row.get("funding_rate_pct"), 0.0) or 0.0
+    ls_ratio = to_float(row.get("long_short_ratio"))
+    direction = "long" if side in {"long", "squeeze-risk"} else "short" if side in {"short", "fade-long"} else "neutral"
+
+    read = (
+        f"{symbol} is grouped as {setup} in {sector} because {driver_text} is the strongest driver, "
+        f"with {conflict_label} signal conflict."
+    )
+    confirm = [
+        "Check the TradingView chart for entry location, invalidation, and nearby liquidity.",
+        "Prefer the setup only if 4h trend and momentum agree with the intended direction.",
+        "Confirm BTC, market breadth, and sector tape have not flipped against the setup.",
+    ]
+    if direction == "long":
+        confirm.append("For longs, avoid chasing after an extended impulse unless pullback structure is clean.")
+    elif direction == "short":
+        confirm.append("For shorts or fades, avoid pressing into obvious squeeze conditions without confirmation.")
+
+    risks: list[str] = []
+    if conflict_label not in {"aligned", "neutral", "unknown"}:
+        risks.append(f"Signal conflict is {conflict_label}; size the idea as a chart-review candidate, not a blind signal.")
+    if funding > 0.015 or (ls_ratio is not None and ls_ratio >= 1.3):
+        risks.append("Long crowding is elevated; late longs can unwind quickly.")
+    if funding < -0.015 or (ls_ratio is not None and ls_ratio <= 0.8):
+        risks.append("Short crowding is elevated; squeeze risk can dominate clean bearish reads.")
+    if quality_flags:
+        risks.append("Data-quality flags are present; ignore the setup until the bad data clears.")
+    if not risks:
+        risks.append("Main risk is chart invalidation after manual review.")
+
+    return {
+        "read": read,
+        "confirm": confirm[:4],
+        "risk": risks[:4],
+        "sector": sector,
+    }
+
+
+def _validation_summary(
+    validation: dict[str, Any],
+    rows: list[dict[str, Any]],
+    sections: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
+    summary = dict(validation or {})
+    model = dict(summary.get("model") or {})
+    factors = dict(summary.get("factors") or {})
+    hit_rate = to_float(model.get("hit_rate"))
+    observations = int(to_float(summary.get("observations"), 0.0) or 0)
+    summary["model"] = model
+    summary["factors"] = factors
+    summary["model_hit_rate"] = hit_rate
+    summary["model_avg_forward_return_pct"] = to_float(model.get("avg_forward_return_pct"))
+    summary["calibration_label"] = _calibration_label(hit_rate, observations)
+    summary["best_factors"] = _rank_validation_factors(factors, reverse=True)
+    summary["weakest_factors"] = _rank_validation_factors(factors, reverse=False)
+    summary["conflict_buckets"] = _conflict_buckets(rows)
+    summary["watchlist_counts"] = {
+        key: len(value)
+        for key, value in sections.items()
+        if key in {"regime_fit", "long", "short", "squeeze_risks", "crowded_longs", "core"}
+    }
+    return summary
+
+
+def _calibration_label(hit_rate: float | None, observations: int) -> str:
+    if observations < 20 or hit_rate is None:
+        return "learning"
+    if hit_rate >= 58.0:
+        return "useful"
+    if hit_rate >= 50.0:
+        return "neutral"
+    return "weak"
+
+
+def _rank_validation_factors(factors: dict[str, Any], reverse: bool) -> list[dict[str, Any]]:
+    ranked: list[dict[str, Any]] = []
+    for name, details in factors.items():
+        if not isinstance(details, dict):
+            continue
+        hit_rate = to_float(details.get("hit_rate"))
+        observations = int(to_float(details.get("observations"), 0.0) or 0)
+        if hit_rate is None or observations <= 0:
+            continue
+        ranked.append(
+            {
+                "name": name,
+                "label": FACTOR_LABELS.get(name, name.replace("_", " ").title()),
+                "hit_rate": round(hit_rate, 2),
+                "observations": observations,
+                "avg_forward_return_pct": to_float(details.get("avg_forward_return_pct")),
+            }
+        )
+    return sorted(ranked, key=lambda item: (item["hit_rate"], item["observations"]), reverse=reverse)[:3]
+
+
+def _conflict_buckets(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    buckets: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        label = str(row.get("signal_conflict_label") or "unknown")
+        bucket = buckets.setdefault(label, {"label": label, "count": 0, "avg_confidence": 0.0})
+        bucket["count"] += 1
+        bucket["avg_confidence"] += to_float(row.get("confidence_score"), 0.0) or 0.0
+    result: list[dict[str, Any]] = []
+    for bucket in buckets.values():
+        count = bucket["count"]
+        result.append(
+            {
+                "label": bucket["label"],
+                "count": count,
+                "avg_confidence": round(bucket["avg_confidence"] / count, 1) if count else None,
+            }
+        )
+    return sorted(result, key=lambda item: item["count"], reverse=True)
+
+
+def _freshness_summary(generated_at: str | None) -> dict[str, Any]:
+    if not generated_at:
+        return {"status": "unknown", "label": "unknown", "age_seconds": None, "age_minutes": None}
+    try:
+        parsed = datetime.fromisoformat(generated_at)
+    except ValueError:
+        return {"status": "unknown", "label": "unknown", "generated_at": generated_at, "age_seconds": None, "age_minutes": None}
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    age_seconds = max(0.0, (datetime.now(parsed.tzinfo) - parsed).total_seconds())
+    if age_seconds <= 4 * 60 * 60:
+        label = "fresh"
+    elif age_seconds <= 12 * 60 * 60:
+        label = "aging"
+    elif age_seconds <= 24 * 60 * 60:
+        label = "stale"
+    else:
+        label = "old"
+    return {
+        "status": "ok",
+        "label": label,
+        "generated_at": generated_at,
+        "age_seconds": round(age_seconds, 0),
+        "age_minutes": round(age_seconds / 60.0, 1),
+        "help": "Freshness is based on the selected saved run, not live tick data.",
+    }
+
+
+def _sector_for_symbol(symbol: Any) -> str:
+    raw = str(symbol or "").upper().replace("-", "").replace("_", "")
+    if raw.startswith("1000") and len(raw) > 4:
+        raw = raw[4:]
+    return SYMBOL_SECTORS.get(raw, "Other")
+
+
+def _sector_breadth(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    trusted = [row for row in rows if row.get("is_trusted", True)]
+    groups: dict[str, dict[str, Any]] = {}
+    for row in trusted:
+        sector = _sector_for_symbol(row.get("symbol"))
+        group = groups.setdefault(
+            sector,
+            {
+                "sector": sector,
+                "count": 0,
+                "advancers": 0,
+                "decliners": 0,
+                "return_sum": 0.0,
+                "return_count": 0,
+                "factor_sum": 0.0,
+                "factor_count": 0,
+                "oi_sum": 0.0,
+                "oi_count": 0,
+                "symbols": [],
+            },
+        )
+        group["count"] += 1
+        symbol = row.get("symbol")
+        if symbol:
+            group["symbols"].append(str(symbol))
+        price_change = to_float(row.get("price_change_24h_pct"))
+        if price_change is not None:
+            group["return_sum"] += price_change
+            group["return_count"] += 1
+            if price_change > 0:
+                group["advancers"] += 1
+            elif price_change < 0:
+                group["decliners"] += 1
+        factor_score = to_float(row.get("factor_score"))
+        if factor_score is not None:
+            group["factor_sum"] += factor_score
+            group["factor_count"] += 1
+        oi_change = to_float(row.get("oi_change_24h_pct"))
+        if oi_change is not None:
+            group["oi_sum"] += oi_change
+            group["oi_count"] += 1
+
+    if not groups:
+        return {"status": "empty", "label": "unknown", "groups": []}
+
+    formatted: list[dict[str, Any]] = []
+    for group in groups.values():
+        return_count = group["return_count"]
+        count = group["count"]
+        formatted.append(
+            {
+                "sector": group["sector"],
+                "count": count,
+                "advancer_pct": round((group["advancers"] / return_count) * 100.0, 1) if return_count else None,
+                "avg_return_24h_pct": round(group["return_sum"] / return_count, 3) if return_count else None,
+                "avg_factor_score": round(group["factor_sum"] / group["factor_count"], 3) if group["factor_count"] else None,
+                "avg_oi_change_24h_pct": round(group["oi_sum"] / group["oi_count"], 3) if group["oi_count"] else None,
+                "symbols": sorted(group["symbols"])[:8],
+            }
+        )
+    formatted.sort(key=lambda item: (item["count"], item.get("avg_return_24h_pct") or 0.0), reverse=True)
+    positive_groups = sum(1 for item in formatted if (item.get("avg_return_24h_pct") or 0.0) > 0)
+    return {
+        "status": "ok",
+        "label": _sector_breadth_label(positive_groups, len(formatted)),
+        "sample_size": len(trusted),
+        "groups": formatted,
+        "leaders": sorted(formatted, key=lambda item: item.get("avg_return_24h_pct") or -999.0, reverse=True)[:5],
+        "laggards": sorted(formatted, key=lambda item: item.get("avg_return_24h_pct") or 999.0)[:5],
+    }
+
+
+def _sector_breadth_label(positive_groups: int, total_groups: int) -> str:
+    if total_groups <= 0:
+        return "unknown"
+    ratio = positive_groups / total_groups
+    if ratio >= 0.70:
+        return "broad-sector-bid"
+    if ratio <= 0.30:
+        return "broad-sector-offer"
+    return "mixed-sector-rotation"
 
 
 def _history_by_symbol(conn, symbols: list[str], generated_at: str, limit: int = 16) -> dict[str, list[dict[str, Any]]]:
