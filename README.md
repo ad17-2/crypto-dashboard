@@ -469,7 +469,6 @@ The top strip shows:
 
 - Market bias.
 - Factor regime.
-- Market breadth.
 - Market cap 24h.
 - BTC dominance.
 - Trusted/excluded row count.

@@ -210,7 +210,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("filterValues", js)
         self.assertIn("factorBars", js)
         self.assertIn("module-panel", css)
-        self.assertIn("Breadth", js)
+        self.assertIn("Use Chart Next first -> filter -> inspect detail -> open TradingView.", js)
         self.assertIn("sector_rotation", js)
         self.assertIn('class="watch-row', js)
         self.assertIn('class="watch-cell', js)

@@ -490,11 +490,10 @@
       updateSourceOptions(data);
       const c = data.market_context || {};
       const r = data.regime || {};
-      $("generated").textContent = `${data.run.generated_at} / ${data.run.row_count} symbols`;
+      $("generated").textContent = `${data.run.generated_at} / ${data.run.row_count} symbols · Use Chart Next first -> filter -> inspect detail -> open TradingView.`;
       $("metrics").innerHTML = [
         metric("Bias", r.bias || "unknown", "accent"),
         metric("Factor Regime", r.label || "unknown", "small"),
-        metric("Breadth", c.breadth?.label || "unknown", "small"),
         metric("Market Cap 24h", fmtPct(c.market_cap_change_24h_pct), clsFor(c.market_cap_change_24h_pct)),
         metric("BTC Dominance", fmtPct(c.btc_dominance_pct, 2).replace("+", "")),
         metric("Trusted / Excluded", `${data.quality.trusted_count} / ${data.quality.excluded_count}`, data.quality.excluded_count ? "warn" : "good"),
