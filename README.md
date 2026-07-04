@@ -20,7 +20,7 @@ Use this project at the start of the trading day to answer:
 The dashboard is designed around this workflow:
 
 1. Open the dashboard.
-2. Start with the `Chart Next` tab.
+2. Start with the `Top Setups` tab.
 3. Filter by quality, source, volume, OI, or funding.
 4. Select a row to inspect the detail rail.
 5. Open the symbol in TradingView and confirm structure manually.
@@ -394,7 +394,7 @@ The model creates five base lists:
 
 The dashboard also builds:
 
-- `Chart Next`: a deduplicated priority queue across all lists, sorted by chart priority.
+- `Top Setups`: a deduplicated priority queue across all lists, sorted by chart priority.
 
 Chart priority combines the relevant score with data quality and trust state. It is not an entry signal; it is a workflow sort for manual review.
 
@@ -476,7 +476,7 @@ The top strip shows:
 
 The main watchlist surface has tabs:
 
-- Chart Next
+- Top Setups
 - Longs
 - Shorts
 - Squeeze Risk

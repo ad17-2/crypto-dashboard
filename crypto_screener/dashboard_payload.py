@@ -28,7 +28,7 @@ FACTOR_LABELS = {
 }
 
 WATCHLIST_LABELS = {
-    "chart_next": "Chart Next",
+    "chart_next": "Top Setups",
     "regime_fit": "Regime Fit",
     "long": "Longs",
     "short": "Shorts",

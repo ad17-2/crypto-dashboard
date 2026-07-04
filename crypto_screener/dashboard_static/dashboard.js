@@ -172,6 +172,14 @@
       const label = row?.signal_conflict_label || "unknown";
       return `<span class="conflict-badge ${conflictTone(label)}">${esc(label)}</span>`;
     }
+    function setupMeta(row) {
+      const parts = [];
+      const sector = row?.sector || "";
+      const conflict = String(row?.signal_conflict_label || "");
+      if (sector && sector !== "Other") parts.push(sector);
+      if (conflict && !["aligned", "neutral", "unknown"].includes(conflict)) parts.push(conflict);
+      return parts.length ? `<span class="driver-line">${parts.map(esc).join(" / ")}</span>` : "";
+    }
     function scoreText(row) {
       const confidence = row.confidence_score == null ? "" : ` / C ${fmtNum(row.confidence_score, 0)}`;
       return `<strong>${fmtNum(row.score)}</strong><div class="driver-line">P ${fmtNum(row.priority)}${confidence}</div>`;
@@ -262,7 +270,7 @@
       }
       $("watchTabs").innerHTML = lists.map((list) => {
         const active = list.id === state.activeWatchlist ? " active" : "";
-        return `<button class="tab-btn${active}" type="button" data-tab="${esc(list.id)}">${esc(list.label)} <span>${esc(list.rows.length)}</span></button>`;
+        return `<button class="tab-btn${active}" type="button" data-tab="${esc(list.id)}">${esc(list.label)}</button>`;
       }).join("");
     }
     function sparkline(points, key) {
@@ -299,7 +307,7 @@
         const active = key === state.selectedKey ? " active" : "";
         return `<div class="watch-row${active}" role="button" tabindex="0" data-key="${esc(key)}">
           <div class="watch-cell left watch-symbol" data-label="Symbol">${symbolLink(row)}<span class="driver-line">${esc(row.primary_driver?.label || row.side || "-")}</span></div>
-          <div class="watch-cell left" data-label="Setup">${setupBadge(row)}<span class="driver-line">${esc(row.sector || "Other")} / ${esc(row.signal_conflict_label || "unknown")}</span></div>
+          <div class="watch-cell left watch-setup" data-label="Setup">${setupBadge(row)}${setupMeta(row)}</div>
           <div class="watch-cell" data-label="Score">${scoreText(row)}</div>
           <div class="watch-cell" data-label="Q"><span class="quality-badge ${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</span></div>
           <div class="watch-cell ${clsFor(row.price_change_24h_pct)}" data-label="24h">${fmtPct(row.price_change_24h_pct)}</div>
@@ -382,6 +390,12 @@
         `).join("")}
       </div>`;
     }
+    function detailSection(title, body, open = false) {
+      return `<details class="detail-section" ${open ? "open" : ""}>
+        <summary>${esc(title)}</summary>
+        <div class="detail-section-body">${body}</div>
+      </details>`;
+    }
     function renderDetail(row) {
       if (!row) {
         $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="empty">Select a watchlist row</div>`);
@@ -409,18 +423,13 @@
           <div class="detail-metric"><span class="label">Volume</span><strong>${fmtUsd(row.quote_volume_usd)}</strong></div>
           <div class="detail-metric"><span class="label">Open Interest</span><strong>${fmtUsd(row.open_interest_usd)}</strong></div>
         </div>
-        <div class="label">How To Read This Coin</div>
-        ${explanationBlock(row)}
-        <div class="label">Signal Conflict</div>
-        ${conflictBlock(row)}
-        <div class="label">Technical Context</div>
-        ${technicalBlock(row)}
         <div class="label">Reason ${reasonHelp()}</div>
         ${reasonView(row)}
-        <div class="label">Factor Breakdown</div>
-        ${factorBars(row)}
-        <div class="label">History</div>
-        ${historyBlock(row)}
+        ${detailSection("How To Read This Coin", explanationBlock(row), false)}
+        ${detailSection("Signal Conflict", conflictBlock(row), (row.signal_conflicts || []).length > 0)}
+        ${detailSection("Technical Context", technicalBlock(row), false)}
+        ${detailSection("Factor Breakdown", factorBars(row), false)}
+        ${detailSection("History", historyBlock(row), false)}
         ${flags.length ? `<div class="quality-flag-list">${qualityFlagView(flags)}</div>` : ""}
       </div>`);
     }
@@ -493,14 +502,14 @@
         "Providers",
         providerIssue ? "needs attention" : `${providerEntries} ok`,
         providerList(data.provider_status),
-        providerIssue
+        false
       );
       const excluded = data.quality?.excluded_count || 0;
       $("qualityPanel").innerHTML = modulePanel(
         "Data Quality",
         `${excluded} excluded`,
         qualityBlock(data.quality),
-        excluded > 0
+        false
       );
       $("validationPanel").innerHTML = modulePanel(
         "Validation",
@@ -512,7 +521,7 @@
         "Sector Rotation",
         data.sector_breadth?.label || "leaders / laggards",
         sectorList(data.market_context || {}, data.sector_breadth || {}),
-        true
+        false
       );
       $("runsPanel").innerHTML = modulePanel(
         "Freshness / Runs",
@@ -556,12 +565,23 @@
       const rotation = context?.sector_rotation || {};
       const sectorGroups = sectorBreadth?.groups || [];
       const line = (item) => `<div class="list-row"><strong>${esc(item.name || item.id)}</strong><span class="${clsFor(item.market_cap_change_24h_pct)}">${fmtPct(item.market_cap_change_24h_pct)}</span></div>`;
-      return `<div class="list">
-        <div class="list-row"><strong>Breadth</strong><span>${esc(breadth.label || "unknown")} / ${fmtNum(breadth.score, 2)}</span></div>
-        <div class="list-row"><strong>Sector Tape</strong><span>${esc(rotation.label || "unknown")}</span></div>
-        <div class="label">Mapped Futures Sectors</div>${sectorGroups.slice(0, 6).map(sectorGroupLine).join("") || `<div class="empty">No mapped sectors</div>`}
-        <div class="label">Leaders</div>${leaders.slice(0, 5).map(line).join("") || `<div class="empty">No leaders</div>`}
-        <div class="label">Laggards</div>${laggards.slice(0, 5).map(line).join("") || `<div class="empty">No laggards</div>`}
+      return `<div class="sector-list">
+        <div class="sector-block">
+          <div class="list-row"><strong>Breadth</strong><span>${esc(breadth.label || "unknown")} / ${fmtNum(breadth.score, 2)}</span></div>
+          <div class="list-row"><strong>Sector Tape</strong><span>${esc(rotation.label || "unknown")}</span></div>
+        </div>
+        <div class="sector-block">
+          <div class="label">Mapped Futures Sectors</div>
+          ${sectorGroups.slice(0, 4).map(sectorGroupLine).join("") || `<div class="empty">No mapped sectors</div>`}
+        </div>
+        <div class="sector-block">
+          <div class="label">Leaders</div>
+          ${leaders.slice(0, 3).map(line).join("") || `<div class="empty">No leaders</div>`}
+        </div>
+        <div class="sector-block">
+          <div class="label">Laggards</div>
+          ${laggards.slice(0, 3).map(line).join("") || `<div class="empty">No laggards</div>`}
+        </div>
       </div>`;
     }
     function runsBlock(runs) {
@@ -592,7 +612,7 @@
       updateSourceOptions(data);
       const c = data.market_context || {};
       const r = data.regime || {};
-      $("generated").textContent = `${data.run.generated_at} / ${data.run.row_count} symbols · Use Chart Next first -> filter -> inspect detail -> open TradingView. Freshness: ${data.freshness?.label || "unknown"}.`;
+      $("generated").textContent = `${data.run.generated_at} / ${data.run.row_count} symbols · Use Top Setups first -> filter -> inspect detail -> open TradingView. Freshness: ${data.freshness?.label || "unknown"}.`;
       $("metrics").innerHTML = [
         metric("Bias", r.bias || "unknown", "accent"),
         metric("Factor Regime", r.label || "unknown", "small"),
