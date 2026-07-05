@@ -169,6 +169,7 @@
     function tradingViewExchange(exchange) {
       const key = String(exchange || "").toLowerCase();
       const map = {
+        binance: "BINANCE",
         okx: "OKX",
         bybit: "BYBIT",
         bitget: "BITGET",

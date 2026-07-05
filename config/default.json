@@ -30,6 +30,7 @@
       "request_delay_seconds": 2.1,
       "request_timeout_seconds": 12,
       "exchanges": [
+        "Binance",
         "OKX",
         "Bybit",
         "Bitget",
