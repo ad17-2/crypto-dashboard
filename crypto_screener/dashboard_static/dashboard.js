@@ -1,7 +1,52 @@
-    const state = { selectedRun: null, data: null, activeWatchlist: "chart_next", selectedKey: null };
+    const state = { selectedRun: null, data: null, activeWatchlist: "chart_next", selectedKey: null, sortKey: null, sortDir: "desc", density: "comfortable", theme: "dark" };
+    const PREFS_KEY = "tape.prefs";
+    const SORT_COLUMNS = {
+      symbol: { field: "symbol", type: "string" },
+      setup: { field: "setup", type: "string" },
+      score: { field: "score", type: "numeric" },
+      quality: { field: "quality", type: "numeric" },
+      price: { field: "price_change_24h_pct", type: "numeric" },
+      oi: { field: "oi_change_24h_pct", type: "numeric" },
+      funding: { field: "funding_rate_pct", type: "numeric" },
+      ls: { field: "long_short_ratio", type: "numeric" },
+      volume: { field: "quote_volume_usd", type: "numeric" },
+      source: { field: "data_source", type: "string" },
+    };
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? "-").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const clsFor = (value) => Number(value || 0) > 0 ? "good" : Number(value || 0) < 0 ? "bad" : "";
+    function loadPrefs() {
+      try {
+        const prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+        if (prefs.theme === "light" || prefs.theme === "dark") state.theme = prefs.theme;
+        if (prefs.density === "compact" || prefs.density === "comfortable") state.density = prefs.density;
+        if (typeof prefs.sortKey === "string" && SORT_COLUMNS[prefs.sortKey]) state.sortKey = prefs.sortKey;
+        if (prefs.sortDir === "asc" || prefs.sortDir === "desc") state.sortDir = prefs.sortDir;
+      } catch (error) { /* ignore malformed prefs */ }
+    }
+    function persistPrefs() {
+      try {
+        localStorage.setItem(PREFS_KEY, JSON.stringify({
+          theme: state.theme,
+          density: state.density,
+          sortKey: state.sortKey,
+          sortDir: state.sortDir,
+        }));
+      } catch (error) { /* storage unavailable */ }
+    }
+    function applyTheme() {
+      const root = document.documentElement;
+      if (state.theme === "light") root.setAttribute("data-theme", "light");
+      else root.setAttribute("data-theme", "dark");
+      const btn = $("themeToggle");
+      if (btn) btn.textContent = state.theme === "light" ? "Dark" : "Light";
+    }
+    function applyDensity() {
+      const table = $("watchTable");
+      if (table) table.setAttribute("data-density", state.density);
+      const btn = $("densityToggle");
+      if (btn) btn.textContent = state.density === "compact" ? "Compact" : "Comfortable";
+    }
     const reasonTooltip = "Read left to right: 24h price move, OI positioning change, funding, L/S crowding, weighted factor score, confidence, 4h technical context, then the strongest normalized factor drivers. Green is positive, red is negative. Crowding and excluded notes are context flags, not automatic trade instructions.";
 
     function fmtNum(value, digits = 2) {
@@ -174,15 +219,23 @@
     }
     function setupMeta(row) {
       const parts = [];
-      const sector = row?.sector || "";
       const conflict = String(row?.signal_conflict_label || "");
-      if (sector && sector !== "Other") parts.push(sector);
       if (conflict && !["aligned", "neutral", "unknown"].includes(conflict)) parts.push(conflict);
       return parts.length ? `<span class="driver-line">${parts.map(esc).join(" / ")}</span>` : "";
     }
-    function scoreText(row) {
+    function scoreText(row, maxScore = 1) {
       const confidence = row.confidence_score == null ? "" : ` / C ${fmtNum(row.confidence_score, 0)}`;
-      return `<strong>${fmtNum(row.score)}</strong><div class="driver-line">P ${fmtNum(row.priority)}${confidence}</div>`;
+      const score = numeric(row.score);
+      const width = maxScore > 0 && score !== null ? Math.round(Math.min(Math.abs(score) / maxScore, 1) * 100) : 0;
+      return `<span class="score-val">${fmtNum(row.score)}</span>
+        <span class="score-bar"><span class="score-fill" style="width:${width}%"></span></span>
+        <div class="driver-line">P ${fmtNum(row.priority)}${confidence}</div>`;
+    }
+    function arrowPct(value, digits = 2) {
+      const n = numeric(value);
+      if (n === null) return fmtPct(value, digits);
+      const mark = n > 0 ? "▲ " : n < 0 ? "▼ " : "";
+      return `${mark}${fmtPct(value, digits)}`;
     }
     function sourceParts(source) {
       return String(source || "-").split("+").map((part) => part.trim()).filter(Boolean);
@@ -221,7 +274,6 @@
       if (filters.query) {
         const haystack = [
           row.symbol,
-          row.sector,
           row.setup,
           row.technical_setup,
           row.signal_conflict_label,
@@ -263,6 +315,31 @@
     function metricCard(label, body, klass = "") {
       return `<article class="metric"><div class="label">${esc(label)}</div><div class="value ${klass}">${body}</div></article>`;
     }
+    function tapeAge(freshness) {
+      if (!freshness || freshness.status !== "ok") return "unknown";
+      if (freshness.age_minutes != null && Number.isFinite(Number(freshness.age_minutes))) return `${fmtNum(freshness.age_minutes, 0)}m ago`;
+      return freshness.label || "unknown";
+    }
+    function tapeSegment(key, value, klass = "") {
+      return `<span class="tape-seg"><span class="tape-k">${esc(key)}</span><span class="tape-v ${klass}">${value}</span></span>`;
+    }
+    function marketTape(data) {
+      const c = data.market_context || {};
+      const r = data.regime || {};
+      const q = data.quality || {};
+      const fresh = data.freshness || {};
+      const excludedTone = q.excluded_count ? "warn" : "good";
+      const live = `<span class="tape-live"><span class="live-dot"></span><b>Live</b><span class="age">${esc(tapeAge(fresh))}</span></span>`;
+      return `<div class="market-tape" role="status" aria-label="Market pulse">
+        ${live}
+        ${tapeSegment("Bias", esc(r.bias || "unknown"), "accent")}
+        ${tapeSegment("Regime", esc(r.label || "unknown"))}
+        ${tapeSegment("MC 24h", fmtPct(c.market_cap_change_24h_pct), clsFor(c.market_cap_change_24h_pct))}
+        ${tapeSegment("BTC.D", fmtPct(c.btc_dominance_pct, 2).replace("+", ""))}
+        ${tapeSegment("Trusted / Excl", `${esc(q.trusted_count ?? "-")} / ${esc(q.excluded_count ?? "-")}`, excludedTone)}
+        ${tapeSegment("Providers", providerDots(data.provider_status))}
+      </div>`;
+    }
     function renderTabs(data) {
       const lists = watchlistsFrom(data);
       if (!lists.some((list) => list.id === state.activeWatchlist)) {
@@ -289,9 +366,36 @@
       const tone = values[values.length - 1] > values[0] ? "good" : values[values.length - 1] < values[0] ? "bad" : "neutral";
       return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" aria-hidden="true"><line class="axis" x1="0" y1="${height - 2}" x2="${width}" y2="${height - 2}"></line><polyline class="${tone}" points="${coords}"></polyline></svg>`;
     }
+    function sortRows(rows) {
+      if (!state.sortKey || !SORT_COLUMNS[state.sortKey]) return rows;
+      const { field, type } = SORT_COLUMNS[state.sortKey];
+      const dir = state.sortDir === "asc" ? 1 : -1;
+      return rows.slice().sort((a, b) => {
+        if (type === "string") {
+          return String(a[field] ?? "").localeCompare(String(b[field] ?? "")) * dir;
+        }
+        const an = numeric(a[field]);
+        const bn = numeric(b[field]);
+        if (an === null && bn === null) return 0;
+        if (an === null) return 1;
+        if (bn === null) return -1;
+        return (an - bn) * dir;
+      });
+    }
+    function headCell(key, label) {
+      const active = state.sortKey === key;
+      const arrow = active ? (state.sortDir === "asc" ? "▲" : "▼") : "";
+      const ariaSort = active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none";
+      return `<div class="watch-th${active ? " sorted" : ""}" role="columnheader" tabindex="0" data-sort="${key}" aria-sort="${ariaSort}">${esc(label)}<span class="sort-arrow">${arrow}</span></div>`;
+    }
+    function watchHead() {
+      return `<div class="watch-head" role="row">
+        ${headCell("symbol", "Symbol")}${headCell("setup", "Setup")}${headCell("score", "Score")}${headCell("quality", "Q")}${headCell("price", "24h")}${headCell("oi", "OI 24h")}${headCell("funding", "Funding")}${headCell("ls", "L/S")}${headCell("volume", "Volume")}${headCell("source", "Source")}
+      </div>`;
+    }
     function renderWatchTable(data) {
       const list = activeWatchlist(data);
-      const rows = filteredRows(list.rows);
+      const rows = sortRows(filteredRows(list.rows));
       const selectedStillVisible = rows.some((row) => rowKey(row) === state.selectedKey);
       if (!selectedStillVisible) state.selectedKey = rows[0] ? rowKey(rows[0]) : null;
       $("watchCount").textContent = `${rows.length} / ${list.rows.length}`;
@@ -300,18 +404,17 @@
         renderDetail(null);
         return;
       }
-      $("watchTable").innerHTML = `<div class="watch-head">
-        <div>Symbol</div><div>Setup</div><div>Score</div><div>Q</div><div>24h</div><div>OI 24h</div><div>Funding</div><div>L/S</div><div>Volume</div><div>Source</div>
-      </div>${rows.map((row) => {
+      const maxScore = Math.max(...rows.map((row) => Math.abs(numeric(row.score) ?? 0)), 1);
+      $("watchTable").innerHTML = `${watchHead()}${rows.map((row) => {
         const key = rowKey(row);
         const active = key === state.selectedKey ? " active" : "";
         return `<div class="watch-row${active}" role="button" tabindex="0" data-key="${esc(key)}">
           <div class="watch-cell left watch-symbol" data-label="Symbol">${symbolLink(row)}<span class="driver-line">${esc(row.primary_driver?.label || row.side || "-")}</span></div>
           <div class="watch-cell left watch-setup" data-label="Setup">${setupBadge(row)}${setupMeta(row)}</div>
-          <div class="watch-cell" data-label="Score">${scoreText(row)}</div>
+          <div class="watch-cell" data-label="Score">${scoreText(row, maxScore)}</div>
           <div class="watch-cell" data-label="Q"><span class="quality-badge ${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</span></div>
-          <div class="watch-cell ${clsFor(row.price_change_24h_pct)}" data-label="24h">${fmtPct(row.price_change_24h_pct)}</div>
-          <div class="watch-cell ${clsFor(row.oi_change_24h_pct)}" data-label="OI 24h">${fmtPct(row.oi_change_24h_pct)}</div>
+          <div class="watch-cell ${clsFor(row.price_change_24h_pct)}" data-label="24h">${arrowPct(row.price_change_24h_pct)}</div>
+          <div class="watch-cell ${clsFor(row.oi_change_24h_pct)}" data-label="OI 24h">${arrowPct(row.oi_change_24h_pct)}</div>
           <div class="watch-cell ${clsFor(row.funding_rate_pct)}" data-label="Funding">${fmtPct(row.funding_rate_pct, 4)}</div>
           <div class="watch-cell" data-label="L/S">${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</div>
           <div class="watch-cell" data-label="Volume">${fmtUsd(row.quote_volume_usd)}</div>
@@ -416,7 +519,6 @@
           <div class="detail-metric"><span class="label">Score / Priority</span><strong>${fmtNum(row.score)} / ${fmtNum(row.priority)}</strong></div>
           <div class="detail-metric"><span class="label">Confidence</span><strong>${row.confidence_score == null ? "-" : fmtNum(row.confidence_score, 0)}</strong></div>
           <div class="detail-metric"><span class="label">Quality</span><strong class="${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</strong></div>
-          <div class="detail-metric"><span class="label">Sector</span><strong>${esc(row.sector || "Other")}</strong></div>
           <div class="detail-metric"><span class="label">24h / OI</span><strong><span class="${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</span> / <span class="${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</span></strong></div>
           <div class="detail-metric"><span class="label">Funding / L/S</span><strong><span class="${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</span> / ${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</strong></div>
           <div class="detail-metric"><span class="label">Volume</span><strong>${fmtUsd(row.quote_volume_usd)}</strong></div>
@@ -518,8 +620,8 @@
       );
       $("sectorPanel").innerHTML = modulePanel(
         "Sector Rotation",
-        data.sector_breadth?.label || "leaders / laggards",
-        sectorList(data.market_context || {}, data.sector_breadth || {}),
+        data.market_context?.sector_rotation?.label || "leaders / laggards",
+        sectorList(data.market_context || {}),
         false
       );
       $("runsPanel").innerHTML = modulePanel(
@@ -551,27 +653,16 @@
         <div class="list-row"><strong>Age</strong><span>${esc(freshness.label || "unknown")} / ${fmtNum(freshness.age_minutes, 1)}m</span></div>
       </div>`;
     }
-    function sectorGroupLine(item) {
-      return `<div class="list-row sector-row">
-        <strong>${esc(item.sector || "Other")}<small>${esc((item.symbols || []).slice(0, 4).join(", "))}</small></strong>
-        <span class="${clsFor(item.avg_return_24h_pct)}">${fmtPct(item.avg_return_24h_pct)} / ${fmtRate(item.advancer_pct, 0)}</span>
-      </div>`;
-    }
-    function sectorList(context, sectorBreadth) {
+    function sectorList(context) {
       const leaders = context?.categories?.leaders || [];
       const laggards = context?.categories?.laggards || [];
       const breadth = context?.breadth || {};
       const rotation = context?.sector_rotation || {};
-      const sectorGroups = sectorBreadth?.groups || [];
       const line = (item) => `<div class="list-row"><strong>${esc(item.name || item.id)}</strong><span class="${clsFor(item.market_cap_change_24h_pct)}">${fmtPct(item.market_cap_change_24h_pct)}</span></div>`;
       return `<div class="sector-list">
         <div class="sector-block">
           <div class="list-row"><strong>Breadth</strong><span>${esc(breadth.label || "unknown")} / ${fmtNum(breadth.score, 2)}</span></div>
           <div class="list-row"><strong>Sector Tape</strong><span>${esc(rotation.label || "unknown")}</span></div>
-        </div>
-        <div class="sector-block">
-          <div class="label">Mapped Futures Sectors</div>
-          ${sectorGroups.slice(0, 4).map(sectorGroupLine).join("") || `<div class="empty">No mapped sectors</div>`}
         </div>
         <div class="sector-block">
           <div class="label">Leaders</div>
@@ -609,17 +700,8 @@
       state.data = data;
       runOptions(data.runs, data.run.run_id);
       updateSourceOptions(data);
-      const c = data.market_context || {};
-      const r = data.regime || {};
       $("generated").textContent = `${data.run.generated_at} / ${data.run.row_count} symbols · Use Top Setups first -> filter -> inspect detail -> open TradingView. Freshness: ${data.freshness?.label || "unknown"}.`;
-      $("metrics").innerHTML = [
-        metric("Bias", r.bias || "unknown", "accent"),
-        metric("Factor Regime", r.label || "unknown", "small"),
-        metric("Market Cap 24h", fmtPct(c.market_cap_change_24h_pct), clsFor(c.market_cap_change_24h_pct)),
-        metric("BTC Dominance", fmtPct(c.btc_dominance_pct, 2).replace("+", "")),
-        metric("Trusted / Excluded", `${data.quality.trusted_count} / ${data.quality.excluded_count}`, data.quality.excluded_count ? "warn" : "good"),
-        metricCard("Providers", providerDots(data.provider_status), "small"),
-      ].join("");
+      $("metrics").innerHTML = marketTape(data);
       renderTabs(data);
       renderWatchTable(data);
       renderSideModules(data);
@@ -646,11 +728,42 @@
     });
     $("watchTable").addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
+      const header = event.target.closest("[data-sort]");
+      if (header) {
+        event.preventDefault();
+        applySort(header.dataset.sort);
+        return;
+      }
       const row = event.target.closest("[data-key]");
       if (!row || !state.data) return;
       event.preventDefault();
       state.selectedKey = row.dataset.key;
       renderWatchTable(state.data);
+    });
+    function applySort(key) {
+      if (!SORT_COLUMNS[key] || !state.data) return;
+      if (state.sortKey === key) {
+        state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.sortKey = key;
+        state.sortDir = SORT_COLUMNS[key].type === "string" ? "asc" : "desc";
+      }
+      persistPrefs();
+      renderWatchTable(state.data);
+    }
+    $("watchTable").addEventListener("click", (event) => {
+      const header = event.target.closest("[data-sort]");
+      if (header) applySort(header.dataset.sort);
+    });
+    $("themeToggle").addEventListener("click", () => {
+      state.theme = state.theme === "light" ? "dark" : "light";
+      applyTheme();
+      persistPrefs();
+    });
+    $("densityToggle").addEventListener("click", () => {
+      state.density = state.density === "compact" ? "comfortable" : "compact";
+      applyDensity();
+      persistPrefs();
     });
     ["symbolFilter", "qualityFilter", "sourceFilter", "volumeFilter", "positiveOiFilter", "negativeFundingFilter"].forEach((id) => {
       $(id).addEventListener("input", () => {
@@ -660,6 +773,9 @@
         if (state.data) renderWatchTable(state.data);
       });
     });
+    loadPrefs();
+    applyTheme();
+    applyDensity();
     load().catch((error) => {
       $("generated").textContent = "Dashboard error";
       $("metrics").innerHTML = metric("Error", error.message || String(error), "bad");

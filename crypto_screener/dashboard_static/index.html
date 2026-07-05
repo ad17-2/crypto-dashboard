@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Crypto Dashboard</title>
   <link rel="stylesheet" href="/assets/dashboard.css">
+  <script>
+    (function () {
+      try {
+        var prefs = JSON.parse(localStorage.getItem("tape.prefs") || "{}");
+        if (prefs.theme === "light") document.documentElement.setAttribute("data-theme", "light");
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <main class="shell">
@@ -15,6 +23,7 @@
       </div>
       <div class="actions">
         <select id="runSelect" aria-label="Run"></select>
+        <button id="themeToggle" class="theme-btn" type="button" aria-label="Toggle color theme">Theme</button>
         <button id="reload" type="button">Reload</button>
       </div>
     </div>
@@ -23,7 +32,10 @@
       <section class="panel watch-panel" aria-label="Watchlist workbench">
         <div class="panel-head">
           <h2>Watchlist</h2>
-          <span class="count" id="watchCount">-</span>
+          <div class="head-tools">
+            <button id="densityToggle" class="density-btn" type="button" aria-label="Toggle row density">Comfortable</button>
+            <span class="count" id="watchCount">-</span>
+          </div>
         </div>
         <div class="watch-tabs" id="watchTabs"></div>
         <div class="watch-controls">
