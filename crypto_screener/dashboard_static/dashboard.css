@@ -1097,6 +1097,10 @@ button:hover {
 .module-panel {
 }
 
+.module-grid > :has(.module-panel[open]) {
+  grid-column: 1 / -1;
+}
+
 .module-panel summary::-webkit-details-marker {
   display: none;
 }
