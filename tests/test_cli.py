@@ -31,7 +31,7 @@ class CliTests(unittest.TestCase):
                     "is_trusted": True,
                 },
             ],
-            "regime": {"bias": "risk-on", "label": "momentum"},
+            "regime": {"bias": "risk-on", "label": "neutral"},
             "factor_weights": {"mode": "prior"},
         }
 
@@ -64,7 +64,7 @@ class CliTests(unittest.TestCase):
                 "run_id=run-cli",
                 "screened_symbols=4",
                 "bias=risk-on",
-                "factor_regime=momentum",
+                "factor_regime=neutral",
                 "weight_mode=prior",
                 "long_candidates=1",
                 "short_candidates=1",

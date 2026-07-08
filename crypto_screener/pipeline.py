@@ -8,7 +8,7 @@ from .collector import collect_market
 from .factors import score_snapshot
 from .models import RunPayload
 from .report import now_jakarta, write_reports
-from .storage import load_labeled_factor_records, save_snapshot
+from .storage import load_labeled_factor_records, load_latest_regime_state, save_snapshot
 
 
 def run_pipeline(
@@ -22,11 +22,13 @@ def run_pipeline(
 
     collected = collect_market(config)
     history_records = load_labeled_factor_records(config)
+    prior_market_state = load_latest_regime_state(config.get("storage_path", "data/crypto_screener.sqlite3"))
     scored = score_snapshot(
         collected["rows"],
         collected.get("market_context", {}),
         history_records,
         config,
+        prior_market_state=prior_market_state,
     )
 
     payload = RunPayload(

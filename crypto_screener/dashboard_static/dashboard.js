@@ -4,6 +4,7 @@
       symbol: { field: "symbol", type: "string" },
       setup: { field: "setup", type: "string" },
       score: { field: "score", type: "numeric" },
+      conf: { field: "confluence_score", type: "numeric" },
       quality: { field: "quality", type: "numeric" },
       price: { field: "price_change_24h_pct", type: "numeric" },
       oi: { field: "oi_change_24h_pct", type: "numeric" },
@@ -155,11 +156,20 @@
     function reasonView(row) {
       const parts = Array.isArray(row.reason_parts) && row.reason_parts.length ? row.reason_parts : fallbackReasonParts(row.reason);
       if (!parts.length) return "-";
-      return `<div class="reason-stack" title="${esc(row.reason || "")}">${parts.map((part) => `
+      const percentileByLabel = {
+        Funding: row.funding_percentile,
+        "OI 24h": row.oi_change_percentile,
+        "L/S": row.positioning_percentile,
+      };
+      return `<div class="reason-stack" title="${esc(row.reason || "")}">${parts.map((part) => {
+        const pct = percentileByLabel[part.label];
+        const pctSuffix = pct == null ? "" : `<span class="reason-pct">${esc(String(Math.round(pct)))}th pct</span>`;
+        return `
         <span class="reason-part ${esc(part.kind || "metric")} ${esc(part.tone || "neutral")}" title="${esc(part.help || "")}">
-          <span>${esc(part.label)}</span><strong>${esc(part.value)}</strong>
+          <span>${esc(part.label)}</span><strong>${esc(part.value)}</strong>${pctSuffix}
         </span>
-      `).join("")}</div>`;
+      `;
+      }).join("")}</div>`;
     }
     function sourceTags(source) {
       return String(source || "-").split("+").map((part) => part.trim()).filter(Boolean).map((part) => (
@@ -361,6 +371,8 @@
         ${tapeSegment("Regime", esc(r.label || "unknown"))}
         ${tapeSegment("MC 24h", fmtPct(c.market_cap_change_24h_pct), clsFor(c.market_cap_change_24h_pct))}
         ${tapeSegment("BTC.D", fmtPct(c.btc_dominance_pct, 2).replace("+", ""))}
+        ${tapeSegment("BTC.D Δ", fmtPct(c.btc_dominance_delta_pct), clsFor(c.btc_dominance_delta_pct))}
+        ${tapeSegment("ETH/BTC", fmtPct(c.eth_btc_performance_pct), clsFor(c.eth_btc_performance_pct))}
         ${tapeSegment("Trusted / Excl", `${esc(q.trusted_count ?? "-")} / ${esc(q.excluded_count ?? "-")}`, excludedTone)}
         ${tapeSegment("Providers", providerDots(data.provider_status))}
       </div>`;
@@ -413,9 +425,37 @@
       const ariaSort = active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none";
       return `<div class="watch-th inline-flex items-center justify-end gap-0.5 cursor-pointer select-none whitespace-nowrap hover:text-ink${active ? " sorted text-gold" : ""}" role="columnheader" tabindex="0" data-sort="${key}" aria-sort="${ariaSort}">${esc(label)}<span class="sort-arrow text-[9px] leading-none transition-colors duration-100">${arrow}</span></div>`;
     }
+
+    function confluenceToneClass(tone) {
+      if (tone === "pos") return "conf-pos";
+      if (tone === "neg") return "conf-neg";
+      return "conf-neutral";
+    }
+    function confluenceCell(row) {
+      const conf = row?.confluence;
+      if (!conf || !Array.isArray(conf.families)) return `<div class="watch-cell" data-label="Conf">-</div>`;
+      const segments = conf.families.map((family) => (
+        `<span class="conf-seg ${confluenceToneClass(family.tone)}" title="${esc(family.label)}${family.value == null ? "" : `: ${family.value}`}"></span>`
+      )).join("");
+      const title = `${conf.aligned} align / ${conf.against} against / ${conf.neutral} neutral (${conf.direction})`;
+      return `<div class="watch-cell conf-cell" data-label="Conf" title="${esc(title)}"><span class="conf-count">${esc(conf.aligned)}/${esc(conf.total)}</span><span class="conf-bar">${segments}</span></div>`;
+    }
+    function confluenceStrip(row) {
+      const conf = row?.confluence;
+      if (!conf || !Array.isArray(conf.families)) return "";
+      const dirLabel = conf.direction === "short" ? "short" : "long";
+      const cells = conf.families.map((family) => {
+        const valueTitle = family.value == null ? "" : ` (${family.value})`;
+        return `<span class="conf-strip-cell ${confluenceToneClass(family.tone)}" title="${esc(family.label)}${esc(valueTitle)}">${esc(family.label.split(" / ")[0])}</span>`;
+      }).join("");
+      return `<div class="conf-strip">
+        <div class="conf-strip-headline">${esc(conf.aligned)} of ${esc(conf.total)} signals align ${esc(dirLabel)}</div>
+        <div class="conf-strip-row">${cells}</div>
+      </div>`;
+    }
     function watchHead() {
       return `<div class="watch-head sticky top-0 z-[2] px-3 py-2 border-b border-line bg-panel-2 text-muted text-[11px] font-bold tracking-wide uppercase text-right" role="row">
-        ${headCell("symbol", "Symbol")}${headCell("setup", "Setup")}${headCell("score", "Score")}${headCell("quality", "Q")}${headCell("price", "24h")}${headCell("oi", "OI 24h")}${headCell("funding", "Funding")}${headCell("ls", "L/S")}${headCell("volume", "Volume")}${headCell("source", "Source")}
+        ${headCell("symbol", "Symbol")}${headCell("setup", "Setup")}${headCell("score", "Score")}${headCell("conf", "Conf")}${headCell("quality", "Q")}${headCell("price", "24h")}${headCell("oi", "OI 24h")}${headCell("funding", "Funding")}${headCell("ls", "L/S")}${headCell("volume", "Volume")}${headCell("source", "Source")}
       </div>`;
     }
     function renderWatchTable(data) {
@@ -437,6 +477,7 @@
           <div class="watch-cell left watch-symbol" data-label="Symbol">${symbolLink(row)}<span class="driver-line">${esc(row.primary_driver?.label || row.side || "-")}</span></div>
           <div class="watch-cell left watch-setup" data-label="Setup">${setupBadge(row)}${setupMeta(row)}</div>
           <div class="watch-cell" data-label="Score">${scoreText(row, maxScore)}</div>
+          ${confluenceCell(row)}
           <div class="watch-cell" data-label="Q"><span class="quality-badge ${qualityTone(row.quality)}">${esc(row.quality ?? "-")}</span></div>
           <div class="watch-cell ${clsFor(row.price_change_24h_pct)}" data-label="24h">${arrowPct(row.price_change_24h_pct)}</div>
           <div class="watch-cell ${clsFor(row.oi_change_24h_pct)}" data-label="OI 24h">${arrowPct(row.oi_change_24h_pct)}</div>
@@ -540,6 +581,7 @@
           </div>
         </div>
         <div class="detail-badges flex flex-wrap gap-1.5">${setupBadge(row)}${conflictBadge(row)}</div>
+        ${confluenceStrip(row)}
         <div class="detail-grid grid grid-cols-2 max-[680px]:grid-cols-1 gap-2">
           <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Score / Priority</span><strong>${fmtNum(row.score)} / ${fmtNum(row.priority)}</strong></div>
           <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Confidence</span><strong>${row.confidence_score == null ? "-" : fmtNum(row.confidence_score, 0)}</strong></div>

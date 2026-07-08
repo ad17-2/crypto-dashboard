@@ -289,9 +289,10 @@ def _regime_fit_rows(
 
 def _regime_fit_score_field(row: dict[str, Any], regime: dict[str, Any]) -> tuple[str, str]:
     bias = str(regime.get("bias") or "mixed")
-    label = str(regime.get("label") or "mixed")
+    label = str(regime.get("regime_state") or regime.get("label") or "neutral")
     factor_score = to_float(row.get("factor_score"), 0.0) or 0.0
-    if label == "crowding-contrarian":
+    # Chaos prefers crowded/squeeze scoring over directional bias.
+    if label == "chaos":
         crowded_score = to_float(row.get("crowded_long_score"), 0.0) or 0.0
         squeeze_score = to_float(row.get("squeeze_risk_score"), 0.0) or 0.0
         if crowded_score >= squeeze_score:

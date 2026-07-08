@@ -2,7 +2,48 @@ from __future__ import annotations
 
 from typing import Any
 
-from .scoring import clamp, to_float
+from .scoring import clamp, stdev, to_float
+
+
+def market_sensing_summary(
+    rows: list[dict[str, Any]],
+    market_context: dict[str, Any],
+    prior_market_state: dict[str, Any] | None,
+) -> dict[str, Any]:
+    trusted_rows = [row for row in rows if row.get("is_trusted", True)]
+    current_btc_dom = to_float(market_context.get("btc_dominance_pct"))
+    prior_btc_dom = to_float((prior_market_state or {}).get("btc_dominance_pct"))
+    btc_dominance_delta_pct = None
+    if current_btc_dom is not None and prior_btc_dom is not None:
+        btc_dominance_delta_pct = current_btc_dom - prior_btc_dom
+
+    price_changes = [
+        value
+        for value in (to_float(row.get("price_change_24h_pct")) for row in trusted_rows)
+        if value is not None
+    ]
+    return_dispersion_pct = stdev(price_changes) if len(price_changes) >= 2 else None
+
+    return {
+        "btc_dominance_delta_pct": btc_dominance_delta_pct,
+        "eth_btc_performance_pct": _eth_btc_performance_pct(trusted_rows),
+        "return_dispersion_pct": return_dispersion_pct,
+    }
+
+
+def _eth_btc_performance_pct(rows: list[dict[str, Any]]) -> float | None:
+    btc_change = None
+    eth_change = None
+    for row in rows:
+        symbol = row.get("symbol")
+        if symbol == "BTC":
+            btc_change = to_float(row.get("price_change_24h_pct"))
+        elif symbol == "ETH":
+            eth_change = to_float(row.get("price_change_24h_pct"))
+    if btc_change is None or eth_change is None:
+        return None
+    return ((1.0 + eth_change / 100.0) / (1.0 + btc_change / 100.0) - 1.0) * 100.0
+
 
 
 def market_structure_summary(rows: list[dict[str, Any]], market_context: dict[str, Any]) -> dict[str, Any]:

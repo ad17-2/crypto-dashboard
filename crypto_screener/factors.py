@@ -5,7 +5,8 @@ from collections.abc import Sequence
 from typing import Any
 
 from .factor_definitions import DEFAULT_PRIORS, DIRECTIONAL_FACTORS, QUALITY_FACTORS
-from .market import market_structure_summary
+from .market import market_sensing_summary, market_structure_summary
+from .regime import classify_regime
 from .scoring import clamp, mean, median, robust_zscore_by_key, safe_log10, spearman_corr, stdev, to_float
 
 
@@ -14,18 +15,21 @@ def score_snapshot(
     market_context: dict[str, Any],
     history_records: list[dict[str, Any]],
     config: dict[str, Any],
+    prior_market_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     trusted_rows = [row for row in rows if row.get("is_trusted", True)]
     enriched_context = dict(market_context or {})
     enriched_context.update(market_structure_summary(trusted_rows, enriched_context))
+    enriched_context.update(market_sensing_summary(trusted_rows, enriched_context, prior_market_state))
     valid_atr = [value for value in (to_float(row.get("atr_14_pct")) for row in trusted_rows) if value is not None]
     enriched_context["median_atr_pct"] = median(valid_atr) if valid_atr else None
     raw_factors = [_raw_factors(row, trusted_rows, enriched_context) for row in trusted_rows]
     normalized = _normalize_factors(raw_factors)
     base_weights = factor_weights(history_records, config)
-    base_regime = infer_regime(base_weights, trusted_rows, enriched_context)
+    prior_state = (prior_market_state or {}).get("regime_state")
+    base_regime = infer_regime(base_weights, trusted_rows, enriched_context, prior_state, config)
     weights = apply_regime_weighting(base_weights, base_regime, config)
-    regime = infer_regime(weights, trusted_rows, enriched_context)
+    regime = infer_regime(weights, trusted_rows, enriched_context, prior_state, config)
 
     for row, raw, factors in zip(trusted_rows, raw_factors, normalized, strict=True):
         row["raw_factors"] = raw
@@ -276,7 +280,7 @@ def apply_regime_weighting(
         return weights
 
     directional = weights.get("directional", {})
-    multipliers = _regime_multipliers(regime)
+    multipliers = _regime_multipliers(regime, config)
     max_multiplier = float(regime_cfg.get("max_factor_multiplier", 1.35))
     adjusted_raw = {
         factor: float(directional.get(factor, 0.0)) * min(max(multipliers.get(factor, 1.0), 0.35), max_multiplier)
@@ -290,7 +294,7 @@ def apply_regime_weighting(
         "directional": adjusted,
         "regime_adjusted": True,
         "regime_adjustment": {
-            "label": regime.get("label", "mixed"),
+            "label": regime.get("label", "neutral"),
             "bias": regime.get("bias", "mixed"),
             "breadth_label": regime.get("breadth_label", "unknown"),
             "multipliers": {factor: round(multipliers.get(factor, 1.0), 3) for factor in DIRECTIONAL_FACTORS},
@@ -340,34 +344,37 @@ def _hit_rate(pairs: list[tuple[float, float]], expected_direction: float) -> fl
     return round((hits / len(pairs)) * 100.0, 2)
 
 
-def _regime_multipliers(regime: dict[str, Any]) -> dict[str, float]:
+def _regime_multipliers(regime: dict[str, Any], config: dict[str, Any] | None = None) -> dict[str, float]:
     multipliers = {factor: 1.0 for factor in DIRECTIONAL_FACTORS}
-    label = str(regime.get("label") or "mixed")
+    label = str(regime.get("label") or "neutral")
     bias = str(regime.get("bias") or "mixed")
     breadth_score = to_float(regime.get("breadth_score"), 0.0) or 0.0
+    regime_cfg = (config or {}).get("factors", {}).get("regime", {})
 
-    if label == "momentum":
-        _multiply(multipliers, ["momentum_24h", "oi_price_signal", "technical_trend_4h"], 1.18)
-        _multiply(multipliers, ["technical_momentum_4h", "taker_flow_24h", "oi_acceleration_signal"], 1.10)
-        _multiply(multipliers, ["reversal_1d"], 0.78)
-        _multiply(multipliers, ["funding_rate_contrarian", "ls_ratio_contrarian"], 0.90)
-    elif label == "reversal":
-        _multiply(multipliers, ["reversal_1d", "funding_rate_contrarian", "ls_ratio_contrarian"], 1.20)
-        _multiply(multipliers, ["liquidation_imbalance", "liquidation_pressure_24h"], 1.12)
-        _multiply(multipliers, ["momentum_24h", "technical_trend_4h"], 0.86)
-    elif label == "crowding-contrarian":
+    # Placeholder state nudges until Phase 5 makes weighting data-driven.
+    if label == "btc-led":
         _multiply(
             multipliers,
-            [
-                "funding_rate_contrarian",
-                "funding_persistence_contrarian",
-                "ls_ratio_contrarian",
-                "liquidation_imbalance",
-                "liquidation_pressure_24h",
-            ],
-            1.22,
+            ["btc_relative_strength", "momentum_24h", "technical_trend_4h"],
+            float(regime_cfg.get("nudge_btc_led", 1.12)),
         )
-        _multiply(multipliers, ["momentum_24h", "technical_trend_4h"], 0.82)
+    elif label == "alts-strong":
+        _multiply(
+            multipliers,
+            ["momentum_24h", "oi_price_signal", "taker_flow_24h"],
+            float(regime_cfg.get("nudge_alts_strong", 1.10)),
+        )
+    elif label == "chaos":
+        _multiply(
+            multipliers,
+            ["momentum_24h", "technical_trend_4h", "reversal_1d"],
+            float(regime_cfg.get("nudge_chaos_trend", 0.88)),
+        )
+        _multiply(
+            multipliers,
+            ["funding_rate_contrarian", "ls_ratio_contrarian", "liquidation_imbalance"],
+            float(regime_cfg.get("nudge_chaos_contrarian", 1.12)),
+        )
 
     if bias == "risk-on":
         _multiply(multipliers, ["momentum_24h", "oi_price_signal", "btc_relative_strength", "technical_trend_4h"], 1.08)
@@ -391,12 +398,9 @@ def infer_regime(
     weights: dict[str, Any],
     rows: list[dict[str, Any]],
     market_context: dict[str, Any],
+    prior_state: str | None = None,
+    config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    directional = weights.get("directional", {})
-    momentum_weight = directional.get("momentum_24h", 0.0) + directional.get("oi_price_signal", 0.0)
-    reversal_weight = directional.get("reversal_1d", 0.0)
-    crowding_weight = directional.get("funding_rate_contrarian", 0.0) + directional.get("ls_ratio_contrarian", 0.0)
-
     avg_funding = _avg([to_float(row.get("funding_rate_pct")) for row in rows])
     btc_change = _btc_change(rows, market_context)
     market_cap_change = to_float(market_context.get("market_cap_change_24h_pct"))
@@ -404,14 +408,8 @@ def infer_regime(
     sector_rotation = market_context.get("sector_rotation", {})
     breadth_score = to_float(breadth.get("score"))
 
-    if abs(momentum_weight) >= abs(reversal_weight) * 1.4 and momentum_weight > 0:
-        label = "momentum"
-    elif abs(reversal_weight) > abs(momentum_weight) and reversal_weight > 0:
-        label = "reversal"
-    elif crowding_weight > 0.2:
-        label = "crowding-contrarian"
-    else:
-        label = "mixed"
+    classified = classify_regime(market_context, prior_state, config or {})
+    label = classified["state"]
 
     bias_score = 0.0
     if btc_change is not None:
@@ -430,11 +428,19 @@ def infer_regime(
     else:
         bias = "mixed"
 
+    btc_dominance_delta_pct = to_float(market_context.get("btc_dominance_delta_pct"))
+    eth_btc_performance_pct = to_float(market_context.get("eth_btc_performance_pct"))
+
     return {
         "label": label,
+        "regime_state": label,
+        "regime_scores": classified["scores"],
+        "raw_regime_state": classified["raw_state"],
         "bias": bias,
         "bias_score": round(bias_score, 3),
         "btc_change_24h_pct": btc_change,
+        "btc_dominance_delta_pct": btc_dominance_delta_pct,
+        "eth_btc_performance_pct": eth_btc_performance_pct,
         "avg_funding_rate_pct": avg_funding,
         "market_cap_change_24h_pct": market_cap_change,
         "breadth_score": breadth_score,

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from .confluence import confluence_summary
 from .dashboard_taxonomy import factor_label
 from .factor_definitions import DIRECTIONAL_FACTORS
 from .factor_explanations import reason_for
 from .scoring import clamp, to_float
+
+MIN_HISTORY_POINTS = 6
 
 
 def dashboard_row(
@@ -19,6 +22,18 @@ def dashboard_row(
     score = row.get(score_field)
     setup = setup_label(row, side)
     priority = chart_priority(row, score_field, score)
+    confluence = confluence_summary(row, side)
+    positioning_ratio = row.get("long_short_account_ratio")
+    if positioning_ratio is None:
+        positioning_ratio = row.get("long_short_ratio")
+    funding_percentile = history_percentile(history, "funding_rate_pct", row.get("funding_rate_pct"))
+    oi_change_percentile = history_percentile(history, "oi_change_24h_pct", row.get("oi_change_24h_pct"))
+    positioning_percentile = history_percentile(
+        history,
+        "long_short_account_ratio",
+        positioning_ratio,
+        fallback_key="long_short_ratio",
+    )
     return {
         "symbol": row.get("symbol"),
         "side": side,
@@ -38,9 +53,12 @@ def dashboard_row(
         "long_short_ratio": row.get("long_short_ratio"),
         "long_short_account_ratio": row.get("long_short_account_ratio"),
         "top_trader_long_short_ratio": row.get("top_trader_long_short_ratio"),
-        "positioning_ratio": row.get("long_short_account_ratio")
-        if row.get("long_short_account_ratio") is not None
-        else row.get("long_short_ratio"),
+        "positioning_ratio": positioning_ratio,
+        "funding_percentile": funding_percentile,
+        "oi_change_percentile": oi_change_percentile,
+        "positioning_percentile": positioning_percentile,
+        "confluence": confluence,
+        "confluence_score": confluence["net_score"],
         "quote_volume_usd": row.get("quote_volume_usd"),
         "open_interest_usd": row.get("open_interest_usd"),
         "technical_setup": row.get("technical_setup"),
@@ -74,6 +92,29 @@ def dashboard_row(
         "reason_parts": reason_parts(row, side),
         "explanation": token_explanation(row, side, setup),
     }
+
+
+def history_percentile(
+    history: list[dict[str, Any]] | None,
+    history_key: str,
+    current_value: Any,
+    *,
+    fallback_key: str | None = None,
+) -> float | None:
+    values: list[float] = []
+    for point in history or []:
+        value = to_float(point.get(history_key))
+        if value is None and fallback_key:
+            value = to_float(point.get(fallback_key))
+        if value is not None:
+            values.append(value)
+    if len(values) < MIN_HISTORY_POINTS:
+        return None
+    current = to_float(current_value)
+    if current is None:
+        return None
+    rank = sum(1 for value in values if value <= current) / len(values) * 100.0
+    return round(rank, 0)
 
 
 def setup_label(row: dict[str, Any], side: str) -> str:

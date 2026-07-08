@@ -100,6 +100,19 @@ class RegimeWeightingConfig(StrictModel):
     conflict_penalty_strength: float = 0.18
 
 
+class RegimeConfig(StrictModel):
+    dispersion_threshold_pct: float = 8.0
+    hysteresis_margin: float = 0.15
+    breadth_weak_threshold: float = 0.15
+    breadth_strong_threshold: float = 0.25
+    dominance_delta_scale_pct: float = 0.5
+    eth_btc_scale_pct: float = 2.0
+    nudge_btc_led: float = 1.12
+    nudge_alts_strong: float = 1.10
+    nudge_chaos_trend: float = 0.88
+    nudge_chaos_contrarian: float = 1.12
+
+
 class FactorsConfig(StrictModel):
     forward_return_hours: float = 24
     ic_window_days: int = 30
@@ -111,6 +124,7 @@ class FactorsConfig(StrictModel):
     ic_prior_strength: int = 10
     ic_min_cross_section: int = 5
     regime_weighting: RegimeWeightingConfig = Field(default_factory=RegimeWeightingConfig)
+    regime: RegimeConfig = Field(default_factory=RegimeConfig)
     priors: dict[str, float] = Field(default_factory=dict)
 
 

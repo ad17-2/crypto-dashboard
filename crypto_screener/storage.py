@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from .scoring import to_float
+
 
 def connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -60,6 +62,18 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             ON factor_history(symbol, generated_at);
         CREATE INDEX IF NOT EXISTS idx_factor_history_time
             ON factor_history(generated_at);
+
+        CREATE TABLE IF NOT EXISTS market_regime_history (
+            run_id TEXT NOT NULL,
+            generated_at TEXT NOT NULL,
+            btc_dominance_pct REAL,
+            eth_btc_performance_pct REAL,
+            regime_state TEXT,
+            regime_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_market_regime_history_time
+            ON market_regime_history(generated_at);
         """
     )
     _ensure_column(conn, "runs", "regime_json", "TEXT NOT NULL DEFAULT '{}'")
@@ -136,6 +150,7 @@ def save_snapshot(payload: dict[str, Any], config: dict[str, Any]) -> None:
                     json.dumps(_history_metrics(row), sort_keys=True),
                 ),
             )
+        _persist_market_regime_history(conn, payload)
         conn.commit()
     finally:
         conn.close()
@@ -274,6 +289,58 @@ def load_labeled_factor_records(config: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
     return records
+
+
+
+def load_latest_regime_state(db_path_or_conn: Path | str | sqlite3.Connection) -> dict[str, Any] | None:
+    should_close = False
+    if isinstance(db_path_or_conn, sqlite3.Connection):
+        conn = db_path_or_conn
+    else:
+        db_path = Path(db_path_or_conn)
+        if not db_path.exists():
+            return None
+        conn = connect(db_path)
+        should_close = True
+    try:
+        row = conn.execute(
+            """
+            SELECT btc_dominance_pct, eth_btc_performance_pct, regime_state, regime_json
+            FROM market_regime_history
+            ORDER BY generated_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "btc_dominance_pct": row["btc_dominance_pct"],
+            "eth_btc_performance_pct": row["eth_btc_performance_pct"],
+            "regime_state": row["regime_state"],
+        }
+    finally:
+        if should_close:
+            conn.close()
+
+
+def _persist_market_regime_history(conn: sqlite3.Connection, payload: dict[str, Any]) -> None:
+    regime = payload.get("regime", {})
+    market_context = payload.get("market_context", {})
+    conn.execute(
+        """
+        INSERT INTO market_regime_history
+            (run_id, generated_at, btc_dominance_pct, eth_btc_performance_pct, regime_state, regime_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            payload["run_id"],
+            payload["generated_at"],
+            to_float(market_context.get("btc_dominance_pct")),
+            to_float(market_context.get("eth_btc_performance_pct") or regime.get("eth_btc_performance_pct")),
+            regime.get("regime_state") or regime.get("label"),
+            json.dumps(regime, sort_keys=True),
+        ),
+    )
 
 
 def _history_metrics(row: dict[str, Any]) -> dict[str, Any]:

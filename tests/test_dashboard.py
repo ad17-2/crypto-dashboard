@@ -43,10 +43,10 @@ class DashboardTests(unittest.TestCase):
                     "sector_rotation": {"status": "ok", "label": "selective-sector-bid"},
                 },
                 "provider_status": {"coinglass": {"status": "ok", "rows": 2}},
-                "regime": {"bias": "risk-on", "label": "momentum", "breadth_label": "selective-risk-on"},
+                "regime": {"bias": "risk-on", "label": "neutral", "breadth_label": "selective-risk-on"},
                 "factor_weights": {
                     "mode": "ic",
-                    "regime_adjustment": {"label": "momentum", "bias": "risk-on"},
+                    "regime_adjustment": {"label": "neutral", "bias": "risk-on"},
                     "stats": {
                         "momentum_24h": {
                             "weight": 0.35,
@@ -220,7 +220,7 @@ class DashboardTests(unittest.TestCase):
         summary = _model_weights_summary(
             {
                 "mode": "ic",
-                "regime_adjustment": {"label": "momentum"},
+                "regime_adjustment": {"label": "neutral"},
                 "stats": {
                     "reversal_1d": {"weight": -0.05, "mode": "prior", "t_stat": None},
                     "momentum_24h": {"weight": 0.2, "mode": "ic", "t_stat": 1.8},
@@ -228,7 +228,7 @@ class DashboardTests(unittest.TestCase):
             }
         )
         self.assertEqual(summary["mode"], "ic")
-        self.assertEqual(summary["regime"]["label"], "momentum")
+        self.assertEqual(summary["regime"]["label"], "neutral")
         self.assertEqual(summary["factors"][0]["label"], "Momentum")
         self.assertEqual(summary["factors"][0]["t_stat"], 1.8)
         self.assertEqual(summary["factors"][1]["label"], "Reversal")
