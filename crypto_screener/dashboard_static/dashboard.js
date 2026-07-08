@@ -450,11 +450,11 @@
     }
     function factorBars(row) {
       const parts = row?.factor_parts || [];
-      if (!parts.length) return `<div class="empty">No factor data</div>`;
+      if (!parts.length) return `<div class="py-7 px-3 text-muted text-center">No factor data</div>`;
       const maxAbs = Math.max(...parts.map((part) => Math.abs(Number(part.value || 0))), 1);
-      return `<div class="factor-list">${parts.map((part) => {
+      return `<div class="factor-list grid gap-2">${parts.map((part) => {
         const width = Math.round((Math.abs(Number(part.value || 0)) / maxAbs) * 100);
-        return `<div class="factor-row">
+        return `<div class="factor-row grid grid-cols-[minmax(90px,1fr)_minmax(0,1.2fr)_48px] gap-2 items-center text-xs">
           <span>${esc(part.label)}</span>
           <span class="factor-track"><span class="factor-fill ${esc(part.tone || "neutral")}" style="width:${width}%"></span></span>
           <strong class="${part.value > 0 ? "text-up" : part.value < 0 ? "text-down" : ""}">${fmtNum(part.value, 2)}</strong>
@@ -566,20 +566,20 @@
         ${detailSection("Technical Context", technicalBlock(row), false)}
         ${detailSection("Factor Breakdown", factorBars(row), false)}
         ${detailSection("History", historyBlock(row), false)}
-        ${flags.length ? `<div class="quality-flag-list">${qualityFlagView(flags)}</div>` : ""}
+        ${flags.length ? `<div class="quality-flag-list flex flex-wrap gap-1">${qualityFlagView(flags)}</div>` : ""}
       </div>`);
     }
     function providerList(providers) {
       const entries = Object.entries(providers || {});
-      if (entries.length === 0) return `<div class="empty">No providers</div>`;
-      return `<div class="provider-list">${entries.map(([name, details]) => {
+      if (entries.length === 0) return `<div class="py-7 px-3 text-muted text-center">No providers</div>`;
+      return `<div class="provider-list p-3 grid gap-2">${entries.map(([name, details]) => {
         const providerStatus = String(details.status || "-");
         const tone = providerStatus === "ok" ? "" : providerStatus === "skipped" || providerStatus === "disabled" ? "warn" : "bad";
         return `
-        <div class="provider-row">
+        <div class="provider-row grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center min-h-[30px] text-[13px]">
           <strong>${esc(name)}</strong>
           <span class="status-pill ${tone}">${esc(providerStatus)}</span>
-          <span class="provider-count">${details.rows === undefined ? "-" : esc(details.rows)}</span>
+          <span class="provider-count text-muted text-xs font-mono text-right min-w-[38px]">${details.rows === undefined ? "-" : esc(details.rows)}</span>
         </div>`;
       }).join("")}</div>`;
     }
@@ -608,20 +608,20 @@
     }
     function qualityBlock(quality) {
       const flags = quality?.flagged_rows || [];
-      if (flags.length === 0) return `<div class="quality-flags"><div class="quality-card"><div class="quality-card-head"><strong>All clear</strong><span>sanity checks passed</span></div></div></div>`;
-      return `<div class="quality-flags">${flags.map((row) => `
-        <div class="quality-card">
-          <div class="quality-card-head">
+      if (flags.length === 0) return `<div class="quality-flags p-3 grid gap-2.5"><div class="quality-card grid gap-1.5 p-2 rounded-md"><div class="quality-card-head flex justify-between gap-2 items-baseline text-[13px]"><strong>All clear</strong><span>sanity checks passed</span></div></div></div>`;
+      return `<div class="quality-flags p-3 grid gap-2.5">${flags.map((row) => `
+        <div class="quality-card grid gap-1.5 p-2 rounded-md">
+          <div class="quality-card-head flex justify-between gap-2 items-baseline text-[13px]">
             <strong>${esc(row.symbol)}</strong>
             <span>${fmtPct(row.price_change_24h_pct)} / OI ${fmtPct(row.oi_change_24h_pct)}</span>
           </div>
-          <div class="quality-flag-list">${qualityFlagView(row.flags)}</div>
+          <div class="quality-flag-list flex flex-wrap gap-1">${qualityFlagView(row.flags)}</div>
         </div>
       `).join("")}</div>`;
     }
-    function modulePanel(title, subtitle, body, open = false) {
-      return `<details class="module-panel" ${open ? "open" : ""}>
-        <summary><strong>${esc(title)}</strong><span>${esc(subtitle || "")}</span></summary>
+    function modulePanel(title, subtitle, body, open = false, accent = "blue") {
+      return `<details class="module-panel border-l-2 border-${accent} rounded-md overflow-hidden bg-panel border border-line" ${open ? "open" : ""}>
+        <summary class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 px-3 py-2.5 cursor-pointer list-none bg-panel-2"><strong class="text-xs font-semibold uppercase tracking-wide">${esc(title)}</strong><span class="text-muted text-xs font-semibold whitespace-nowrap">${esc(subtitle || "")}</span></summary>
         ${body}
       </details>`;
     }
@@ -638,74 +638,79 @@
         "Providers",
         providerIssue ? "needs attention" : `${providerEntries} ok`,
         providerList(data.provider_status),
-        false
+        false,
+        "blue"
       );
       const excluded = data.quality?.excluded_count || 0;
       $("qualityPanel").innerHTML = modulePanel(
         "Data Quality",
         `${excluded} excluded`,
         qualityBlock(data.quality),
-        false
+        false,
+        "blue"
       );
       $("validationPanel").innerHTML = modulePanel(
         "Validation",
         data.validation?.calibration_label || data.validation?.status || "unknown",
         validationBlock(data.validation),
-        false
+        false,
+        "blue"
       );
       const mw = data.model_weights || {};
       const mwSub = `${mw.mode || "prior"} · ${mw.regime?.label || data.regime?.label || "mixed"}`;
-      $("weightsPanel").innerHTML = modulePanel("Factor Weights", mwSub, weightsBlock(mw), false);
+      $("weightsPanel").innerHTML = modulePanel("Factor Weights", mwSub, weightsBlock(mw), false, "gold");
       $("sectorPanel").innerHTML = modulePanel(
         "Sector Rotation",
         data.market_context?.sector_rotation?.label || "leaders / laggards",
         sectorList(data.market_context || {}),
-        false
+        false,
+        "gold"
       );
       $("runsPanel").innerHTML = modulePanel(
         "Freshness / Runs",
         data.freshness?.label || `${(data.runs || []).length} loaded`,
         `${freshnessBlock(data.freshness)}${runsBlock(data.runs)}`,
-        false
+        false,
+        "blue"
       );
     }
     function weightsBlock(modelWeights) {
       const factors = modelWeights?.factors || [];
-      if (!factors.length) return `<div class="empty">No factor weights</div>`;
+      if (!factors.length) return `<div class="py-7 px-3 text-muted text-center">No factor weights</div>`;
       const maxAbs = Math.max(...factors.map((f) => Math.abs(Number(f.weight || 0))), 0.0001);
-      return `<div class="list">${factors.map((f) => {
+      return `<div class="list p-3 grid gap-2">${factors.map((f) => {
         const width = Math.round((Math.abs(Number(f.weight || 0)) / maxAbs) * 100);
         const tone = f.weight > 0 ? "pos" : f.weight < 0 ? "neg" : "neutral";
         const driver = f.mode === "ic"
           ? `<span class="driver-line">IC ${fmtNum(f.ic, 2)} · t ${fmtNum(f.t_stat, 1)} · k ${fmtNum(f.credibility_k, 2)} · ${esc(f.n_periods)}p${f.regime_multiplier != null && Math.abs(f.regime_multiplier - 1) >= 0.01 ? ` · x${fmtNum(f.regime_multiplier, 2)}` : ""}</span>`
           : "";
-        return `<div class="weight-row">
-          <div class="weight-label"><strong>${esc(f.label || f.name || "-")}</strong>${driver}</div>
+        return `<div class="weight-row grid grid-cols-[minmax(90px,1fr)_minmax(0,1.2fr)_auto] gap-2 items-center text-xs">
+          <div class="weight-label grid gap-0.5 min-w-0"><strong>${esc(f.label || f.name || "-")}</strong>${driver}</div>
           <span class="factor-track"><span class="factor-fill ${tone}" style="width:${width}%"></span></span>
-          <div class="weight-meta"><span class="status-pill ${f.mode === "ic" ? "" : "warn"}">${esc((f.mode || "prior").toUpperCase())}</span><strong>${fmtNum(f.weight, 3)}</strong></div>
+          <div class="weight-meta flex items-center gap-1.5 justify-self-end"><span class="status-pill ${f.mode === "ic" ? "" : "warn"}">${esc((f.mode || "prior").toUpperCase())}</span><strong>${fmtNum(f.weight, 3)}</strong></div>
         </div>`;
       }).join("")}</div>`;
     }
     function validationBlock(validation) {
-      if (!validation || Object.keys(validation).length === 0) return `<div class="empty">No validation data</div>`;
+      if (!validation || Object.keys(validation).length === 0) return `<div class="py-7 px-3 text-muted text-center">No validation data</div>`;
       const best = validation.best_factors?.[0];
       const weak = validation.weakest_factors?.[0];
       const buckets = validation.conflict_buckets || [];
-      return `<div class="list">
-        <div class="list-row"><strong>Status</strong><span>${esc(validation.status || "unknown")} / ${esc(validation.calibration_label || "learning")}</span></div>
-        <div class="list-row"><strong>Observations</strong><span>${esc(validation.observations ?? 0)} / ${esc(validation.horizon_hours ?? "-")}h</span></div>
-        <div class="list-row"><strong>Model Hit</strong><span>${fmtRate(validation.model_hit_rate)}</span></div>
-        <div class="list-row"><strong>Best Factor</strong><span>${best ? `${esc(best.label)} ${fmtRate(best.hit_rate)}` : "-"}</span></div>
-        <div class="list-row"><strong>Weak Factor</strong><span>${weak ? `${esc(weak.label)} ${fmtRate(weak.hit_rate)}` : "-"}</span></div>
+      return `<div class="list p-3 grid gap-2">
+        <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Status</strong><span>${esc(validation.status || "unknown")} / ${esc(validation.calibration_label || "learning")}</span></div>
+        <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Observations</strong><span>${esc(validation.observations ?? 0)} / ${esc(validation.horizon_hours ?? "-")}h</span></div>
+        <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Model Hit</strong><span>${fmtRate(validation.model_hit_rate)}</span></div>
+        <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Best Factor</strong><span>${best ? `${esc(best.label)} ${fmtRate(best.hit_rate)}` : "-"}</span></div>
+        <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Weak Factor</strong><span>${weak ? `${esc(weak.label)} ${fmtRate(weak.hit_rate)}` : "-"}</span></div>
         <div class="label">Current Signal Mix</div>
-        ${buckets.slice(0, 4).map((bucket) => `<div class="list-row"><strong>${esc(bucket.label)}</strong><span>${esc(bucket.count)} / C ${fmtNum(bucket.avg_confidence, 0)}</span></div>`).join("") || `<div class="empty">No signal buckets</div>`}
+        ${buckets.slice(0, 4).map((bucket) => `<div class="list-row flex justify-between gap-3 text-[13px]"><strong>${esc(bucket.label)}</strong><span>${esc(bucket.count)} / C ${fmtNum(bucket.avg_confidence, 0)}</span></div>`).join("") || `<div class="py-7 px-3 text-muted text-center">No signal buckets</div>`}
       </div>`;
     }
     function freshnessBlock(freshness) {
-      if (!freshness || freshness.status !== "ok") return `<div class="list"><div class="list-row"><strong>Freshness</strong><span>unknown</span></div></div>`;
-      return `<div class="list freshness-list">
-        <div class="list-row"><strong>Selected Run</strong><span>${esc(freshness.generated_at || "-")}</span></div>
-        <div class="list-row"><strong>Age</strong><span>${esc(freshness.label || "unknown")} / ${fmtNum(freshness.age_minutes, 1)}m</span></div>
+      if (!freshness || freshness.status !== "ok") return `<div class="list p-3 grid gap-2"><div class="list-row flex justify-between gap-3 text-[13px]"><strong>Freshness</strong><span>unknown</span></div></div>`;
+      return `<div class="list freshness-list p-3 grid gap-2 border-b border-line">
+        <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Selected Run</strong><span>${esc(freshness.generated_at || "-")}</span></div>
+        <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Age</strong><span>${esc(freshness.label || "unknown")} / ${fmtNum(freshness.age_minutes, 1)}m</span></div>
       </div>`;
     }
     function sectorList(context) {
@@ -713,11 +718,11 @@
       const laggards = context?.categories?.laggards || [];
       const breadth = context?.breadth || {};
       const rotation = context?.sector_rotation || {};
-      const line = (item) => `<div class="list-row"><strong>${esc(item.name || item.id)}</strong><span class="${clsFor(item.market_cap_change_24h_pct)}">${fmtPct(item.market_cap_change_24h_pct)}</span></div>`;
+      const line = (item) => `<div class="list-row flex justify-between gap-3 text-[13px]"><strong>${esc(item.name || item.id)}</strong><span class="${clsFor(item.market_cap_change_24h_pct)}">${fmtPct(item.market_cap_change_24h_pct)}</span></div>`;
       return `<div class="sector-list">
         <div class="sector-block">
-          <div class="list-row"><strong>Breadth</strong><span>${esc(breadth.label || "unknown")} / ${fmtNum(breadth.score, 2)}</span></div>
-          <div class="list-row"><strong>Sector Tape</strong><span>${esc(rotation.label || "unknown")}</span></div>
+          <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Breadth</strong><span>${esc(breadth.label || "unknown")} / ${fmtNum(breadth.score, 2)}</span></div>
+          <div class="list-row flex justify-between gap-3 text-[13px]"><strong>Sector Tape</strong><span>${esc(rotation.label || "unknown")}</span></div>
         </div>
         <div class="sector-block">
           <div class="label">Leaders</div>
@@ -730,9 +735,9 @@
       </div>`;
     }
     function runsBlock(runs) {
-      if (!runs || runs.length === 0) return `<div class="empty">No runs</div>`;
-      return `<div class="list">${runs.slice(0, 12).map((run) => `
-        <div class="list-row"><strong>${esc(run.generated_at)}</strong><span>${esc(run.bias)} / ${esc(run.coinglass_status)} / ${esc(run.row_count)} rows</span></div>
+      if (!runs || runs.length === 0) return `<div class="py-7 px-3 text-muted text-center">No runs</div>`;
+      return `<div class="list p-3 grid gap-2">${runs.slice(0, 12).map((run) => `
+        <div class="list-row flex justify-between gap-3 text-[13px]"><strong>${esc(run.generated_at)}</strong><span>${esc(run.bias)} / ${esc(run.coinglass_status)} / ${esc(run.row_count)} rows</span></div>
       `).join("")}</div>`;
     }
     function runOptions(runs, selected) {
@@ -748,7 +753,7 @@
         $("watchCount").textContent = "-";
         $("watchTable").innerHTML = `<div class="py-7 px-3 text-muted text-center">No data</div>`;
         $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="py-7 px-3 text-muted text-center">No data</div>`);
-        ["providerPanel","qualityPanel","validationPanel","weightsPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = modulePanel(id, "", `<div class="empty">No data</div>`));
+        ["providerPanel","qualityPanel","validationPanel","weightsPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = modulePanel(id, "", `<div class="py-7 px-3 text-muted text-center">No data</div>`, false, "blue"));
         return;
       }
       state.selectedRun = data.run.run_id;
