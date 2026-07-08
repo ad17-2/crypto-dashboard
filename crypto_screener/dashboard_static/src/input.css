@@ -182,8 +182,7 @@
     .quality-flag-chip.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); color: var(--warn); }
     .module-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      align-items: start;
+      grid-template-columns: 1fr;
       gap: 12px;
       margin-top: 12px;
     }
@@ -318,10 +317,8 @@
     }
     .detail-section summary::-webkit-details-marker { display: none; }
     .module-panel { }
-    .module-grid > :has(.module-panel[open]) { grid-column: 1 / -1; }
     .detail-body > .detail-section[open] { grid-column: 1 / -1; }
-    .module-panel summary::-webkit-details-marker { display: none; }
-    .detail-section summary::after, .module-panel summary::after {
+    .detail-section summary::after {
       content: "";
       width: 7px;
       height: 7px;
@@ -332,7 +329,7 @@
       transition: transform 120ms ease, margin-top 120ms ease;
       flex: 0 0 auto;
     }
-    .detail-section[open] summary::after, .module-panel[open] summary::after {
+    .detail-section[open] summary::after {
       margin-top: 4px;
       transform: rotate(225deg);
     }

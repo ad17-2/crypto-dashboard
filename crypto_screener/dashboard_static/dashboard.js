@@ -619,12 +619,12 @@
         </div>
       `).join("")}</div>`;
     }
-    function modulePanel(title, subtitle, body, open = false, accent = "blue") {
+    function modulePanel(title, subtitle, body, accent = "blue") {
       const accentBar = accent === "gold" ? "border-l-2 border-l-gold" : "border-l-2 border-l-blue";
-      return `<details class="module-panel ${accentBar} rounded-md overflow-hidden bg-panel border border-line" ${open ? "open" : ""}>
-        <summary class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 px-3 py-2.5 cursor-pointer list-none bg-panel-2"><strong class="text-xs font-semibold uppercase tracking-wide">${esc(title)}</strong><span class="text-muted text-xs font-semibold whitespace-nowrap">${esc(subtitle || "")}</span></summary>
+      return `<div class="module-panel ${accentBar} rounded-md overflow-hidden bg-panel border border-line">
+        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 bg-panel-2"><strong class="text-xs font-semibold uppercase tracking-wide">${esc(title)}</strong><span class="text-muted text-xs font-semibold whitespace-nowrap">${esc(subtitle || "")}</span></div>
         ${body}
-      </details>`;
+      </div>`;
     }
     function providerHasIssue(providers) {
       return Object.values(providers || {}).some((details) => {
@@ -639,7 +639,6 @@
         "Providers",
         providerIssue ? "needs attention" : `${providerEntries} ok`,
         providerList(data.provider_status),
-        false,
         "blue"
       );
       const excluded = data.quality?.excluded_count || 0;
@@ -647,31 +646,27 @@
         "Data Quality",
         `${excluded} excluded`,
         qualityBlock(data.quality),
-        false,
         "blue"
       );
       $("validationPanel").innerHTML = modulePanel(
         "Validation",
         data.validation?.calibration_label || data.validation?.status || "unknown",
         validationBlock(data.validation),
-        false,
         "blue"
       );
       const mw = data.model_weights || {};
       const mwSub = `${mw.mode || "prior"} · ${mw.regime?.label || data.regime?.label || "mixed"}`;
-      $("weightsPanel").innerHTML = modulePanel("Factor Weights", mwSub, weightsBlock(mw), false, "gold");
+      $("weightsPanel").innerHTML = modulePanel("Factor Weights", mwSub, weightsBlock(mw), "gold");
       $("sectorPanel").innerHTML = modulePanel(
         "Sector Rotation",
         data.market_context?.sector_rotation?.label || "leaders / laggards",
         sectorList(data.market_context || {}),
-        false,
         "gold"
       );
       $("runsPanel").innerHTML = modulePanel(
         "Freshness / Runs",
         data.freshness?.label || `${(data.runs || []).length} loaded`,
         `${freshnessBlock(data.freshness)}${runsBlock(data.runs)}`,
-        false,
         "blue"
       );
     }
@@ -748,7 +743,7 @@
         $("watchCount").textContent = "-";
         $("watchTable").innerHTML = `<div class="py-7 px-3 text-muted text-center">No data</div>`;
         $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="py-7 px-3 text-muted text-center">No data</div>`);
-        ["providerPanel","qualityPanel","validationPanel","weightsPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = modulePanel(id, "", `<div class="py-7 px-3 text-muted text-center">No data</div>`, false, "blue"));
+        ["providerPanel","qualityPanel","validationPanel","weightsPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = modulePanel(id, "", `<div class="py-7 px-3 text-muted text-center">No data</div>`, "blue"));
         return;
       }
       state.selectedRun = data.run.run_id;
