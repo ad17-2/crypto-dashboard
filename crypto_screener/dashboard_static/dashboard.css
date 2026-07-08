@@ -1112,22 +1112,11 @@ h2 {
 }
 
 .module-grid {
-  -moz-column-count: 4;
-       column-count: 4;
-  -moz-column-gap: 12px;
-       column-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+  gap: 12px;
   margin-top: 12px;
-}
-
-.module-grid > div {
-  -moz-column-break-inside: avoid;
-       break-inside: avoid;
-  margin-bottom: 12px;
-}
-
-#sectorPanel {
-  -moz-column-span: all;
-       column-span: all;
 }
 
 .watch-panel {
@@ -1893,16 +1882,6 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .module-grid {
-    -moz-column-count: 2;
-         column-count: 2;
-  }
-
-  #sectorPanel {
-    -moz-column-span: none;
-         column-span: none;
-  }
-
   .sector-list {
     grid-template-columns: 1fr;
   }
@@ -1985,11 +1964,6 @@ h2 {
 
   .explanation-grid {
     grid-template-columns: 1fr;
-  }
-
-  .module-grid {
-    -moz-column-count: 1;
-         column-count: 1;
   }
 
   .sector-list {
