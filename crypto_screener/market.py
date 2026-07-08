@@ -18,9 +18,7 @@ def market_sensing_summary(
         btc_dominance_delta_pct = current_btc_dom - prior_btc_dom
 
     price_changes = [
-        value
-        for value in (to_float(row.get("price_change_24h_pct")) for row in trusted_rows)
-        if value is not None
+        value for value in (to_float(row.get("price_change_24h_pct")) for row in trusted_rows) if value is not None
     ]
     return_dispersion_pct = stdev(price_changes) if len(price_changes) >= 2 else None
 
@@ -43,7 +41,6 @@ def _eth_btc_performance_pct(rows: list[dict[str, Any]]) -> float | None:
     if btc_change is None or eth_change is None:
         return None
     return ((1.0 + eth_change / 100.0) / (1.0 + btc_change / 100.0) - 1.0) * 100.0
-
 
 
 def market_structure_summary(rows: list[dict[str, Any]], market_context: dict[str, Any]) -> dict[str, Any]:

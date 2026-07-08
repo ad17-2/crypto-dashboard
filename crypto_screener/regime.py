@@ -55,9 +55,12 @@ def classify_regime(context: dict[str, Any], prior_state: str | None, config: di
     raw_state = max(scores, key=lambda state: scores[state])
     state = raw_state
     # Full transition-matrix / HMM smoothing is deferred to Phase 5.
-    if prior_state in scores and raw_state != prior_state:
-        if scores[raw_state] <= scores[prior_state] + hysteresis_margin:
-            state = prior_state
+    if (
+        prior_state in scores
+        and raw_state != prior_state
+        and scores[raw_state] <= scores[prior_state] + hysteresis_margin
+    ):
+        state = prior_state
 
     return {
         "state": state,

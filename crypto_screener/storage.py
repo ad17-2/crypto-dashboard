@@ -291,7 +291,6 @@ def load_labeled_factor_records(config: dict[str, Any]) -> list[dict[str, Any]]:
     return records
 
 
-
 def load_latest_regime_state(db_path_or_conn: Path | str | sqlite3.Connection) -> dict[str, Any] | None:
     should_close = False
     if isinstance(db_path_or_conn, sqlite3.Connection):

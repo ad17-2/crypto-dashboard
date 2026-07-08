@@ -81,10 +81,7 @@ class ConfluenceTests(unittest.TestCase):
         self.assertEqual(history_percentile(history, "funding_rate_pct", 0.06), 100.0)
 
     def test_history_percentile_positioning_fallback_key(self):
-        history = [
-            {"long_short_ratio": 1.0 + index * 0.1}
-            for index in range(6)
-        ]
+        history = [{"long_short_ratio": 1.0 + index * 0.1} for index in range(6)]
         self.assertEqual(
             history_percentile(history, "long_short_account_ratio", 1.3, fallback_key="long_short_ratio"),
             67.0,
