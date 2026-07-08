@@ -47,6 +47,16 @@ def mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    sorted_values = sorted(values)
+    middle = len(sorted_values) // 2
+    if len(sorted_values) % 2 == 0:
+        return (sorted_values[middle - 1] + sorted_values[middle]) / 2.0
+    return sorted_values[middle]
+
+
 def stdev(values: list[float]) -> float:
     if len(values) < 2:
         return 0.0
@@ -66,6 +76,32 @@ def zscore_by_key(rows: list[dict[str, Any]], key: str) -> list[float]:
     if std == 0:
         return [0.0 for _ in rows]
     return [0.0 if value is None else (value - avg) / std for value in values]
+
+
+# Scale MAD to approximate standard deviation under normality.
+_MAD_SCALE = 1.4826
+
+
+def robust_zscore_by_key(rows: list[dict[str, Any]], key: str, winsor: float = 3.0) -> list[float]:
+    values = [to_float(row.get(key)) for row in rows]
+    valid = [value for value in values if value is not None]
+    if not valid:
+        return [0.0 for _ in rows]
+
+    med = median(valid)
+    deviations = [abs(value - med) for value in valid]
+    mad = median(deviations)
+    scale = mad * _MAD_SCALE
+    if scale == 0:
+        return zscore_by_key(rows, key)
+
+    zscores: list[float] = []
+    for value in values:
+        if value is None:
+            zscores.append(0.0)
+        else:
+            zscores.append(clamp((value - med) / scale, -winsor, winsor))
+    return zscores
 
 
 def average_ranks(values: list[float]) -> list[float]:

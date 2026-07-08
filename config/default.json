@@ -50,6 +50,15 @@
         "limit": 220,
         "max_symbols": 25,
         "request_delay_seconds": 2.1
+      },
+      "long_short_ratio": {
+        "enabled": true,
+        "interval": "4h",
+        "limit": 30,
+        "max_symbols": 0,
+        "ratio_exchange": "Binance",
+        "include_top_trader": true,
+        "request_delay_seconds": 2.1
       }
     },
     "coingecko": {
@@ -105,7 +114,11 @@
       "funding_persistence_contrarian": 0.08,
       "taker_flow_24h": 0.07,
       "liquidation_pressure_24h": 0.07
-    }
+    },
+    "ic_min_periods": 10,
+    "min_abs_t": 2.0,
+    "ic_prior_strength": 10,
+    "ic_min_cross_section": 5
   },
   "report": {
     "limit": 12,

@@ -168,3 +168,37 @@ class CoinGlassClient:
             params["end_time"] = end_time
         data = self.get_json("/api/futures/aggregated-taker-buy-sell-volume/history", params)
         return data if isinstance(data, list) else []
+
+    def global_long_short_account_ratio_history(
+        self,
+        exchange: str,
+        symbol: str,
+        interval: str,
+        limit: int,
+        start_time: int | None = None,
+        end_time: int | None = None,
+    ) -> list[dict[str, Any]]:
+        params = {"exchange": exchange, "symbol": symbol, "interval": interval, "limit": limit}
+        if start_time is not None:
+            params["start_time"] = start_time
+        if end_time is not None:
+            params["end_time"] = end_time
+        data = self.get_json("/api/futures/global-long-short-account-ratio/history", params)
+        return data if isinstance(data, list) else []
+
+    def top_long_short_account_ratio_history(
+        self,
+        exchange: str,
+        symbol: str,
+        interval: str,
+        limit: int,
+        start_time: int | None = None,
+        end_time: int | None = None,
+    ) -> list[dict[str, Any]]:
+        params = {"exchange": exchange, "symbol": symbol, "interval": interval, "limit": limit}
+        if start_time is not None:
+            params["start_time"] = start_time
+        if end_time is not None:
+            params["end_time"] = end_time
+        data = self.get_json("/api/futures/top-long-short-account-ratio/history", params)
+        return data if isinstance(data, list) else []

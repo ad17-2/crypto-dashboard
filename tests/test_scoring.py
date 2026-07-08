@@ -1,7 +1,8 @@
+import math
 import unittest
 
-from crypto_screener.factors import factor_weights, score_snapshot
-from crypto_screener.scoring import pct_change, spearman_corr, spread_bps, zscore_by_key
+from crypto_screener.factors import _raw_factors, factor_weights, score_snapshot
+from crypto_screener.scoring import pct_change, robust_zscore_by_key, spearman_corr, spread_bps, zscore_by_key
 
 
 class ScoringTests(unittest.TestCase):
@@ -165,6 +166,71 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(alt["signal_conflict_label"], "high-conflict")
         self.assertGreater(alt["signal_conflict_score"], 0)
         self.assertTrue(alt["signal_conflicts"])
+
+    def test_robust_zscore_resists_single_outlier(self):
+        rows = [{"value": 1.0}, {"value": 2.0}, {"value": 3.0}, {"value": 100.0}]
+        plain = zscore_by_key(rows, "value")
+        robust = robust_zscore_by_key(rows, "value")
+        plain_spread = plain[2] - plain[0]
+        robust_spread = robust[2] - robust[0]
+        self.assertLess(abs(plain_spread), abs(robust_spread))
+
+    def test_reversal_is_volatility_normalized(self):
+        rows = [
+            {"symbol": "LOWVOL", "price_change_24h_pct": 10.0, "atr_14_pct": 2.0, "quote_volume_usd": 1},
+            {"symbol": "HIGHVOL", "price_change_24h_pct": 10.0, "atr_14_pct": 5.0, "quote_volume_usd": 1},
+        ]
+        context = {"median_atr_pct": 3.5}
+        low = _raw_factors(rows[0], rows, context)
+        high = _raw_factors(rows[1], rows, context)
+        self.assertNotAlmostEqual(low["reversal_1d"], high["reversal_1d"])
+        self.assertAlmostEqual(low["reversal_1d"], -5.0)
+        self.assertAlmostEqual(high["reversal_1d"], -2.0)
+
+    def test_cross_sectional_ic_weighting(self):
+        records = []
+        symbols = ["A", "B", "C", "D", "E", "F"]
+        for period in range(12):
+            generated_at = f"2026-01-{period + 1:02d}T00:00:00"
+            for index, symbol in enumerate(symbols):
+                rank = float(index + 1)
+                forward = rank
+                if period % 2 == 1 and index == 2:
+                    forward = 4.0
+                elif period % 2 == 1 and index == 3:
+                    forward = 3.0
+                records.append(
+                    {
+                        "symbol": symbol,
+                        "generated_at": generated_at,
+                        "forward_return_pct": forward,
+                        "factors": {
+                            "momentum_24h": rank,
+                            "reversal_1d": rank if period % 2 == 0 else -rank,
+                        },
+                    }
+                )
+        config = {
+            "factors": {
+                "ic_min_periods": 10,
+                "min_abs_t": 2.0,
+                "min_abs_ic": 0.02,
+                "ic_prior_strength": 10,
+                "ic_min_cross_section": 5,
+            }
+        }
+        weights = factor_weights(records, config)
+        self.assertEqual(weights["stats"]["momentum_24h"]["mode"], "ic")
+        self.assertEqual(weights["stats"]["reversal_1d"]["mode"], "prior")
+
+    def test_account_ratio_drives_ls_contrarian(self):
+        row = {
+            "long_short_account_ratio": 2.0,
+            "long_short_ratio": 1.1,
+            "quote_volume_usd": 1_000_000,
+        }
+        raw = _raw_factors(row, [row], {})
+        self.assertAlmostEqual(raw["ls_ratio_contrarian"], -math.log(2.0))
 
 
 if __name__ == "__main__":

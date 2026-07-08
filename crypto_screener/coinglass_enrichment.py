@@ -6,6 +6,7 @@ from typing import Any
 from .coinglass import CoinGlassClient
 from .derivatives import derivatives_snapshot
 from .providers import ProviderError
+from .scoring import to_float
 from .technicals import technical_snapshot
 
 
@@ -117,3 +118,79 @@ def append_coinglass_derivatives_history(
 def _sleep_between_requests(seconds: float) -> None:
     if seconds > 0:
         time.sleep(seconds)
+
+
+def _parse_ratio_entry(data: list[dict[str, Any]], keys: tuple[str, ...]) -> float | None:
+    if not data:
+        return None
+    latest = data[-1]
+    for key in keys:
+        value = to_float(latest.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def append_coinglass_long_short_ratio(
+    rows: list[dict[str, Any]],
+    client: CoinGlassClient,
+    provider_cfg: dict[str, Any],
+    status: dict[str, Any] | None,
+) -> None:
+    cfg = provider_cfg.get("long_short_ratio", {})
+    if not cfg.get("enabled", True):
+        if status is not None:
+            status["long_short_ratio"] = {"status": "disabled"}
+        return
+
+    interval = str(cfg.get("interval", "4h"))
+    limit = int(cfg.get("limit", 30))
+    max_symbols = int(cfg.get("max_symbols", 0))
+    ratio_exchange = str(cfg.get("ratio_exchange", "Binance"))
+    include_top = bool(cfg.get("include_top_trader", True))
+    request_delay = float(cfg.get("request_delay_seconds", provider_cfg.get("request_delay_seconds", 2.1)))
+    target = rows if max_symbols <= 0 else rows[:max_symbols]
+    enriched = 0
+    errors: list[str] = []
+
+    for row in target:
+        exchange = ratio_exchange or str(row.get("primary_exchange") or "")
+        base = str(row.get("base_asset") or row.get("symbol") or "")
+        quote = str(row.get("quote_asset") or "USDT")
+        pair = f"{base}{quote}"
+        if not base or not exchange:
+            continue
+        try:
+            global_history = client.global_long_short_account_ratio_history(exchange, pair, interval, limit)
+            ratio = _parse_ratio_entry(
+                global_history,
+                ("global_account_long_short_ratio", "long_short_ratio", "account_long_short_ratio"),
+            )
+            if ratio is not None:
+                row["long_short_account_ratio"] = ratio
+                enriched += 1
+            _sleep_between_requests(request_delay)
+
+            if include_top:
+                top_history = client.top_long_short_account_ratio_history(exchange, pair, interval, limit)
+                top_ratio = _parse_ratio_entry(
+                    top_history,
+                    ("top_account_long_short_ratio", "long_short_ratio", "account_long_short_ratio"),
+                )
+                if top_ratio is not None:
+                    row["top_trader_long_short_ratio"] = top_ratio
+                _sleep_between_requests(request_delay)
+        except ProviderError as exc:
+            errors.append(f"{base}: {exc}")
+        finally:
+            _sleep_between_requests(request_delay)
+
+    if status is not None:
+        status["long_short_ratio"] = {
+            "status": "ok" if enriched else ("error" if errors else "empty"),
+            "rows": enriched,
+            "candidate_symbols": len(target),
+            "exchange": ratio_exchange,
+            "errors": errors[:5],
+            "note": "CoinGlass global + top-trader long/short account ratio",
+        }

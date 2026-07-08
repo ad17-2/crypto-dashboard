@@ -10,6 +10,9 @@ from .coinglass_enrichment import (
     append_coinglass_derivatives_history as _append_coinglass_derivatives_history,
 )
 from .coinglass_enrichment import (
+    append_coinglass_long_short_ratio as _append_coinglass_long_short_ratio,
+)
+from .coinglass_enrichment import (
     append_coinglass_technicals as _append_coinglass_technicals,
 )
 from .coinglass_pairs import base_from_pair, is_likely_perpetual_pair, pair_symbol_matches_quote, quote_matches
@@ -84,6 +87,7 @@ def collect_coinglass_futures(config: dict[str, Any], status: dict[str, Any] | N
     rows = rows[:top_symbols]
     _append_coinglass_technicals(rows, client, provider_cfg, status)
     _append_coinglass_derivatives_history(rows, client, provider_cfg, status)
+    _append_coinglass_long_short_ratio(rows, client, provider_cfg, status)
 
     if status is not None:
         status["coinglass"] = {

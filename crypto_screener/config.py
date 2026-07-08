@@ -18,6 +18,16 @@ class TechnicalIndicatorsConfig(StrictModel):
     request_delay_seconds: float = 2.1
 
 
+class LongShortRatioConfig(StrictModel):
+    enabled: bool = True
+    interval: str = "4h"
+    limit: int = 30
+    max_symbols: int = 0
+    ratio_exchange: str = "Binance"
+    include_top_trader: bool = True
+    request_delay_seconds: float = 2.1
+
+
 class DerivativesHistoryConfig(StrictModel):
     enabled: bool = True
     interval: str = "4h"
@@ -37,6 +47,7 @@ class CoinGlassConfig(StrictModel):
     exchanges: list[str] = Field(default_factory=list)
     technical_indicators: TechnicalIndicatorsConfig = Field(default_factory=TechnicalIndicatorsConfig)
     derivatives_history: DerivativesHistoryConfig = Field(default_factory=DerivativesHistoryConfig)
+    long_short_ratio: LongShortRatioConfig = Field(default_factory=LongShortRatioConfig)
 
 
 class CoinGeckoConfig(StrictModel):
@@ -95,6 +106,10 @@ class FactorsConfig(StrictModel):
     min_observations: int = 30
     min_abs_ic: float = 0.02
     max_abs_weight: float = 0.35
+    ic_min_periods: int = 10
+    min_abs_t: float = 2.0
+    ic_prior_strength: int = 10
+    ic_min_cross_section: int = 5
     regime_weighting: RegimeWeightingConfig = Field(default_factory=RegimeWeightingConfig)
     priors: dict[str, float] = Field(default_factory=dict)
 

@@ -6,7 +6,7 @@ from typing import Any
 
 from .factor_definitions import DEFAULT_PRIORS, DIRECTIONAL_FACTORS, QUALITY_FACTORS
 from .market import market_structure_summary
-from .scoring import clamp, safe_log10, spearman_corr, to_float, zscore_by_key
+from .scoring import clamp, mean, median, robust_zscore_by_key, safe_log10, spearman_corr, stdev, to_float
 
 
 def score_snapshot(
@@ -18,6 +18,8 @@ def score_snapshot(
     trusted_rows = [row for row in rows if row.get("is_trusted", True)]
     enriched_context = dict(market_context or {})
     enriched_context.update(market_structure_summary(trusted_rows, enriched_context))
+    valid_atr = [value for value in (to_float(row.get("atr_14_pct")) for row in trusted_rows) if value is not None]
+    enriched_context["median_atr_pct"] = median(valid_atr) if valid_atr else None
     raw_factors = [_raw_factors(row, trusted_rows, enriched_context) for row in trusted_rows]
     normalized = _normalize_factors(raw_factors)
     base_weights = factor_weights(history_records, config)
@@ -53,7 +55,9 @@ def _raw_factors(
     price_change = to_float(row.get("price_change_24h_pct"))
     oi_change = to_float(row.get("oi_change_24h_pct"))
     funding = to_float(row.get("funding_rate_pct"))
-    ls_ratio = to_float(row.get("long_short_ratio"))
+    ls = to_float(row.get("long_short_account_ratio"))
+    if ls is None:
+        ls = to_float(row.get("long_short_ratio"))
     long_liq = to_float(row.get("long_liquidation_usd_24h"), 0.0) or 0.0
     short_liq = to_float(row.get("short_liquidation_usd_24h"), 0.0) or 0.0
     quote_volume = to_float(row.get("quote_volume_usd"), 0.0) or 0.0
@@ -82,16 +86,22 @@ def _raw_factors(
         oi_price = math.copysign(max(oi_change, 0.0), price_change)
 
     ls_contrarian = None
-    if ls_ratio is not None and ls_ratio > 0:
-        ls_contrarian = -math.log(ls_ratio)
+    if ls is not None and ls > 0:
+        ls_contrarian = -math.log(ls)
 
     oi_acceleration_signal = None
     if oi_acceleration is not None and price_change is not None:
         oi_acceleration_signal = math.copysign(max(oi_acceleration, 0.0), price_change)
 
+    reversal = None
+    if price_change is not None:
+        denom = atr_pct if atr_pct is not None else to_float(market_context.get("median_atr_pct"))
+        floor = 1.0
+        reversal = -(price_change) / max(denom if denom is not None else floor, floor)
+
     return {
         "momentum_24h": price_change,
-        "reversal_1d": -price_change if price_change is not None else None,
+        "reversal_1d": reversal,
         "oi_price_signal": oi_price,
         "funding_rate_contrarian": -funding if funding is not None else None,
         "ls_ratio_contrarian": ls_contrarian,
@@ -115,40 +125,92 @@ def _normalize_factors(raw_rows: list[dict[str, float | None]]) -> list[dict[str
     keys = DIRECTIONAL_FACTORS + QUALITY_FACTORS
     normalized: list[dict[str, float]] = [dict() for _ in raw_rows]
     for key in keys:
-        zscores = zscore_by_key(raw_rows, key)
+        zscores = robust_zscore_by_key(raw_rows, key)
         for index, score in enumerate(zscores):
             normalized[index][key] = score
     return normalized
 
 
+def _cross_sectional_ic(records: list[dict[str, Any]], factor: str, min_cross_section: int) -> dict[str, Any]:
+    # Per-section rank IC already neutralizes cross-time market drift; no explicit demeaning needed.
+    grouped: dict[Any, list[tuple[float, float]]] = {}
+    n_obs = 0
+    for record in records:
+        factor_value = to_float(record.get("factors", {}).get(factor))
+        forward_return = to_float(record.get("forward_return_pct"))
+        if factor_value is None or forward_return is None:
+            continue
+        n_obs += 1
+        grouped.setdefault(record.get("generated_at"), []).append((factor_value, forward_return))
+
+    ic_series: list[float] = []
+    for pairs in grouped.values():
+        if len(pairs) < min_cross_section:
+            continue
+        x_values = [x for x, _ in pairs]
+        y_values = [y for _, y in pairs]
+        ic = spearman_corr(x_values, y_values)
+        if ic is not None:
+            ic_series.append(ic)
+
+    n_periods = len(ic_series)
+    mean_ic = mean(ic_series) if ic_series else None
+    t_stat = None
+    if n_periods >= 2 and mean_ic is not None:
+        ic_stdev = stdev(ic_series)
+        if ic_stdev > 0:
+            t_stat = mean_ic / (ic_stdev / math.sqrt(n_periods))
+
+    return {
+        "mean_ic": mean_ic,
+        "t_stat": t_stat,
+        "n_periods": n_periods,
+        "n_obs": n_obs,
+    }
+
+
 def factor_weights(history_records: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:
     factor_cfg = config.get("factors", {})
     priors = factor_cfg.get("priors", DEFAULT_PRIORS)
-    min_observations = int(factor_cfg.get("min_observations", 30))
     max_abs_weight = float(factor_cfg.get("max_abs_weight", 0.35))
     min_abs_ic = float(factor_cfg.get("min_abs_ic", 0.02))
+    ic_min_periods = int(factor_cfg.get("ic_min_periods", 10))
+    min_abs_t = float(factor_cfg.get("min_abs_t", 2.0))
+    ic_prior_strength = float(factor_cfg.get("ic_prior_strength", 10))
+    ic_min_cross_section = int(factor_cfg.get("ic_min_cross_section", 5))
 
     factor_stats: dict[str, dict[str, Any]] = {}
     raw_weights: dict[str, float] = {}
 
     for factor in DIRECTIONAL_FACTORS:
-        pairs = [
-            (to_float(record.get("factors", {}).get(factor)), to_float(record.get("forward_return_pct")))
-            for record in history_records
-        ]
-        valid_pairs = [(x, y) for x, y in pairs if x is not None and y is not None]
-        observations = len(valid_pairs)
-        ic = spearman_corr([x for x, _ in valid_pairs], [y for _, y in valid_pairs]) if observations >= 3 else None
-        if observations >= min_observations and ic is not None and abs(ic) >= min_abs_ic:
-            raw = clamp(ic, -max_abs_weight, max_abs_weight)
+        cs_ic = _cross_sectional_ic(history_records, factor, ic_min_cross_section)
+        mean_ic = cs_ic["mean_ic"]
+        t_stat = cs_ic["t_stat"]
+        n_periods = cs_ic["n_periods"]
+        observations = cs_ic["n_obs"]
+        prior_signed = float(priors.get(factor, 0.0))
+        k = n_periods / (n_periods + ic_prior_strength) if n_periods > 0 else 0.0
+        use_observed = (
+            n_periods >= ic_min_periods
+            and t_stat is not None
+            and abs(t_stat) >= min_abs_t
+            and mean_ic is not None
+            and abs(mean_ic) >= min_abs_ic
+        )
+        k_effective = k if use_observed else 0.0
+        if use_observed and mean_ic is not None:
+            raw = (1.0 - k_effective) * prior_signed + k_effective * clamp(mean_ic, -max_abs_weight, max_abs_weight)
             mode = "ic"
         else:
-            raw = float(priors.get(factor, 0.0))
+            raw = prior_signed
             mode = "prior"
         raw_weights[factor] = raw
         factor_stats[factor] = {
-            "ic": ic,
+            "ic": mean_ic,
             "observations": observations,
+            "n_periods": n_periods,
+            "t_stat": t_stat,
+            "credibility_k": k_effective,
             "mode": mode,
             "raw_weight": raw,
         }
@@ -395,16 +457,18 @@ def _apply_scores(
     conflicts = _signal_conflict_summary(row, factors, directional_score, regime, market_context)
 
     funding = to_float(row.get("funding_rate_pct"), 0.0) or 0.0
-    ls_ratio = to_float(row.get("long_short_ratio"))
+    ls = to_float(row.get("long_short_account_ratio"))
+    if ls is None:
+        ls = to_float(row.get("long_short_ratio"))
     oi_change = to_float(row.get("oi_change_24h_pct"), 0.0) or 0.0
     price_change = to_float(row.get("price_change_24h_pct"), 0.0) or 0.0
 
     long_crowding = clamp(max(funding, 0.0) / 0.08)
-    if ls_ratio is not None:
-        long_crowding += clamp((ls_ratio - 1.3) / 0.7)
+    if ls is not None:
+        long_crowding += clamp((ls - 1.3) / 0.7)
     short_crowding = clamp(abs(min(funding, 0.0)) / 0.08)
-    if ls_ratio is not None and ls_ratio > 0:
-        short_crowding += clamp((0.8 - ls_ratio) / 0.5)
+    if ls is not None and ls > 0:
+        short_crowding += clamp((0.8 - ls) / 0.5)
 
     long_score = max(0.0, directional_score) * 55.0 + liquidity_quality * 0.25 - long_crowding * 10.0
     short_score = max(0.0, -directional_score) * 55.0 + liquidity_quality * 0.25 - short_crowding * 8.0

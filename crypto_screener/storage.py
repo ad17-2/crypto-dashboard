@@ -282,6 +282,8 @@ def _history_metrics(row: dict[str, Any]) -> dict[str, Any]:
         "oi_change_24h_pct",
         "funding_rate_pct",
         "long_short_ratio",
+        "long_short_account_ratio",
+        "top_trader_long_short_ratio",
         "quote_volume_usd",
         "open_interest_usd",
         "confidence_score",
