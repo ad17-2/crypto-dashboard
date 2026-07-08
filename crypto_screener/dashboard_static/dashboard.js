@@ -518,7 +518,7 @@
       </div>`;
     }
     function detailSection(title, body, open = false) {
-      return `<details class="detail-section border border-line rounded-md bg-panel-2 overflow-hidden border-l-2 border-l-gold" ${open ? "open" : ""}>
+      return `<details class="detail-section border-2 border-line rounded-md bg-panel-2 overflow-hidden border-l-gold" ${open ? "open" : ""}>
         <summary class="flex items-center gap-2.5 px-2.5 py-2 cursor-pointer list-none text-ink text-xs font-semibold uppercase tracking-wide">${esc(title)}</summary>
         <div class="detail-section-body px-2.5 pb-2.5 grid gap-2">${body}</div>
       </details>`;
@@ -620,8 +620,8 @@
       `).join("")}</div>`;
     }
     function modulePanel(title, subtitle, body, accent = "blue") {
-      const accentBar = accent === "gold" ? "border-l-2 border-l-gold" : "border-l-2 border-l-blue";
-      return `<div class="module-panel ${accentBar} rounded-md overflow-hidden bg-panel border border-line">
+      const accentBorder = accent === "gold" ? "border-l-gold" : "border-l-blue";
+      return `<div class="module-panel ${accentBorder} rounded-md overflow-hidden bg-panel border-2 border-line">
         <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 bg-panel-2"><strong class="text-xs font-semibold uppercase tracking-wide">${esc(title)}</strong><span class="text-muted text-xs font-semibold whitespace-nowrap">${esc(subtitle || "")}</span></div>
         ${body}
       </div>`;
