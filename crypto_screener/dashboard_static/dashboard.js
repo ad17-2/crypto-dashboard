@@ -225,15 +225,15 @@
       const top = numeric(row?.top_trader_long_short_ratio);
       if (retail === null || top === null) return null;
       if (retail >= LONG && top <= 1.0) {
-        return { tone: "warn", mark: "R▲", title: `Retail long ${retail.toFixed(2)}x vs top-trader ${top.toFixed(2)}x — retail-crowded long` };
+        return { tone: "warn", mark: "R▲", label: "Retail long", title: `Retail long ${retail.toFixed(2)}x vs top-trader ${top.toFixed(2)}x — retail-crowded long` };
       }
       if (retail <= SHORT && top >= 1.0) {
-        return { tone: "warn", mark: "R▼", title: `Retail short ${retail.toFixed(2)}x vs top-trader ${top.toFixed(2)}x — retail-crowded short` };
+        return { tone: "warn", mark: "R▼", label: "Retail short", title: `Retail short ${retail.toFixed(2)}x vs top-trader ${top.toFixed(2)}x — retail-crowded short` };
       }
       if ((retail >= LONG && top >= LONG) || (retail <= SHORT && top <= SHORT)) {
-        return { tone: "pos", mark: "=", title: `Retail ${retail.toFixed(2)}x / top ${top.toFixed(2)}x — aligned` };
+        return { tone: "pos", mark: "=", label: "Aligned", title: `Retail ${retail.toFixed(2)}x / top ${top.toFixed(2)}x — aligned` };
       }
-      return { tone: "neutral", mark: "", title: `Retail ${retail.toFixed(2)}x / top ${top.toFixed(2)}x` };
+      return { tone: "neutral", mark: "", label: "Mixed", title: `Retail ${retail.toFixed(2)}x / top ${top.toFixed(2)}x` };
     }
     function positioningCell(row) {
       const div = positioningDivergence(row);
@@ -552,7 +552,7 @@
             const div = positioningDivergence(row);
             const valueText = `${retail == null ? "-" : fmtNum(retail)}x / ${top == null ? "-" : fmtNum(top)}x`;
             const badge = retail != null && top != null
-              ? `<span class="conflict-badge ${div ? (div.tone === "warn" ? "warn" : div.tone === "pos" ? "pos" : "neutral") : "neutral"}">${esc(div ? (div.mark || "mixed") : "n/a")}</span>`
+              ? `<span class="conflict-badge ${div ? (div.tone === "warn" ? "warn" : div.tone === "pos" ? "pos" : "neutral") : "neutral"}">${esc(div ? (div.label || "Mixed") : "n/a")}</span>`
               : "";
             return `${valueText}${badge}`;
           })()}</strong></div>
