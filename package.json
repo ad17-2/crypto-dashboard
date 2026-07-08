@@ -1,0 +1,10 @@
+{
+  "name": "crypto-screener-dashboard",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i crypto_screener/dashboard_static/src/input.css -o crypto_screener/dashboard_static/dashboard.css"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}
