@@ -477,13 +477,13 @@
       if (!Object.keys(state).length && !row?.technical_setup) {
         return `<div class="driver-line">No CoinGlass OHLC technical snapshot for this row.</div>`;
       }
-      return `<div class="detail-grid tech-grid">
-        <div class="detail-metric"><span class="label">4h Setup</span><strong>${esc(row.technical_setup || "-")}</strong></div>
-        <div class="detail-metric"><span class="label">RSI / MACD</span><strong>${fmtNum(state.rsi_14, 1)} / <span class="${clsFor(state.macd_histogram_pct)}">${fmtPct(state.macd_histogram_pct, 3)}</span></strong></div>
-        <div class="detail-metric"><span class="label">ATR / BB Width</span><strong>${fmtPct(state.atr_14_pct, 2)} / ${fmtPct(state.bb_width_pct, 2).replace("+", "")}</strong></div>
-        <div class="detail-metric"><span class="label">BB Pos / EMA20 Dist</span><strong>${fmtNum(state.bb_position, 2)} / <span class="${clsFor(state.distance_ema20_pct)}">${fmtPct(state.distance_ema20_pct, 2)}</span></strong></div>
-        <div class="detail-metric"><span class="label">Trend / Momentum</span><strong><span class="${clsFor(state.technical_trend_score)}">${fmtNum(state.technical_trend_score, 2)}</span> / <span class="${clsFor(state.technical_momentum_score)}">${fmtNum(state.technical_momentum_score, 2)}</span></strong></div>
-        <div class="detail-metric"><span class="label">Candles</span><strong>${esc(state.technical_candle_count ?? "-")} ${esc(state.technical_interval || "")}</strong></div>
+      return `<div class="detail-grid tech-grid grid grid-cols-2 max-[680px]:grid-cols-1 gap-2 -mt-1">
+        <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">4h Setup</span><strong>${esc(row.technical_setup || "-")}</strong></div>
+        <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">RSI / MACD</span><strong>${fmtNum(state.rsi_14, 1)} / <span class="${clsFor(state.macd_histogram_pct)}">${fmtPct(state.macd_histogram_pct, 3)}</span></strong></div>
+        <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">ATR / BB Width</span><strong>${fmtPct(state.atr_14_pct, 2)} / ${fmtPct(state.bb_width_pct, 2).replace("+", "")}</strong></div>
+        <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">BB Pos / EMA20 Dist</span><strong>${fmtNum(state.bb_position, 2)} / <span class="${clsFor(state.distance_ema20_pct)}">${fmtPct(state.distance_ema20_pct, 2)}</span></strong></div>
+        <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Trend / Momentum</span><strong><span class="${clsFor(state.technical_trend_score)}">${fmtNum(state.technical_trend_score, 2)}</span> / <span class="${clsFor(state.technical_momentum_score)}">${fmtNum(state.technical_momentum_score, 2)}</span></strong></div>
+        <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Candles</span><strong>${esc(state.technical_candle_count ?? "-")} ${esc(state.technical_interval || "")}</strong></div>
       </div>`;
     }
     function explanationBlock(row) {
@@ -518,35 +518,35 @@
       </div>`;
     }
     function detailSection(title, body, open = false) {
-      return `<details class="detail-section" ${open ? "open" : ""}>
-        <summary>${esc(title)}</summary>
-        <div class="detail-section-body">${body}</div>
+      return `<details class="detail-section border border-line rounded-md bg-panel-2 overflow-hidden border-l-2 border-l-gold" ${open ? "open" : ""}>
+        <summary class="flex items-center gap-2.5 px-2.5 py-2 cursor-pointer list-none text-ink text-xs font-semibold uppercase tracking-wide">${esc(title)}</summary>
+        <div class="detail-section-body px-2.5 pb-2.5 grid gap-2">${body}</div>
       </details>`;
     }
     function renderDetail(row) {
       if (!row) {
-        $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="empty">Select a watchlist row</div>`);
+        $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="py-7 px-3 text-muted text-center">Select a watchlist row</div>`);
         return;
       }
       const flags = row.data_quality_flags || [];
-      $("detailPanel").innerHTML = panel("Selected Coin", esc(row.setup || ""), `<div class="detail-body">
-        <div class="detail-title">
+      $("detailPanel").innerHTML = panel("Selected Coin", esc(row.setup || ""), `<div class="detail-body p-3 grid gap-3">
+        <div class="detail-title flex justify-between items-start gap-2.5">
           <div>
-            <div class="detail-symbol">${symbolLink(row)}</div>
+            <div class="detail-symbol text-xl font-extrabold leading-tight">${symbolLink(row)}</div>
             <div class="driver-line">${esc(row.primary_driver?.label || "No dominant driver")} / ${esc(row.side || "-")}</div>
           </div>
-          <div class="detail-actions">
-            <a class="detail-link" href="${tradingViewUrl(row)}" target="_blank" rel="noopener noreferrer">TradingView</a>
+          <div class="detail-actions flex gap-1.5 flex-wrap justify-end">
+            <a class="detail-link inline-flex items-center h-7 border border-line rounded-md px-2 text-blue no-underline text-xs font-bold href="${tradingViewUrl(row)}" target="_blank" rel="noopener noreferrer">TradingView</a>
           </div>
         </div>
-        <div class="detail-badges">${setupBadge(row)}${conflictBadge(row)}</div>
-        <div class="detail-grid">
-          <div class="detail-metric"><span class="label">Score / Priority</span><strong>${fmtNum(row.score)} / ${fmtNum(row.priority)}</strong></div>
-          <div class="detail-metric"><span class="label">Confidence</span><strong>${row.confidence_score == null ? "-" : fmtNum(row.confidence_score, 0)}</strong></div>
-          <div class="detail-metric"><span class="label">Quality</span><strong class="${qualityTone(row.quality) === "bad" ? "text-down" : qualityTone(row.quality) === "warn" ? "text-warn" : ""}">${esc(row.quality ?? "-")}</strong></div>
-          <div class="detail-metric"><span class="label">24h / OI</span><strong><span class="${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</span> / <span class="${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</span></strong></div>
-          <div class="detail-metric"><span class="label">Funding / L/S</span><strong><span class="${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</span> / ${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</strong></div>
-          <div class="detail-metric"><span class="label">Positioning (R / T)</span><strong>${(() => {
+        <div class="detail-badges flex flex-wrap gap-1.5">${setupBadge(row)}${conflictBadge(row)}</div>
+        <div class="detail-grid grid grid-cols-2 max-[680px]:grid-cols-1 gap-2">
+          <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Score / Priority</span><strong>${fmtNum(row.score)} / ${fmtNum(row.priority)}</strong></div>
+          <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Confidence</span><strong>${row.confidence_score == null ? "-" : fmtNum(row.confidence_score, 0)}</strong></div>
+          <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Quality</span><strong class="${qualityTone(row.quality) === "bad" ? "text-down" : qualityTone(row.quality) === "warn" ? "text-warn" : ""}">${esc(row.quality ?? "-")}</strong></div>
+          <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">24h / OI</span><strong><span class="${clsFor(row.price_change_24h_pct)}">${fmtPct(row.price_change_24h_pct)}</span> / <span class="${clsFor(row.oi_change_24h_pct)}">${fmtPct(row.oi_change_24h_pct)}</span></strong></div>
+          <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Funding / L/S</span><strong><span class="${clsFor(row.funding_rate_pct)}">${fmtPct(row.funding_rate_pct, 4)}</span> / ${row.long_short_ratio == null ? "-" : fmtNum(row.long_short_ratio)}</strong></div>
+          <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Positioning (R / T)</span><strong>${(() => {
             const retail = row.long_short_account_ratio;
             const top = row.top_trader_long_short_ratio;
             const div = positioningDivergence(row);
@@ -556,8 +556,8 @@
               : "";
             return `${valueText}${badge}`;
           })()}</strong></div>
-          <div class="detail-metric"><span class="label">Volume</span><strong>${fmtUsd(row.quote_volume_usd)}</strong></div>
-          <div class="detail-metric"><span class="label">Open Interest</span><strong>${fmtUsd(row.open_interest_usd)}</strong></div>
+          <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Volume</span><strong>${fmtUsd(row.quote_volume_usd)}</strong></div>
+          <div class="detail-metric min-w-0 border border-line rounded-md p-2 bg-panel-2"><span class="label">Open Interest</span><strong>${fmtUsd(row.open_interest_usd)}</strong></div>
         </div>
         <div class="label">Reason ${reasonHelp()}</div>
         ${reasonView(row)}
@@ -747,7 +747,7 @@
         $("watchTabs").innerHTML = "";
         $("watchCount").textContent = "-";
         $("watchTable").innerHTML = `<div class="py-7 px-3 text-muted text-center">No data</div>`;
-        $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="empty">No data</div>`);
+        $("detailPanel").innerHTML = panel("Selected Coin", "", `<div class="py-7 px-3 text-muted text-center">No data</div>`);
         ["providerPanel","qualityPanel","validationPanel","weightsPanel","sectorPanel","runsPanel"].forEach((id) => $(id).innerHTML = modulePanel(id, "", `<div class="empty">No data</div>`));
         return;
       }

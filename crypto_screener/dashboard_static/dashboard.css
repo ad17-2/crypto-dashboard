@@ -1138,81 +1138,6 @@ button:hover {
   stroke-width: 1;
 }
 
-.detail-rail {
-  display: grid;
-  gap: 12px;
-  position: sticky;
-  top: 12px;
-}
-
-.detail-body {
-  padding: 12px;
-  display: grid;
-  gap: 12px;
-}
-
-.detail-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.detail-symbol {
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.1;
-}
-
-.detail-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.detail-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.detail-link {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 0 8px;
-  color: var(--blue);
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 760;
-}
-
-.detail-link:hover {
-  border-color: color-mix(in srgb, var(--gold) 45%, var(--line));
-  color: var(--gold);
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.tech-grid {
-  margin-top: -4px;
-}
-
-.detail-metric {
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px;
-  background: var(--panel-2);
-}
-
 .detail-metric strong {
   display: block;
   margin-top: 4px;
@@ -1220,25 +1145,6 @@ button:hover {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
-}
-
-.detail-section {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-2);
-  overflow: hidden;
-}
-
-.detail-section summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  cursor: pointer;
-  list-style: none;
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 780;
 }
 
 .detail-section summary::-webkit-details-marker {
@@ -1260,12 +1166,6 @@ button:hover {
 .detail-section[open] summary::after, .module-panel[open] summary::after {
   margin-top: 4px;
   transform: rotate(225deg);
-}
-
-.detail-section-body {
-  padding: 0 10px 10px;
-  display: grid;
-  gap: 8px;
 }
 
 .factor-list {
@@ -1550,10 +1450,6 @@ button:hover {
   .sector-list {
     grid-template-columns: 1fr;
   }
-
-  .detail-rail {
-    position: static;
-  }
 }
 
 @media (max-width: 900px) {
@@ -1589,10 +1485,6 @@ button:hover {
 }
 
 @media (max-width: 680px) {
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-
   .explanation-grid {
     grid-template-columns: 1fr;
   }
@@ -1614,6 +1506,10 @@ button:hover {
   top: 0px;
 }
 
+.top-3 {
+  top: 0.75rem;
+}
+
 .z-\[2\] {
   z-index: 2;
 }
@@ -1629,6 +1525,10 @@ button:hover {
 .mx-auto {
   margin-left: auto;
   margin-right: auto;
+}
+
+.-mt-1 {
+  margin-top: -0.25rem;
 }
 
 .mb-3 {
@@ -1671,6 +1571,10 @@ button:hover {
   display: none;
 }
 
+.h-7 {
+  height: 1.75rem;
+}
+
 .h-8 {
   height: 2rem;
 }
@@ -1703,6 +1607,10 @@ button:hover {
   width: 100%;
 }
 
+.min-w-0 {
+  min-width: 0px;
+}
+
 .min-w-10 {
   min-width: 2.5rem;
 }
@@ -1727,6 +1635,14 @@ button:hover {
 
 .resize {
   resize: both;
+}
+
+.list-none {
+  list-style-type: none;
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .grid-cols-\[minmax\(0\2c 1fr\)_390px\] {
@@ -1771,6 +1687,10 @@ button:hover {
 
 .gap-2 {
   gap: 0.5rem;
+}
+
+.gap-2\.5 {
+  gap: 0.625rem;
 }
 
 .gap-3 {
@@ -1821,6 +1741,10 @@ button:hover {
   border-left-width: 1px;
 }
 
+.border-l-2 {
+  border-left-width: 2px;
+}
+
 .border-r {
   border-right-width: 1px;
 }
@@ -1829,12 +1753,20 @@ button:hover {
   border-color: var(--line);
 }
 
+.border-l-gold {
+  border-left-color: var(--gold);
+}
+
 .bg-panel {
   background-color: var(--panel);
 }
 
 .bg-panel-2 {
   background-color: var(--panel-2);
+}
+
+.p-2 {
+  padding: 0.5rem;
 }
 
 .p-3 {
@@ -1884,6 +1816,10 @@ button:hover {
 .py-\[11px\] {
   padding-top: 11px;
   padding-bottom: 11px;
+}
+
+.pb-2\.5 {
+  padding-bottom: 0.625rem;
 }
 
 .pb-\[34px\] {
@@ -1982,6 +1918,10 @@ button:hover {
   letter-spacing: 0.05em;
 }
 
+.text-blue {
+  color: var(--blue);
+}
+
 .text-down {
   color: var(--down);
 }
@@ -2006,6 +1946,10 @@ button:hover {
   color: var(--warn);
 }
 
+.no-underline {
+  text-decoration-line: none;
+}
+
 .filter {
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
 }
@@ -2025,6 +1969,10 @@ button:hover {
 }
 
 @media (max-width: 1100px) {
+  .max-\[1100px\]\:static {
+    position: static;
+  }
+
   .max-\[1100px\]\:grid-cols-1 {
     grid-template-columns: repeat(1, minmax(0, 1fr));
   }
@@ -2041,6 +1989,10 @@ button:hover {
 
   .max-\[680px\]\:w-full {
     width: 100%;
+  }
+
+  .max-\[680px\]\:grid-cols-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
   }
 
   .max-\[680px\]\:grid-cols-2 {
