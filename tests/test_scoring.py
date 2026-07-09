@@ -36,17 +36,17 @@ class ScoringTests(unittest.TestCase):
         records = [
             {
                 "forward_return_pct": 2,
-                "factors": {"momentum_24h": 1, "reversal_1d": -1},
+                "factors": {"momentum_24h": 1, "reversal_3d": -1},
                 "scores": {"factor_score": 0.4},
             },
             {
                 "forward_return_pct": -3,
-                "factors": {"momentum_24h": -1, "reversal_1d": 1},
+                "factors": {"momentum_24h": -1, "reversal_3d": 1},
                 "scores": {"factor_score": -0.5},
             },
             {
                 "forward_return_pct": 1,
-                "factors": {"momentum_24h": -1, "reversal_1d": 1},
+                "factors": {"momentum_24h": -1, "reversal_3d": 1},
                 "scores": {"factor_score": -0.2},
             },
         ]
@@ -177,15 +177,27 @@ class ScoringTests(unittest.TestCase):
 
     def test_reversal_is_volatility_normalized(self):
         rows = [
-            {"symbol": "LOWVOL", "price_change_24h_pct": 10.0, "atr_14_pct": 2.0, "quote_volume_usd": 1},
-            {"symbol": "HIGHVOL", "price_change_24h_pct": 10.0, "atr_14_pct": 5.0, "quote_volume_usd": 1},
+            {
+                "symbol": "LOWVOL",
+                "price_change_24h_pct": 10.0,
+                "price_change_72h_pct": 10.0,
+                "atr_14_pct": 2.0,
+                "quote_volume_usd": 1,
+            },
+            {
+                "symbol": "HIGHVOL",
+                "price_change_24h_pct": 10.0,
+                "price_change_72h_pct": 10.0,
+                "atr_14_pct": 5.0,
+                "quote_volume_usd": 1,
+            },
         ]
         context = {"median_atr_pct": 3.5}
         low = _raw_factors(rows[0], rows, context)
         high = _raw_factors(rows[1], rows, context)
-        self.assertNotAlmostEqual(low["reversal_1d"], high["reversal_1d"])
-        self.assertAlmostEqual(low["reversal_1d"], -5.0)
-        self.assertAlmostEqual(high["reversal_1d"], -2.0)
+        self.assertNotAlmostEqual(low["reversal_3d"], high["reversal_3d"])
+        self.assertAlmostEqual(low["reversal_3d"], -5.0)
+        self.assertAlmostEqual(high["reversal_3d"], -2.0)
 
     def test_cross_sectional_ic_weighting(self):
         records = []
@@ -206,7 +218,7 @@ class ScoringTests(unittest.TestCase):
                         "forward_return_pct": forward,
                         "factors": {
                             "momentum_24h": rank,
-                            "reversal_1d": rank if period % 2 == 0 else -rank,
+                            "reversal_3d": rank if period % 2 == 0 else -rank,
                         },
                     }
                 )
@@ -221,7 +233,7 @@ class ScoringTests(unittest.TestCase):
         }
         weights = factor_weights(records, config)
         self.assertEqual(weights["stats"]["momentum_24h"]["mode"], "ic")
-        self.assertEqual(weights["stats"]["reversal_1d"]["mode"], "prior")
+        self.assertEqual(weights["stats"]["reversal_3d"]["mode"], "prior")
 
     def test_account_ratio_drives_ls_contrarian(self):
         row = {

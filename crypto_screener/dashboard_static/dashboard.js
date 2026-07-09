@@ -712,10 +712,30 @@
         "blue"
       );
     }
+    function correlationVerdictTone(verdict) {
+      if (verdict === "duplicate") return "bad";
+      if (verdict === "redundant") return "warn";
+      return "neutral";
+    }
+    function factorCorrelationsBlock(correlations) {
+      const pairs = correlations || [];
+      if (!pairs.length) return "";
+      return `<div class="factor-correlations border-t border-line pt-2 mt-1 grid gap-1.5">
+        <div class="label">Collinearity Flags</div>
+        ${pairs.map((pair) => `<div class="list-row flex justify-between gap-2 items-center text-xs">
+          <span class="min-w-0 truncate">${esc(pair.a)} / ${esc(pair.b)}</span>
+          <span class="flex items-center gap-1.5 shrink-0">
+            <span class="status-pill ${correlationVerdictTone(pair.verdict)}">${esc(pair.verdict)}</span>
+            <strong>${fmtNum(pair.rho, 2)}</strong>
+          </span>
+        </div>`).join("")}
+      </div>`;
+    }
     function weightsBlock(modelWeights) {
       const factors = modelWeights?.factors || [];
       if (!factors.length) return `<div class="py-7 px-3 text-muted text-center">No factor weights</div>`;
       const maxAbs = Math.max(...factors.map((f) => Math.abs(Number(f.weight || 0))), 0.0001);
+      const correlations = modelWeights?.factor_correlations || [];
       return `<div class="list p-3 grid gap-2">${factors.map((f) => {
         const width = Math.round((Math.abs(Number(f.weight || 0)) / maxAbs) * 100);
         const tone = f.weight > 0 ? "pos" : f.weight < 0 ? "neg" : "neutral";
@@ -727,7 +747,7 @@
           <span class="factor-track"><span class="factor-fill ${tone}" style="width:${width}%"></span></span>
           <div class="weight-meta flex items-center gap-1.5 justify-self-end"><span class="status-pill ${f.mode === "ic" ? "" : "warn"}">${esc((f.mode || "prior").toUpperCase())}</span><strong>${fmtNum(f.weight, 3)}</strong></div>
         </div>`;
-      }).join("")}</div>`;
+      }).join("")}${factorCorrelationsBlock(correlations)}</div>`;
     }
     function validationBlock(validation) {
       if (!validation || Object.keys(validation).length === 0) return `<div class="py-7 px-3 text-muted text-center">No validation data</div>`;

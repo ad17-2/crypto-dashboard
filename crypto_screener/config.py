@@ -115,6 +115,7 @@ class RegimeConfig(StrictModel):
 
 class FactorsConfig(StrictModel):
     forward_return_hours: float = 24
+    reversal_lookback_hours: float = 72
     ic_window_days: int = 30
     min_observations: int = 30
     min_abs_ic: float = 0.02

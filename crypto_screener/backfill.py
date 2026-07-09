@@ -13,9 +13,9 @@ from .coinglass import CoinGlassClient
 from .coinglass_pairs import select_price_pair
 from .config import load_config_dict
 from .derivatives import candles_per_window, derivatives_snapshot
-from .factors import score_snapshot
+from .factors import _btc_change, score_snapshot
 from .providers import ProviderError
-from .scoring import pct_change, to_float
+from .scoring import median, pct_change, to_float
 from .storage import save_factor_history_records
 from .technicals import technical_snapshot
 
@@ -141,6 +141,7 @@ def _build_symbol_rows(
 
     rows: list[dict[str, Any]] = []
     window = candles_per_window(interval, 24.0)
+    window_72h = candles_per_window(interval, 72.0)
     closes = [row["close"] for row in price_rows]
     rolling_volumes = [row["volume_usd"] for row in price_rows]
     for index, candle in enumerate(price_rows):
@@ -148,6 +149,7 @@ def _build_symbol_rows(
             continue
         time_value = int(candle["time"])
         price_change = pct_change(closes[index - window], closes[index]) if index >= window else None
+        price_change_72h = pct_change(closes[index - window_72h], closes[index]) if index >= window_72h else None
         previous_volume = sum(rolling_volumes[max(0, index - (window * 2) + 1) : index - window + 1])
         current_volume = sum(rolling_volumes[max(0, index - window + 1) : index + 1])
         volume_change = pct_change(previous_volume, current_volume) if previous_volume > 0 else None
@@ -172,6 +174,7 @@ def _build_symbol_rows(
             "data_quality_score": 100,
             "price_usd": candle["close"],
             "price_change_24h_pct": price_change,
+            "price_change_72h_pct": price_change_72h,
             "quote_volume_usd": current_volume,
             "volume_change_percent_24h": volume_change,
         }
@@ -191,6 +194,15 @@ def _build_symbol_rows(
     return rows
 
 
+def _backfill_market_context(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    atr_values = [to_float(row.get("atr_14_pct")) for row in rows]
+    valid_atr = [value for value in atr_values if value is not None]
+    return {
+        "median_atr_pct": median(valid_atr) if valid_atr else None,
+        "btc_price_change_24h_pct": _btc_change(rows, {}),
+    }
+
+
 def _score_backfill_rows(
     rows_by_time: dict[int, list[dict[str, Any]]],
     config: dict[str, Any],
@@ -204,7 +216,8 @@ def _score_backfill_rows(
         rows = rows_by_time[time_value]
         if len(rows) < min_cross_section:
             continue
-        scored = score_snapshot(rows, {}, [], config)["rows"]
+        market_context = _backfill_market_context(rows)
+        scored = score_snapshot(rows, market_context, [], config)["rows"]
         for row in scored:
             row.pop("_time", None)
             records.append(row)

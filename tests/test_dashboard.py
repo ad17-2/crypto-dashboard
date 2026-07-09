@@ -58,7 +58,7 @@ class DashboardTests(unittest.TestCase):
                             "credibility_k": 0.75,
                             "regime_multiplier": 1.05,
                         },
-                        "reversal_1d": {
+                        "reversal_3d": {
                             "weight": -0.12,
                             "base_weight": -0.1,
                             "mode": "prior",
@@ -76,7 +76,7 @@ class DashboardTests(unittest.TestCase):
                         "model": {"hit_rate": 62.5},
                         "factors": {
                             "momentum_24h": {"hit_rate": 75.0, "observations": 4},
-                            "reversal_1d": {"hit_rate": 40.0, "observations": 4},
+                            "reversal_3d": {"hit_rate": 40.0, "observations": 4},
                         },
                     },
                 },
@@ -185,7 +185,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(factors[0]["label"], "Momentum")
         self.assertEqual(factors[0]["mode"], "ic")
         self.assertEqual(factors[0]["t_stat"], 2.1)
-        self.assertEqual(factors[1]["name"], "reversal_1d")
+        self.assertEqual(factors[1]["name"], "reversal_3d")
         self.assertGreater(abs(factors[0]["weight"] or 0), abs(factors[1]["weight"] or 0))
         self.assertTrue(long_row["factor_parts"])
         self.assertEqual(len(long_row["history"]), 2)
@@ -222,7 +222,7 @@ class DashboardTests(unittest.TestCase):
                 "mode": "ic",
                 "regime_adjustment": {"label": "neutral"},
                 "stats": {
-                    "reversal_1d": {"weight": -0.05, "mode": "prior", "t_stat": None},
+                    "reversal_3d": {"weight": -0.05, "mode": "prior", "t_stat": None},
                     "momentum_24h": {"weight": 0.2, "mode": "ic", "t_stat": 1.8},
                 },
             }
@@ -231,7 +231,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(summary["regime"]["label"], "neutral")
         self.assertEqual(summary["factors"][0]["label"], "Momentum")
         self.assertEqual(summary["factors"][0]["t_stat"], 1.8)
-        self.assertEqual(summary["factors"][1]["label"], "Reversal")
+        self.assertEqual(summary["factors"][1]["label"], "Reversal 3d")
 
     def test_prune_old_runs_keeps_only_latest_snapshot(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -503,3 +503,127 @@ class DashboardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StorageLookbackTests(unittest.TestCase):
+    def test_load_price_lookback_matches_backward_horizon_window(self):
+        from datetime import timedelta
+
+        from crypto_screener.storage import load_price_lookback
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "screener.sqlite3"
+            config = {"storage_path": str(db_path)}
+            conn = connect(db_path)
+            now = datetime.now(ZoneInfo("Asia/Jakarta"))
+            fixtures = [
+                ("run-old", (now - timedelta(hours=120)).isoformat(timespec="seconds"), "BTC", 90_000.0),
+                ("run-lookback", (now - timedelta(hours=72)).isoformat(timespec="seconds"), "BTC", 100_000.0),
+                ("run-recent", (now - timedelta(hours=24)).isoformat(timespec="seconds"), "BTC", 110_000.0),
+                (
+                    "run-lookback-eth",
+                    (now - timedelta(hours=72)).isoformat(timespec="seconds"),
+                    "ETH",
+                    3_000.0,
+                ),
+            ]
+            for run_id, generated_at, symbol, price in fixtures:
+                conn.execute(
+                    """
+                    INSERT INTO factor_history
+                        (run_id, generated_at, symbol, price_usd, factors_json, scores_json, metrics_json)
+                    VALUES (?, ?, ?, ?, '{}', '{}', '{}')
+                    """,
+                    (run_id, generated_at, symbol, price),
+                )
+            conn.commit()
+            conn.close()
+
+            prices = load_price_lookback(config, 72.0)
+            self.assertAlmostEqual(prices["BTC"], 100_000.0)
+            self.assertAlmostEqual(prices["ETH"], 3_000.0)
+            self.assertNotIn("SOL", prices)
+
+    def test_load_price_lookback_prefers_nearest_72h_over_80h(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from crypto_screener.storage import load_price_lookback
+
+        reference = datetime(2026, 7, 9, 12, 0, 0, tzinfo=ZoneInfo("Asia/Jakarta"))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "screener.sqlite3"
+            config = {"storage_path": str(db_path)}
+            conn = connect(db_path)
+            fixtures = [
+                (
+                    "run-80h",
+                    (reference - timedelta(hours=80)).isoformat(timespec="seconds"),
+                    "BTC",
+                    80_000.0,
+                ),
+                (
+                    "run-72h",
+                    (reference - timedelta(hours=72)).isoformat(timespec="seconds"),
+                    "BTC",
+                    100_000.0,
+                ),
+            ]
+            for run_id, generated_at, symbol, price in fixtures:
+                conn.execute(
+                    """
+                    INSERT INTO factor_history
+                        (run_id, generated_at, symbol, price_usd, factors_json, scores_json, metrics_json)
+                    VALUES (?, ?, ?, ?, '{}', '{}', '{}')
+                    """,
+                    (run_id, generated_at, symbol, price),
+                )
+            conn.commit()
+            conn.close()
+
+            with patch("crypto_screener.storage.datetime") as mocked_datetime:
+                mocked_datetime.now.return_value = reference
+                mocked_datetime.fromisoformat = datetime.fromisoformat
+                mocked_datetime.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+                prices = load_price_lookback(config, 72.0)
+
+            self.assertAlmostEqual(prices["BTC"], 100_000.0)
+
+    def test_load_price_lookback_is_timezone_invariant(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from crypto_screener.storage import load_price_lookback
+
+        reference = datetime(2026, 7, 9, 12, 0, 0, tzinfo=ZoneInfo("Asia/Jakarta"))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "screener.sqlite3"
+            config = {"storage_path": str(db_path)}
+            conn = connect(db_path)
+            fixtures = [
+                ("run-lookback", (reference - timedelta(hours=72)).isoformat(timespec="seconds"), "BTC", 100_000.0),
+                ("run-recent", (reference - timedelta(hours=24)).isoformat(timespec="seconds"), "BTC", 110_000.0),
+            ]
+            for run_id, generated_at, symbol, price in fixtures:
+                conn.execute(
+                    """
+                    INSERT INTO factor_history
+                        (run_id, generated_at, symbol, price_usd, factors_json, scores_json, metrics_json)
+                    VALUES (?, ?, ?, ?, '{}', '{}', '{}')
+                    """,
+                    (run_id, generated_at, symbol, price),
+                )
+            conn.commit()
+            conn.close()
+
+            instant = reference.astimezone(ZoneInfo("UTC"))
+
+            def load_as_local(tz_name: str) -> dict[str, float]:
+                local_now = instant.astimezone(ZoneInfo(tz_name))
+                with patch("crypto_screener.storage.datetime") as mocked_datetime:
+                    mocked_datetime.now.return_value = local_now
+                    mocked_datetime.fromisoformat = datetime.fromisoformat
+                    mocked_datetime.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+                    return load_price_lookback(config, 72.0)
+
+            self.assertEqual(load_as_local("UTC"), load_as_local("Asia/Jakarta"))

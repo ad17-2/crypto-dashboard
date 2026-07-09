@@ -82,6 +82,7 @@ def build_dashboard_payload(db_path: Path, run_id: str | None = None, limit: int
         "provider_status": provider_status,
         "factor_weights": factor_weights,
         "model_weights": _model_weights_summary(factor_weights),
+        "factor_correlations": factor_weights.get("factor_correlations", []),
         "validation": _validation_summary(factor_weights.get("validation", {}), rows, sections),
         "freshness": freshness,
         "quality": _quality_summary(rows),
@@ -368,6 +369,7 @@ def _model_weights_summary(factor_weights: dict[str, Any]) -> dict[str, Any]:
         "mode": factor_weights.get("mode"),
         "regime": factor_weights.get("regime_adjustment", {}) or {},
         "factors": factors,
+        "factor_correlations": factor_weights.get("factor_correlations", []) or [],
     }
 
 

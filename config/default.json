@@ -101,13 +101,12 @@
       "conflict_penalty_strength": 0.18
     },
     "priors": {
-      "momentum_24h": 0.18,
-      "reversal_1d": 0.08,
+      "momentum_24h": 0.30,
+      "reversal_3d": 0.08,
       "oi_price_signal": 0.2,
       "funding_rate_contrarian": 0.16,
       "ls_ratio_contrarian": 0.12,
       "liquidation_imbalance": 0.1,
-      "btc_relative_strength": 0.16,
       "technical_trend_4h": 0.12,
       "technical_momentum_4h": 0.08,
       "oi_acceleration_signal": 0.08,

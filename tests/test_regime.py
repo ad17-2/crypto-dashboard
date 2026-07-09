@@ -92,7 +92,7 @@ class RegimeTests(unittest.TestCase):
         momentum_weights = {
             "directional": {
                 "momentum_24h": 0.5,
-                "reversal_1d": 0.01,
+                "reversal_3d": 0.01,
                 "funding_rate_contrarian": 0.01,
                 "ls_ratio_contrarian": 0.01,
             }
@@ -100,7 +100,7 @@ class RegimeTests(unittest.TestCase):
         reversal_weights = {
             "directional": {
                 "momentum_24h": 0.01,
-                "reversal_1d": 0.5,
+                "reversal_3d": 0.5,
                 "funding_rate_contrarian": 0.5,
                 "ls_ratio_contrarian": 0.5,
             }

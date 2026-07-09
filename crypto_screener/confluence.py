@@ -15,7 +15,7 @@ FAMILY_DEFINITIONS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "momentum",
         "Momentum",
-        ("momentum_24h", "technical_momentum_4h", "btc_relative_strength", "reversal_1d"),
+        ("momentum_24h", "technical_momentum_4h", "reversal_3d"),
     ),
     (
         "oi_flow",

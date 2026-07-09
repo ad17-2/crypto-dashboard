@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from .factor_definitions import DEFAULT_PRIORS, DIRECTIONAL_FACTORS, QUALITY_FACTORS
+from .independence import factor_correlations
 from .market import market_sensing_summary, market_structure_summary
 from .regime import classify_regime
 from .scoring import clamp, mean, median, robust_zscore_by_key, safe_log10, spearman_corr, stdev, to_float
@@ -43,10 +44,15 @@ def score_snapshot(
         row["factors"] = {}
         _apply_excluded_scores(row)
 
+    correlation_rows = [{"factors": factors} for factors in normalized]
+    factor_correlation_flags = factor_correlations(correlation_rows, DIRECTIONAL_FACTORS)
+    weights["factor_correlations"] = factor_correlation_flags
+
     return {
         "rows": rows,
         "market_context": enriched_context,
         "factor_weights": weights,
+        "factor_correlations": factor_correlation_flags,
         "regime": regime,
     }
 
@@ -76,7 +82,6 @@ def _raw_factors(
     taker_imbalance = to_float(row.get("taker_imbalance_24h_pct"))
     liquidation_imbalance_24h = to_float(row.get("liquidation_imbalance_24h_pct"))
 
-    btc_change = _btc_change(rows, market_context)
     liq_total = long_liq + short_liq
 
     liquidity = safe_log10(quote_volume)
@@ -97,22 +102,19 @@ def _raw_factors(
     if oi_acceleration is not None and price_change is not None:
         oi_acceleration_signal = math.copysign(max(oi_acceleration, 0.0), price_change)
 
+    price_change_72h = to_float(row.get("price_change_72h_pct"))
     reversal = None
-    if price_change is not None:
+    if price_change_72h is not None:
         denom = atr_pct if atr_pct is not None else to_float(market_context.get("median_atr_pct"))
-        floor = 1.0
-        reversal = -(price_change) / max(denom if denom is not None else floor, floor)
+        reversal = -price_change_72h / max(denom or 1.0, 1.0)
 
     return {
         "momentum_24h": price_change,
-        "reversal_1d": reversal,
+        "reversal_3d": reversal,
         "oi_price_signal": oi_price,
         "funding_rate_contrarian": -funding if funding is not None else None,
         "ls_ratio_contrarian": ls_contrarian,
         "liquidation_imbalance": ((short_liq - long_liq) / liq_total) * 100.0 if liq_total > 0 else None,
-        "btc_relative_strength": price_change - btc_change
-        if price_change is not None and btc_change is not None
-        else None,
         "technical_trend_4h": technical_trend,
         "technical_momentum_4h": technical_momentum,
         "oi_acceleration_signal": oi_acceleration_signal,
@@ -355,7 +357,7 @@ def _regime_multipliers(regime: dict[str, Any], config: dict[str, Any] | None = 
     if label == "btc-led":
         _multiply(
             multipliers,
-            ["btc_relative_strength", "momentum_24h", "technical_trend_4h"],
+            ["momentum_24h", "technical_trend_4h"],
             float(regime_cfg.get("nudge_btc_led", 1.12)),
         )
     elif label == "alts-strong":
@@ -367,7 +369,7 @@ def _regime_multipliers(regime: dict[str, Any], config: dict[str, Any] | None = 
     elif label == "chaos":
         _multiply(
             multipliers,
-            ["momentum_24h", "technical_trend_4h", "reversal_1d"],
+            ["momentum_24h", "technical_trend_4h", "reversal_3d"],
             float(regime_cfg.get("nudge_chaos_trend", 0.88)),
         )
         _multiply(
@@ -377,11 +379,10 @@ def _regime_multipliers(regime: dict[str, Any], config: dict[str, Any] | None = 
         )
 
     if bias == "risk-on":
-        _multiply(multipliers, ["momentum_24h", "oi_price_signal", "btc_relative_strength", "technical_trend_4h"], 1.08)
-        _multiply(multipliers, ["reversal_1d"], 0.92)
+        _multiply(multipliers, ["momentum_24h", "oi_price_signal", "technical_trend_4h"], 1.08)
+        _multiply(multipliers, ["reversal_3d"], 0.92)
     elif bias == "risk-off":
         _multiply(multipliers, ["momentum_24h", "oi_price_signal", "technical_trend_4h", "taker_flow_24h"], 1.08)
-        _multiply(multipliers, ["btc_relative_strength"], 1.12)
 
     if abs(breadth_score) >= 0.35:
         _multiply(multipliers, ["momentum_24h", "oi_price_signal", "technical_trend_4h"], 1.06)

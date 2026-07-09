@@ -2,12 +2,11 @@ from __future__ import annotations
 
 DIRECTIONAL_FACTORS = [
     "momentum_24h",
-    "reversal_1d",
+    "reversal_3d",
     "oi_price_signal",
     "funding_rate_contrarian",
     "ls_ratio_contrarian",
     "liquidation_imbalance",
-    "btc_relative_strength",
     "technical_trend_4h",
     "technical_momentum_4h",
     "oi_acceleration_signal",
@@ -23,13 +22,12 @@ QUALITY_FACTORS = [
 ]
 
 DEFAULT_PRIORS = {
-    "momentum_24h": 0.18,
-    "reversal_1d": 0.08,
+    "momentum_24h": 0.30,
+    "reversal_3d": 0.08,
     "oi_price_signal": 0.20,
     "funding_rate_contrarian": 0.16,
     "ls_ratio_contrarian": 0.12,
     "liquidation_imbalance": 0.10,
-    "btc_relative_strength": 0.16,
     "technical_trend_4h": 0.12,
     "technical_momentum_4h": 0.08,
     "oi_acceleration_signal": 0.08,

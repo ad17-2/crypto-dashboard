@@ -163,6 +163,7 @@
     .status-pill { height: 24px; background: color-mix(in srgb, var(--up) 16%, var(--panel)); color: var(--up); }
     .status-pill.warn { background: color-mix(in srgb, var(--warn) 16%, var(--panel)); color: var(--warn); }
     .status-pill.bad { background: color-mix(in srgb, var(--down) 16%, var(--panel)); color: var(--down); }
+    .status-pill.neutral { background: color-mix(in srgb, var(--muted) 16%, var(--panel)); color: var(--muted); }
     .quality-card {
       border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--line));
       background: color-mix(in srgb, var(--warn) 9%, var(--panel));

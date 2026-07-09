@@ -5,8 +5,11 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .scoring import to_float
+
+_STORAGE_TZ = ZoneInfo("Asia/Jakarta")
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -406,16 +409,96 @@ def _find_forward_row(
     min_target_hours: float,
     max_target_hours: float,
 ) -> dict[str, Any] | None:
-    best: dict[str, Any] | None = None
-    best_delta: float | None = None
+    items: list[tuple[dict[str, Any], float]] = []
     for candidate in candidates:
         delta_hours = (candidate["generated_at"] - generated_at).total_seconds() / 3600.0
         if delta_hours < min_target_hours:
             continue
         if delta_hours > max_target_hours:
             break
-        distance = abs(delta_hours - ((min_target_hours + max_target_hours) / 2.0))
-        if best is None or best_delta is None or distance < best_delta:
-            best = candidate
-            best_delta = distance
+        items.append((candidate, delta_hours))
+    # Midpoint target preserved for forward-return continuity (pre-existing behavior).
+    forward_target_hours = (min_target_hours + max_target_hours) / 2.0
+    return _select_horizon_match(items, min_target_hours, max_target_hours, forward_target_hours)
+
+
+def _horizon_tolerance(hours: float) -> tuple[float, float]:
+    return hours * 0.75, hours * 1.5
+
+
+def _select_horizon_match(
+    items: list[tuple[dict[str, Any], float]],
+    min_target_hours: float,
+    max_target_hours: float,
+    target_hours: float,
+) -> dict[str, Any] | None:
+    best: dict[str, Any] | None = None
+    best_distance: float | None = None
+    for row, delta_hours in items:
+        if delta_hours < min_target_hours:
+            continue
+        if delta_hours > max_target_hours:
+            continue
+        distance = abs(delta_hours - target_hours)
+        if best is None or best_distance is None or distance < best_distance:
+            best = row
+            best_distance = distance
     return best
+
+
+def load_price_lookback(config: dict[str, Any], hours: float) -> dict[str, float]:
+    db_path = Path(config.get("storage_path", "data/crypto_screener.sqlite3"))
+    if not db_path.exists():
+        return {}
+
+    reference_at = datetime.now().astimezone()
+    min_target_hours, max_target_hours = _horizon_tolerance(hours)
+    # generated_at is stored in Asia/Jakarta; ISO string SQL bounds must use the same offset.
+    cutoff = (
+        (reference_at - timedelta(hours=max_target_hours * 1.25)).astimezone(_STORAGE_TZ).isoformat(timespec="seconds")
+    )
+    reference_iso = reference_at.astimezone(_STORAGE_TZ).isoformat(timespec="seconds")
+
+    conn = connect(db_path)
+    try:
+        db_rows = conn.execute(
+            """
+            SELECT generated_at, symbol, price_usd
+            FROM factor_history
+            WHERE generated_at >= ?
+              AND generated_at <= ?
+              AND price_usd IS NOT NULL
+              AND price_usd > 0
+            ORDER BY generated_at ASC
+            """,
+            (cutoff, reference_iso),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    by_symbol: dict[str, list[dict[str, Any]]] = {}
+    for db_row in db_rows:
+        parsed_at = datetime.fromisoformat(db_row["generated_at"])
+        if parsed_at.tzinfo is None:
+            # Legacy rows without an offset are assumed to be storage-local.
+            parsed_at = parsed_at.replace(tzinfo=_STORAGE_TZ)
+        by_symbol.setdefault(db_row["symbol"], []).append(
+            {
+                "generated_at": parsed_at,
+                "price_usd": float(db_row["price_usd"]),
+            }
+        )
+
+    result: dict[str, float] = {}
+    for symbol, history in by_symbol.items():
+        items = [
+            (
+                row,
+                (reference_at - row["generated_at"]).total_seconds() / 3600.0,
+            )
+            for row in history
+        ]
+        matched = _select_horizon_match(items, min_target_hours, max_target_hours, hours)
+        if matched is not None:
+            result[symbol] = matched["price_usd"]
+    return result

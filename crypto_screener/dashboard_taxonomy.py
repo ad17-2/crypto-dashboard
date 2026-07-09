@@ -2,12 +2,11 @@ from __future__ import annotations
 
 FACTOR_LABELS = {
     "momentum_24h": "Momentum",
-    "reversal_1d": "Reversal",
+    "reversal_3d": "Reversal 3d",
     "oi_price_signal": "OI/Price",
     "funding_rate_contrarian": "Funding",
     "ls_ratio_contrarian": "L/S",
     "liquidation_imbalance": "Liquidations",
-    "btc_relative_strength": "BTC Relative",
     "technical_trend_4h": "4h Trend",
     "technical_momentum_4h": "4h Momentum",
     "oi_acceleration_signal": "OI Acceleration",
