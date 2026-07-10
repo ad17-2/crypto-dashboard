@@ -5,11 +5,17 @@ from typing import Any
 from uuid import uuid4
 
 from .collector import collect_market
-from .factors import score_snapshot
+from .factors import factor_decay, score_snapshot
 from .models import RunPayload
 from .report import now_jakarta, write_reports
 from .scoring import pct_change, to_float
-from .storage import load_labeled_factor_records, load_latest_regime_state, load_price_lookback, save_snapshot
+from .storage import (
+    load_labeled_factor_records,
+    load_labeled_records_by_horizon,
+    load_latest_regime_state,
+    load_price_lookback,
+    save_snapshot,
+)
 
 
 def run_pipeline(
@@ -41,6 +47,9 @@ def run_pipeline(
         config,
         prior_market_state=prior_market_state,
     )
+    decay_horizons = config.get("factors", {}).get("decay_horizons", [4, 8, 12, 24, 48, 72])
+    records_by_horizon = load_labeled_records_by_horizon(config, decay_horizons)
+    scored["factor_weights"]["factor_decay"] = factor_decay(records_by_horizon, config)
 
     payload = RunPayload(
         run_id=run_id,

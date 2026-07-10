@@ -1241,6 +1241,42 @@ button:hover {
   background: var(--down);
 }
 
+.decay-row {
+  margin-top: 2px;
+}
+
+.decay-sparkline {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-height: 14px;
+}
+
+.decay-bar {
+  width: 5px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+
+.decay-bar.pos {
+  background: var(--up);
+}
+
+.decay-bar.neg {
+  background: var(--down);
+}
+
+.decay-bar.hollow {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--muted) 55%, transparent);
+}
+
+.status-pill.decay-holds {
+  height: 20px;
+  font-size: 10px;
+  padding: 0 6px;
+}
+
 .pos-dot {
   display: inline-block;
   font-size: 10px;

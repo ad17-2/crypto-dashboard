@@ -235,6 +235,84 @@ def factor_weights(history_records: list[dict[str, Any]], config: dict[str, Any]
     }
 
 
+def factor_decay(
+    records_by_horizon: dict[float, list[dict[str, Any]]],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    factor_cfg = config.get("factors", {})
+    ic_min_cross_section = int(factor_cfg.get("ic_min_cross_section", 5))
+    ic_min_periods = int(factor_cfg.get("ic_min_periods", 10))
+    horizons = sorted(records_by_horizon.keys())
+    result: dict[str, Any] = {}
+
+    for factor in DIRECTIONAL_FACTORS:
+        curve: list[dict[str, Any]] = []
+        for horizon in horizons:
+            ic_result = _cross_sectional_ic(records_by_horizon[horizon], factor, ic_min_cross_section)
+            mean_ic = ic_result["mean_ic"]
+            t_stat = ic_result["t_stat"]
+            n_periods = ic_result["n_periods"]
+            curve.append(
+                {
+                    "horizon_hours": horizon,
+                    "mean_ic": round(mean_ic, 4) if mean_ic is not None else None,
+                    "t_stat": round(t_stat, 3) if t_stat is not None else None,
+                    "n_periods": n_periods,
+                    "insufficient": n_periods < ic_min_periods,
+                }
+            )
+
+        sufficient_points = [point for point in curve if not point["insufficient"]]
+        sufficient = bool(sufficient_points)
+        peak_abs_ic = None
+        peak_horizon_hours = None
+        half_life_hours = None
+        first_sign_flip_hours = None
+        holds_hours = None
+
+        if sufficient_points:
+            peak_point = max(sufficient_points, key=lambda point: abs(point["mean_ic"] or 0.0))
+            peak_mean_ic = peak_point["mean_ic"]
+            peak_abs_ic = abs(peak_mean_ic or 0.0)
+            peak_horizon_hours = peak_point["horizon_hours"]
+
+            if peak_abs_ic > 0:
+                for point in curve:
+                    if point["horizon_hours"] <= peak_horizon_hours or point["insufficient"]:
+                        continue
+                    mean_ic = point["mean_ic"]
+                    if mean_ic is not None and abs(mean_ic) < 0.5 * peak_abs_ic:
+                        half_life_hours = point["horizon_hours"]
+                        break
+
+            if peak_mean_ic not in (None, 0.0):
+                peak_positive = peak_mean_ic > 0
+                for point in curve:
+                    if point["horizon_hours"] <= peak_horizon_hours or point["insufficient"]:
+                        continue
+                    mean_ic = point["mean_ic"]
+                    if mean_ic in (None, 0.0):
+                        continue
+                    if (mean_ic > 0) != peak_positive:
+                        first_sign_flip_hours = point["horizon_hours"]
+                        break
+
+            hold_candidates = [value for value in (half_life_hours, first_sign_flip_hours) if value is not None]
+            holds_hours = min(hold_candidates) if hold_candidates else None
+
+        result[factor] = {
+            "curve": curve,
+            "peak_abs_ic": round(peak_abs_ic, 4) if peak_abs_ic is not None else None,
+            "peak_horizon_hours": peak_horizon_hours,
+            "half_life_hours": half_life_hours,
+            "first_sign_flip_hours": first_sign_flip_hours,
+            "holds_hours": holds_hours,
+            "sufficient": sufficient,
+        }
+
+    return result
+
+
 def validation_metrics(history_records: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:
     factor_cfg = config.get("factors", {})
     horizon_hours = float(factor_cfg.get("forward_return_hours", 24))

@@ -115,6 +115,7 @@ class RegimeConfig(StrictModel):
 
 class FactorsConfig(StrictModel):
     forward_return_hours: float = 24
+    decay_horizons: list[float] = Field(default_factory=lambda: [4.0, 8.0, 12.0, 24.0, 48.0, 72.0])
     reversal_lookback_hours: float = 72
     ic_window_days: int = 30
     min_observations: int = 30

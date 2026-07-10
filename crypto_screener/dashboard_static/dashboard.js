@@ -731,19 +731,44 @@
         </div>`).join("")}
       </div>`;
     }
+    function factorDecaySparkline(curve) {
+      const points = curve || [];
+      if (!points.length) return "";
+      const maxAbs = Math.max(
+        ...points.map((point) => (point.insufficient || point.mean_ic == null ? 0 : Math.abs(Number(point.mean_ic)))),
+        0.0001
+      );
+      return `<span class="decay-sparkline" aria-hidden="true">${points.map((point) => {
+        const hollow = point.insufficient || point.mean_ic == null;
+        const absIc = hollow ? 0 : Math.abs(Number(point.mean_ic));
+        const height = hollow ? 3 : Math.max(3, Math.round((absIc / maxAbs) * 14));
+        const tone = Number(point.mean_ic) > 0 ? "pos" : Number(point.mean_ic) < 0 ? "neg" : "neutral";
+        const cls = hollow ? "decay-bar hollow" : `decay-bar ${tone}`;
+        const label = `${point.horizon_hours}h: ${point.mean_ic == null ? "n/a" : fmtNum(point.mean_ic, 2)}`;
+        return `<span class="${cls}" style="height:${height}px" title="${esc(label)}"></span>`;
+      }).join("")}</span>`;
+    }
+    function factorDecayHoldsTag(decay) {
+      if (!decay || !decay.sufficient) return `<span class="status-pill neutral decay-holds">insufficient-data</span>`;
+      if (decay.holds_hours == null) return `<span class="status-pill decay-holds">persistent</span>`;
+      return `<span class="status-pill decay-holds">holds ~${esc(decay.holds_hours)}h</span>`;
+    }
     function weightsBlock(modelWeights) {
       const factors = modelWeights?.factors || [];
       if (!factors.length) return `<div class="py-7 px-3 text-muted text-center">No factor weights</div>`;
       const maxAbs = Math.max(...factors.map((f) => Math.abs(Number(f.weight || 0))), 0.0001);
       const correlations = modelWeights?.factor_correlations || [];
+      const decayByFactor = modelWeights?.factor_decay || {};
       return `<div class="list p-3 grid gap-2">${factors.map((f) => {
         const width = Math.round((Math.abs(Number(f.weight || 0)) / maxAbs) * 100);
         const tone = f.weight > 0 ? "pos" : f.weight < 0 ? "neg" : "neutral";
         const driver = f.mode === "ic"
           ? `<span class="driver-line">IC ${fmtNum(f.ic, 2)} · t ${fmtNum(f.t_stat, 1)} · k ${fmtNum(f.credibility_k, 2)} · ${esc(f.n_periods)}p${f.regime_multiplier != null && Math.abs(f.regime_multiplier - 1) >= 0.01 ? ` · x${fmtNum(f.regime_multiplier, 2)}` : ""}</span>`
           : "";
+        const decay = decayByFactor[f.name] || {};
+        const decayLine = `<div class="decay-row flex items-center gap-1.5 flex-wrap">${factorDecaySparkline(decay.curve)}${factorDecayHoldsTag(decay)}</div>`;
         return `<div class="weight-row grid grid-cols-[minmax(90px,1fr)_minmax(0,1.2fr)_auto] gap-2 items-center text-xs">
-          <div class="weight-label grid gap-0.5 min-w-0"><strong>${esc(f.label || f.name || "-")}</strong>${driver}</div>
+          <div class="weight-label grid gap-0.5 min-w-0"><strong>${esc(f.label || f.name || "-")}</strong>${driver}${decayLine}</div>
           <span class="factor-track"><span class="factor-fill ${tone}" style="width:${width}%"></span></span>
           <div class="weight-meta flex items-center gap-1.5 justify-self-end"><span class="status-pill ${f.mode === "ic" ? "" : "warn"}">${esc((f.mode || "prior").toUpperCase())}</span><strong>${fmtNum(f.weight, 3)}</strong></div>
         </div>`;

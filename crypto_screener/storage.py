@@ -229,15 +229,27 @@ def prune_old_runs(db_path: Path, keep: int) -> dict[str, int]:
 
 
 def load_labeled_factor_records(config: dict[str, Any]) -> list[dict[str, Any]]:
+    factor_cfg = config.get("factors", {})
+    horizon_hours = float(factor_cfg.get("forward_return_hours", 24))
+    by_symbol = _labeling_rows_by_symbol(config)
+    return _labeled_records_for_horizon(by_symbol, horizon_hours)
+
+
+def load_labeled_records_by_horizon(
+    config: dict[str, Any],
+    horizons: list[float],
+) -> dict[float, list[dict[str, Any]]]:
+    by_symbol = _labeling_rows_by_symbol(config)
+    return {horizon: _labeled_records_for_horizon(by_symbol, horizon) for horizon in horizons}
+
+
+def _labeling_rows_by_symbol(config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     db_path = Path(config.get("storage_path", "data/crypto_screener.sqlite3"))
     if not db_path.exists():
-        return []
+        return {}
 
     factor_cfg = config.get("factors", {})
     window_days = int(factor_cfg.get("ic_window_days", 30))
-    horizon_hours = float(factor_cfg.get("forward_return_hours", 24))
-    min_target_hours = horizon_hours * 0.75
-    max_target_hours = horizon_hours * 1.5
     cutoff = datetime.now().astimezone() - timedelta(days=window_days + 3)
 
     conn = connect(db_path)
@@ -270,7 +282,14 @@ def load_labeled_factor_records(config: dict[str, Any]) -> list[dict[str, Any]]:
             "scores": json.loads(db_row["scores_json"] or "{}") if "scores_json" in row_keys else {},
         }
         by_symbol.setdefault(item["symbol"], []).append(item)
+    return by_symbol
 
+
+def _labeled_records_for_horizon(
+    by_symbol: dict[str, list[dict[str, Any]]],
+    horizon_hours: float,
+) -> list[dict[str, Any]]:
+    min_target_hours, max_target_hours = _horizon_tolerance(horizon_hours)
     records: list[dict[str, Any]] = []
     for symbol_rows in by_symbol.values():
         for index, current in enumerate(symbol_rows):
