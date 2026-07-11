@@ -134,8 +134,10 @@ function TabGroup({
             key={list.id}
             type="button"
             onClick={() => onTabChange(list.id)}
-            className={`tab-btn h-[30px] rounded-full px-3 border text-xs font-semibold cursor-pointer${
-              list.id === activeTab ? ' active' : ' border-line bg-panel-2 text-muted'
+            className={`tab-btn h-[30px] rounded-full px-3 border text-xs cursor-pointer${
+              list.id === activeTab
+                ? ' active font-bold'
+                : ' border-line bg-panel-2 text-muted font-semibold'
             }`}
           >
             {lookupWatchlist(list.id).label}

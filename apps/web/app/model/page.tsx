@@ -1,22 +1,27 @@
 import Link from 'next/link';
 import {
-  DataQualityPanel,
-  FactorWeightsPanel,
-  FreshnessPanel,
-  ProvidersPanel,
-  ValidationPanel,
-} from '@/components/context';
+  DataInStage,
+  EvidenceStage,
+  FactorWeightsStage,
+  HeroStage,
+  RisksStage,
+} from '@/components/model';
 import { getDashboard } from '@/lib/api';
 
 // Live DB state — never statically cache this route.
 export const dynamic = 'force-dynamic';
+
+// Narrower than the dashboard's 1480px on purpose: this page is read top-to-bottom like a document,
+// not scanned like a grid. At 1480 its prose keeps its ~65ch measure and strands half the viewport empty.
+const MAIN_CLASS =
+  'w-[min(1120px,calc(100vw-32px))] max-[680px]:w-[min(100vw-20px,1120px)] mx-auto pt-[22px] max-[680px]:pt-3.5 pb-[34px]';
 
 export default async function ModelPage() {
   const result = await getDashboard();
 
   if (!result.ok) {
     return (
-      <main className="w-[min(1480px,calc(100vw-32px))] max-[680px]:w-[min(100vw-20px,1480px)] mx-auto pt-[22px] max-[680px]:pt-3.5 pb-[34px]">
+      <main className={MAIN_CLASS}>
         <PageHeader />
         <div className="panel">
           <div className="py-7 px-3 text-down text-center">Dashboard error: {result.error}</div>
@@ -29,7 +34,7 @@ export default async function ModelPage() {
 
   if (payload.status === 'empty') {
     return (
-      <main className="w-[min(1480px,calc(100vw-32px))] max-[680px]:w-[min(100vw-20px,1480px)] mx-auto pt-[22px] max-[680px]:pt-3.5 pb-[34px]">
+      <main className={MAIN_CLASS}>
         <PageHeader />
         <div className="panel">
           <div className="py-7 px-3 text-muted text-center">
@@ -41,15 +46,27 @@ export default async function ModelPage() {
   }
 
   return (
-    <main className="w-[min(1480px,calc(100vw-32px))] max-[680px]:w-[min(100vw-20px,1480px)] mx-auto pt-[22px] max-[680px]:pt-3.5 pb-[34px]">
+    <main className={MAIN_CLASS}>
       <PageHeader />
-      <section className="module-grid" aria-label="Model health">
-        <ValidationPanel validation={payload.validation} />
-        <FactorWeightsPanel modelWeights={payload.model_weights} />
-        <ProvidersPanel providerStatus={payload.provider_status} />
-        <DataQualityPanel quality={payload.quality} />
-        <FreshnessPanel freshness={payload.freshness} runs={payload.runs} />
-      </section>
+
+      <HeroStage
+        quality={payload.quality}
+        validation={payload.validation}
+        modelWeights={payload.model_weights}
+      />
+
+      <DataInStage
+        providerStatus={payload.provider_status}
+        quality={payload.quality}
+        freshness={payload.freshness}
+        run={payload.run}
+      />
+
+      <FactorWeightsStage modelWeights={payload.model_weights} />
+
+      <EvidenceStage validation={payload.validation} modelWeights={payload.model_weights} />
+
+      <RisksStage modelWeights={payload.model_weights} />
     </main>
   );
 }

@@ -68,21 +68,21 @@ export function arrowPct(value: unknown, digits = 2): string {
   return `${mark}${fmtPct(value, digits)}`;
 }
 
-export type QualityTone = 'bad' | 'warn' | '';
+export type QualityTone = 'neg' | 'warn' | '';
 
 export function qualityTone(value: unknown): QualityTone {
   const q = numeric(value);
-  if (q === null || q < 75) return 'bad';
+  if (q === null || q < 75) return 'neg';
   if (q < 90) return 'warn';
   return '';
 }
 
-export type ConflictTone = 'pos' | 'bad' | 'warn' | 'neutral';
+export type ConflictTone = 'pos' | 'neg' | 'warn' | 'neutral';
 
 export function conflictTone(label: unknown): ConflictTone {
   const normalized = String(label ?? '').toLowerCase();
   if (normalized === 'aligned' || normalized === 'neutral') return 'pos';
-  if (normalized === 'high-conflict' || normalized === 'excluded') return 'bad';
+  if (normalized === 'high-conflict' || normalized === 'excluded') return 'neg';
   if (normalized && normalized !== 'unknown') return 'warn';
   return 'neutral';
 }

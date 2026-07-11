@@ -3,33 +3,19 @@ import type { ReactNode } from 'react';
 export interface PanelProps {
   title: string;
   meta?: ReactNode;
-  accent?: 'blue' | 'gold';
   id?: string;
   'aria-label'?: string;
   className?: string;
   children: ReactNode;
 }
 
-export function Panel({ title, meta, accent, id, className, children, ...rest }: PanelProps) {
-  const shellClassName = [
-    accent ? 'module-panel' : 'panel',
-    accent === 'gold' && 'border-l-4 border-l-gold',
-    accent === 'blue' && 'border-l-4 border-l-blue',
-    className,
-  ]
-    .filter(Boolean)
-    .join(' ');
+export function Panel({ title, meta, id, className, children, ...rest }: PanelProps) {
+  const shellClassName = ['panel', className].filter(Boolean).join(' ');
 
-  const headerClassName = [
-    'flex justify-between items-center gap-2 min-h-[42px] px-3 py-2.5 bg-panel-2',
-    !accent && 'border-b border-line',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const headerClassName =
+    'flex justify-between items-center gap-2 min-h-[42px] px-3 py-2.5 bg-panel-2 border-b border-line';
 
-  const metaClassName = accent
-    ? 'text-muted text-xs font-semibold whitespace-nowrap'
-    : 'text-muted text-xs font-mono tabular-nums';
+  const metaClassName = 'text-muted text-xs font-mono tabular-nums';
 
   return (
     <section id={id} className={shellClassName} {...rest}>

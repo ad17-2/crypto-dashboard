@@ -65,7 +65,7 @@ export function SelectedCoinRail({ row }: SelectedCoinRailProps) {
           </div>
           <div className="detail-actions flex gap-1.5 flex-wrap justify-end">
             <a
-              className="detail-link inline-flex items-center h-7 border border-line rounded-md px-2 text-blue no-underline text-xs font-bold"
+              className="detail-link inline-flex items-center h-7 border border-line rounded-md px-2 text-ink no-underline text-xs font-bold"
               href={href}
               target="_blank"
               rel="noopener noreferrer"
@@ -275,6 +275,10 @@ function resolveReasonPart(
   part: DashboardRow['reason_parts'][number],
   index: number,
 ): ReasonPartView | null {
+  // apps/api/src/dashboard/rows.ts still emits the legacy 'bad' tone on the wire for a couple of
+  // reason parts (read-only reference, not editable here) -- normalize it to 'neg' at this
+  // consumption boundary so 'bad' never reaches the rendered className.
+  const tone = part.tone === 'bad' ? 'neg' : part.tone;
   if (part.kind === 'metric') {
     const meta = REASON_METRIC_META[part.label];
     if (!meta) return null;
@@ -283,7 +287,7 @@ function resolveReasonPart(
       label: meta.label,
       definition: meta.definition,
       value: part.value,
-      tone: part.tone,
+      tone,
     };
   }
   if (part.kind === 'driver') {
@@ -294,7 +298,7 @@ function resolveReasonPart(
       label: factor.label,
       definition: factor.definition,
       value: part.value,
-      tone: part.tone,
+      tone,
     };
   }
   if (part.kind === 'context') {
@@ -305,7 +309,7 @@ function resolveReasonPart(
         label: 'Chart read (4h)',
         definition: tech.definition,
         value: tech.label,
-        tone: part.tone,
+        tone,
       };
     }
     if (part.label === 'Signals') {
@@ -315,7 +319,7 @@ function resolveReasonPart(
         label: 'Signal agreement',
         definition: conflict.definition,
         value: conflict.label,
-        tone: part.tone,
+        tone,
       };
     }
     if (part.label === 'Crowding') {
@@ -326,7 +330,7 @@ function resolveReasonPart(
         label: meta.label,
         definition: meta.definition,
         value: sideMeta(row.side).label,
-        tone: part.tone,
+        tone,
       };
     }
     return null;
@@ -339,7 +343,7 @@ function resolveReasonPart(
       label: meta.label,
       definition: meta.definition,
       value: `${count} flag${count === 1 ? '' : 's'}`,
-      tone: part.tone,
+      tone,
     };
   }
   return null;
@@ -439,7 +443,7 @@ function MetricTiles({ row }: { row: DashboardRow }) {
         label={lookupMetric('data_quality').label}
         definition={lookupMetric('data_quality').definition}
         value={row.quality}
-        tone={qTone === 'bad' ? 'neg' : qTone || undefined}
+        tone={qTone || undefined}
       />
       <StatTile
         label="24h"
@@ -637,7 +641,7 @@ function Sparkline({ points, field }: { points: DashboardRow['history']; field: 
     .join(' ');
   const firstValue = values[0] ?? 0;
   const lastValue = values[values.length - 1] ?? 0;
-  const tone = lastValue > firstValue ? 'good' : lastValue < firstValue ? 'bad' : 'neutral';
+  const tone = lastValue > firstValue ? 'good' : lastValue < firstValue ? 'neg' : 'neutral';
 
   return (
     <svg

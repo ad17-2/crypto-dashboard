@@ -160,7 +160,7 @@ function HeaderCell({
         event.preventDefault();
         onSort(columnKey);
       }}
-      className={`watch-th inline-flex items-center justify-end gap-0.5 cursor-pointer select-none whitespace-nowrap hover:text-ink${active ? ' sorted text-gold' : ''}`}
+      className={`watch-th inline-flex items-center justify-end gap-0.5 cursor-pointer select-none whitespace-nowrap hover:text-ink${active ? ' sorted text-ink' : ''}`}
     >
       {/* placement="bottom": .watch-table sets overflow:hidden, so a tooltip opening upward from
           this sticky header row is clipped out of existence. */}

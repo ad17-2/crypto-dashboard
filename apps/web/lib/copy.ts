@@ -698,9 +698,170 @@ export const METRIC: Record<string, CopyEntry> = {
     definition:
       'Whether overall conditions favor risk-taking (risk-on), caution (risk-off), or neither clearly (mixed).',
   },
+  // -- Model-health terms (apps/web/app/model) -- definitions verified against apps/api/src/
+  // pipeline/{weighting,ic,validation,independence}.ts; see the field-semantics audit this page
+  // was built from. Same not-from-an-API-enum, stable-id convention as the rest of this dict.
+  ic: {
+    label: 'Information coefficient',
+    definition:
+      "How well this factor's value predicted the direction of the next price move, historically. It's the correlation (Spearman rank) between the factor's value and each coin's forward return, averaged across every past snapshot with enough coins to check. Zero means no relationship; further from zero means a stronger historical relationship, in either direction.",
+  },
+  t_stat: {
+    label: 't-stat',
+    definition:
+      'How consistent a factor\'s historical edge has been over time, not just how big it looks on average. As a rough rule of thumb, a t-stat of 2 or higher is normally treated as "probably not noise" — below that, the measured edge could easily be random.',
+  },
+  credibility: {
+    label: 'Credibility',
+    definition:
+      "How much of a factor's weight comes from its own measured track record (1.0) versus a starting assumption (0.0). It only rises once the factor clears a minimum reliability bar; until then it stays at 0 and the weight is entirely the starting assumption.",
+  },
+  prior_weight: {
+    label: 'Prior',
+    definition:
+      "This weight is a starting assumption about what should matter, not something measured from this factor's own track record — it hasn't cleared the bar to be trusted on its own measured numbers yet.",
+  },
+  measured_weight: {
+    label: 'Measured',
+    definition:
+      "This weight reflects the factor's own measured track record, not just a starting assumption — it cleared the reliability bar needed to earn that.",
+  },
+  robustness: {
+    label: 'Robustness',
+    definition:
+      "A train-then-test check: a factor's edge is measured on an earlier slice of history, then re-checked on a later slice it wasn't measured from. 'Held up' means the edge survived. 'Reversed' means it vanished or flipped on that unseen data. 'No clear edge' means the factor never showed a strong enough signal to test in the first place — the bar is a t-stat of 2 — or, rarely, that there wasn't enough history to run the test.",
+  },
+  walk_forward: {
+    label: 'Walk-forward test',
+    definition:
+      "A train-then-test check: history is split in time order, a factor's edge is measured on the earlier slice, then checked again on the later slice it wasn't measured from — a more honest test than checking a factor against the same data used to measure it.",
+  },
+  out_of_sample: {
+    label: 'Out-of-sample',
+    definition:
+      'The same historical-edge measurement, computed only on the later "test" slice of history that wasn\'t used to measure the factor in the first place — the more trustworthy of the two numbers.',
+  },
+  decay: {
+    label: 'Decay',
+    definition:
+      "How a signal's predictive strength changes the longer you wait after it fires. Most useful signals are strongest soon after they fire and fade afterward.",
+  },
+  half_life: {
+    label: 'Half-life',
+    definition:
+      "The first later point in time where a signal's predictive strength has faded to under half of its peak.",
+  },
+  /** apps/api/src/pipeline/validation.ts:184-204 -- holds_hours = the earlier of half-life or a
+   *  sign flip, only ever checked at the tested horizons (4/8/12/24/48/72h). Distinct from decay
+   *  and half_life individually; see FactorWeightsStage.tsx's per-factor decay stat. */
+  holds: {
+    label: 'Holds',
+    definition:
+      'The earlier of two things, checked only at the tested horizons (4h, 8h, 12h, 24h, 48h, 72h): the signal fading to under half its peak strength, or flipping sign entirely. If neither happened by the last horizon tested, nothing beyond that point was measured.',
+  },
+  collinearity: {
+    label: 'Collinearity',
+    definition:
+      "How closely two factors move together across coins, measured by Spearman correlation (rho, from -1 to +1). When it's high, the two are largely making the same bet on the same coins — counting both adds duplicate weight, not independent information.",
+  },
+  hit_rate: {
+    label: 'Hit rate',
+    definition:
+      'Of the times this factor took a directional stance, the share where price actually moved that way. A coin flip is 50% — real edges in data like this are usually only a few points above that, not dramatically higher.',
+  },
+  calibration: {
+    label: 'Calibration',
+    definition:
+      "A read on how much to trust the model's historical track record, based on how many outcomes have been checked and how often the calls were right.",
+  },
+  regime_conditional_ic: {
+    label: 'Regime-conditional IC',
+    definition:
+      "A version of the historical-edge measurement computed only from snapshots taken during the same market regime the model is in right now, instead of pooling every regime together. It needs enough snapshots within that one regime before it's trusted over the pooled number.",
+  },
+  observations: {
+    label: 'Observations',
+    definition:
+      'The number of individual (coin, snapshot) pairs with a known outcome on record — not the same as the number of distinct time snapshots those pairs are drawn from.',
+  },
+  n_periods: {
+    label: 'Periods measured',
+    definition:
+      'The number of distinct historical snapshots that had enough coins with both a value for this factor and a known outcome to produce one reading.',
+  },
 };
 
 export const lookupMetric = makeLookup(METRIC, NOT_REPORTED);
+
+// ---------------------------------------------------------------------------------------------
+// 9. ROBUSTNESS_VERDICT -- apps/api/src/pipeline/validation.ts `WalkForwardFactorResult['verdict']`
+// (3 values). 'insufficient-data' fires in two different branches there -- genuinely too little
+// history, OR ample history that simply failed the significance bar -- and the wire alone can't
+// tell you which, so this definition must never assert a history shortage as the cause.
+// ---------------------------------------------------------------------------------------------
+
+export const ROBUSTNESS_VERDICT: Record<string, CopyEntry> = {
+  robust: {
+    label: 'Held up',
+    definition:
+      "This factor's edge was measured on an earlier slice of history, then held up when re-checked on a later slice it wasn't measured from.",
+  },
+  overfit: {
+    label: 'Reversed',
+    definition:
+      "This factor cleared the significance bar on the earlier slice of history it was measured on, but its edge reversed or vanished when re-checked on a later slice it wasn't measured from.",
+  },
+  'insufficient-data': {
+    label: 'No clear edge',
+    definition:
+      "This factor never showed an edge strong enough to test in the first place — the bar is a t-stat of 2 — or, rarely, there wasn't enough history to run the test at all.",
+  },
+};
+
+export const lookupRobustnessVerdict = makeLookup(ROBUSTNESS_VERDICT, {
+  label: 'Unknown',
+  definition: 'Not reported.',
+});
+
+// ---------------------------------------------------------------------------------------------
+// 10. PROVIDER -- apps/api/src/pipeline/collector.ts and enrichment.ts `status.<key> = ...`
+// assignment sites (6 hardcoded string-literal keys). Two are real external providers
+// (coingecko, coinglass); the other four are in-process checks or CoinGlass sub-checks, not
+// separate external providers.
+// ---------------------------------------------------------------------------------------------
+
+export const PROVIDER: Record<string, CopyEntry> = {
+  coingecko: {
+    label: 'CoinGecko',
+    definition: 'External provider: global market cap, dominance, and category data.',
+  },
+  coinglass: {
+    label: 'CoinGlass',
+    definition:
+      'External provider: the primary futures snapshot (price, open interest, funding, volume) for every tracked pair.',
+  },
+  data_quality: {
+    label: 'Data quality checks',
+    definition:
+      'Not an external provider -- a local, in-process sanity-check pass that excludes rows failing quality checks.',
+  },
+  derivatives_history: {
+    label: 'Derivatives history',
+    definition:
+      'A CoinGlass sub-check: historical open interest, funding, liquidation, and taker-flow series, distinct from the live CoinGlass snapshot.',
+  },
+  long_short_ratio: {
+    label: 'Long/short ratio',
+    definition: 'A CoinGlass sub-check: global and top-trader long/short account ratio history.',
+  },
+  technicals: {
+    label: 'Technicals',
+    definition:
+      'A CoinGlass sub-check: OHLC price history used to compute 4h technical indicators.',
+  },
+};
+
+export const lookupProvider = makeLookup(PROVIDER, NOT_REPORTED);
 
 // ---------------------------------------------------------------------------------------------
 // DATA_QUALITY_FLAG -- apps/api/src/pipeline/quality.ts `dataQualityFlags()` (13 codes). Most
@@ -767,6 +928,9 @@ export const DATA_QUALITY_FLAG: Record<string, CopyEntry> = {
 };
 
 export interface QualityFlagCopy extends CopyEntry {
+  /** The flag's dynamic suffix on its own (e.g. "+1271.84%"), for rendering beside the label. */
+  readonly value: string;
+  /** The suffix written out as a sentence, for a tooltip -- too long to sit inside a chip. */
   readonly detail: string;
 }
 
@@ -799,5 +963,5 @@ export function lookupQualityFlag(flag: string): QualityFlagCopy {
   const code = separatorIndex === -1 ? flag : flag.slice(0, separatorIndex);
   const value = separatorIndex === -1 ? '' : flag.slice(separatorIndex + 1);
   const entry = DATA_QUALITY_FLAG[code] ?? unknownEntry(code);
-  return { ...entry, detail: value ? qualityFlagDetail(code, value) : '' };
+  return { ...entry, value, detail: value ? qualityFlagDetail(code, value) : '' };
 }
