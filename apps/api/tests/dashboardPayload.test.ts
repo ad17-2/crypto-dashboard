@@ -9,12 +9,18 @@ import { openDatabase } from '../src/db/client.js';
 
 /**
  * THE PARITY GATE: apps/api/tests/fixtures/dashboard-payload.json is a REAL `GET /api/dashboard`
- * response captured from the running Python server (crypto_screener/dashboard.py) against
- * data/crypto_screener.sqlite3 -- the exact database checked into this repo. This test copies
- * that database to a temp path (never opens the original read-write), builds the payload with the
- * ported TypeScript buildDashboardPayload(), and deep-compares the result against the fixture with
- * a 1e-9 float tolerance and STRICT key-set equality at every level (sections, watchlists, every
- * row, every nested object) -- missing or extra keys are failures, not just differing values.
+ * response captured from the running Python server (crypto_screener/dashboard.py), and
+ * apps/api/tests/fixtures/parity.sqlite3 is a frozen snapshot of the database it was captured
+ * against. This test copies that snapshot to a temp path (never opens the fixture read-write),
+ * builds the payload with the ported TypeScript buildDashboardPayload(), and deep-compares the
+ * result against the fixture with a 1e-9 float tolerance and STRICT key-set equality at every level
+ * (sections, watchlists, every row, every nested object) -- missing or extra keys are failures, not
+ * just differing values.
+ *
+ * The snapshot is deliberately NOT data/crypto_screener.sqlite3. That file is live, mutable state:
+ * any real screener run appends a run and new factor_history rows, which legitimately shifts the IC
+ * weights and decay curves and would break this comparison for reasons that have nothing to do with
+ * the port's correctness. A correctness gate must be hermetic, so it pins its own input.
  *
  * EXCLUSION LIST (kept as short as possible; each entry justified individually, each excluded
  * field still asserted present with the right type before being excluded from the value compare):
@@ -42,10 +48,7 @@ const FIXTURE_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
   'fixtures/dashboard-payload.json',
 );
-const SOURCE_DB_PATH = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../../data/crypto_screener.sqlite3',
-);
+const SOURCE_DB_PATH = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/parity.sqlite3');
 
 const FLOAT_TOLERANCE = 1e-9;
 
