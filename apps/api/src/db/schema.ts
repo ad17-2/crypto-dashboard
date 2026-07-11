@@ -1,0 +1,97 @@
+import type Database from 'better-sqlite3';
+
+/**
+ * DDL mirrors crypto_screener/storage.py::ensure_schema exactly (table names,
+ * column names, types, defaults, PRIMARY/FOREIGN KEYs, indexes). The existing
+ * production database was created by that Python code, so this must stay
+ * byte-compatible: CREATE TABLE IF NOT EXISTS is idempotent against an
+ * already-populated database and never rewrites existing rows.
+ *
+ * factor_history deliberately has NO FOREIGN KEY on run_id — backfill jobs
+ * write factor_history rows with no matching runs row. Do not add one.
+ */
+const DDL = `
+CREATE TABLE IF NOT EXISTS runs (
+    run_id TEXT PRIMARY KEY,
+    generated_at TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    context_json TEXT NOT NULL,
+    provider_status_json TEXT NOT NULL,
+    regime_json TEXT NOT NULL DEFAULT '{}',
+    factor_weights_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS market_rows (
+    run_id TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    price_usd REAL,
+    factors_json TEXT NOT NULL,
+    scores_json TEXT NOT NULL,
+    row_json TEXT NOT NULL,
+    PRIMARY KEY (run_id, symbol),
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_rows_symbol_time
+    ON market_rows(symbol, generated_at);
+CREATE INDEX IF NOT EXISTS idx_market_rows_time
+    ON market_rows(generated_at);
+
+CREATE TABLE IF NOT EXISTS factor_history (
+    run_id TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    price_usd REAL,
+    factors_json TEXT NOT NULL,
+    scores_json TEXT NOT NULL DEFAULT '{}',
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY (run_id, symbol)
+);
+
+CREATE INDEX IF NOT EXISTS idx_factor_history_symbol_time
+    ON factor_history(symbol, generated_at);
+CREATE INDEX IF NOT EXISTS idx_factor_history_time
+    ON factor_history(generated_at);
+
+CREATE TABLE IF NOT EXISTS market_regime_history (
+    run_id TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    btc_dominance_pct REAL,
+    eth_btc_performance_pct REAL,
+    regime_state TEXT,
+    regime_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_regime_history_time
+    ON market_regime_history(generated_at);
+`;
+
+/**
+ * Creates all tables/indexes if missing, then applies the same legacy
+ * ALTER TABLE ADD COLUMN migration storage.py runs on every connect() so
+ * older database files (created before regime_json/factor_weights_json
+ * existed on `runs`) get the missing columns without losing data.
+ */
+export function ensureSchema(db: Database.Database): void {
+  db.exec(DDL);
+  ensureColumn(db, 'runs', 'regime_json', "TEXT NOT NULL DEFAULT '{}'");
+  ensureColumn(db, 'runs', 'factor_weights_json', "TEXT NOT NULL DEFAULT '{}'");
+}
+
+interface TableInfoRow {
+  name: string;
+}
+
+function ensureColumn(
+  db: Database.Database,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as TableInfoRow[];
+  const hasColumn = columns.some((row) => row.name === column);
+  if (!hasColumn) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}

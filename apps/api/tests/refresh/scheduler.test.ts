@@ -1,0 +1,134 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { openDatabase } from '../../src/db/client.js';
+import { saveSnapshot } from '../../src/db/runs.js';
+import {
+  dailyRefreshDue,
+  scheduledDatetime,
+  scheduledRefreshDue,
+  secondsUntilNextDailyCheck,
+} from '../../src/refresh/scheduler.js';
+
+/**
+ * Port of tests/test_dashboard.py::test_daily_refresh_due_after_scheduled_time_only_once_per_day
+ * and ::test_daily_refresh_supports_multiple_times_per_day. Every instant below is constructed as
+ * "Asia/Jakarta wall-clock HH:MM" -> UTC (Jakarta is a fixed +07:00, no DST), matching the
+ * Python tests' `datetime(..., tzinfo=ZoneInfo("Asia/Jakarta"))` fixtures exactly.
+ */
+
+const ZONE = 'Asia/Jakarta';
+
+function jakarta(year: number, month: number, day: number, hour: number, minute: number): Date {
+  return new Date(Date.UTC(year, month - 1, day, hour - 7, minute, 0));
+}
+
+let dir: string;
+let dbPath: string;
+let db: Database.Database;
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'crypto-screener-scheduler-'));
+  dbPath = join(dir, 'screener.sqlite3');
+  db = openDatabase(dbPath);
+});
+
+afterEach(() => {
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+describe('scheduledDatetime', () => {
+  it('combines the current Jakarta calendar date with the given HH:MM', () => {
+    const now = jakarta(2026, 7, 3, 12, 0);
+    const target = scheduledDatetime(now, { hour: 6, minute: 0 }, ZONE);
+    expect(target.getTime()).toBe(jakarta(2026, 7, 3, 6, 0).getTime());
+  });
+});
+
+describe('dailyRefreshDue', () => {
+  it('is due only once per day, after the scheduled time and only once a fresh run exists', () => {
+    const refreshTime = { hour: 6, minute: 0 };
+
+    expect(dailyRefreshDue(db, jakarta(2026, 7, 3, 5, 59), refreshTime, ZONE)).toBe(false);
+    expect(dailyRefreshDue(db, jakarta(2026, 7, 3, 6, 0), refreshTime, ZONE)).toBe(true);
+
+    saveSnapshot(
+      db,
+      {
+        run_id: 'today',
+        generated_at: '2026-07-03T06:05:00+07:00',
+        rows: [{ symbol: 'BTC', price_usd: 100 }],
+      },
+      { storage_path: dbPath },
+    );
+
+    expect(dailyRefreshDue(db, jakarta(2026, 7, 3, 12, 0), refreshTime, ZONE)).toBe(false);
+    expect(dailyRefreshDue(db, jakarta(2026, 7, 4, 6, 0), refreshTime, ZONE)).toBe(true);
+  });
+});
+
+describe('scheduledRefreshDue / secondsUntilNextDailyCheck', () => {
+  it('supports multiple times per day, deduped/sorted upstream by parseDailyRefreshTimes', () => {
+    // parseDailyRefreshTimes("15:10,07:10,11:10,07:10") from env.ts dedupes + sorts ascending,
+    // matching Python's _parse_daily_refresh_times -- reproduced here directly rather than
+    // re-parsing, since env.ts already owns and tests that parsing.
+    const refreshTimes = [
+      { hour: 7, minute: 10 },
+      { hour: 11, minute: 10 },
+      { hour: 15, minute: 10 },
+    ];
+
+    expect(scheduledRefreshDue(db, jakarta(2026, 7, 3, 7, 9), refreshTimes, ZONE)).toBe(false);
+    expect(scheduledRefreshDue(db, jakarta(2026, 7, 3, 7, 10), refreshTimes, ZONE)).toBe(true);
+
+    saveSnapshot(
+      db,
+      {
+        run_id: 'morning',
+        generated_at: '2026-07-03T07:15:00+07:00',
+        rows: [{ symbol: 'BTC', price_usd: 100 }],
+      },
+      { storage_path: dbPath },
+    );
+
+    expect(scheduledRefreshDue(db, jakarta(2026, 7, 3, 10, 59), refreshTimes, ZONE)).toBe(false);
+    expect(scheduledRefreshDue(db, jakarta(2026, 7, 3, 11, 10), refreshTimes, ZONE)).toBe(true);
+
+    saveSnapshot(
+      db,
+      {
+        run_id: 'midday',
+        generated_at: '2026-07-03T11:20:00+07:00',
+        rows: [{ symbol: 'BTC', price_usd: 101 }],
+      },
+      { storage_path: dbPath },
+    );
+
+    expect(scheduledRefreshDue(db, jakarta(2026, 7, 3, 15, 9), refreshTimes, ZONE)).toBe(false);
+    expect(scheduledRefreshDue(db, jakarta(2026, 7, 3, 15, 10), refreshTimes, ZONE)).toBe(true);
+    expect(secondsUntilNextDailyCheck(jakarta(2026, 7, 3, 15, 11), refreshTimes, ZONE)).toBe(1800);
+  });
+
+  it('restart idempotency: a fresh process re-derives the same due-ness from SQLite alone', () => {
+    // No persisted "next fire time" anywhere -- due-ness is recomputed from the latest run row on
+    // every call, so a process restart between two due-checks must not double-fire or skip.
+    const refreshTime = { hour: 6, minute: 0 };
+    saveSnapshot(
+      db,
+      {
+        run_id: 'today',
+        generated_at: '2026-07-03T06:05:00+07:00',
+        rows: [{ symbol: 'BTC', price_usd: 100 }],
+      },
+      { storage_path: dbPath },
+    );
+
+    // Simulate a restart: a brand new call with no in-memory state, still correctly not due.
+    expect(dailyRefreshDue(db, jakarta(2026, 7, 3, 8, 0), refreshTime, ZONE)).toBe(false);
+    // ...and still correctly due once the next day's window opens.
+    expect(dailyRefreshDue(db, jakarta(2026, 7, 4, 6, 0), refreshTime, ZONE)).toBe(true);
+  });
+});
