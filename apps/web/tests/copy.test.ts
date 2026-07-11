@@ -17,13 +17,17 @@ import {
   lookupConfluenceFamily,
   lookupFactor,
   lookupFreshness,
+  lookupProvider,
   lookupQualityFlag,
+  lookupRobustnessVerdict,
   lookupSectorRotationLabel,
   lookupSetup,
   lookupSignalConflictLabel,
   lookupTechnicalPattern,
   lookupWatchlist,
+  PROVIDER,
   REGIME_STATE,
+  ROBUSTNESS_VERDICT,
   SECTOR_ROTATION_LABEL,
   SIGNAL_CONFLICT_LABEL,
   TECHNICAL_PATTERN,
@@ -157,6 +161,19 @@ const FRESHNESS_LABELS = ['fresh', 'aging', 'stale', 'old', 'unknown'];
 // apps/api/src/dashboard/payload.ts `calibrationLabel()`.
 const CALIBRATION_LABELS = ['learning', 'useful', 'neutral', 'weak'];
 
+// apps/api/src/pipeline/validation.ts `WalkForwardFactorResult['verdict']`.
+const ROBUSTNESS_VERDICTS = ['robust', 'overfit', 'insufficient-data'];
+
+// apps/api/src/pipeline/collector.ts and enrichment.ts `status.<key> = ...` assignment sites.
+const PROVIDER_KEYS = [
+  'coingecko',
+  'coinglass',
+  'data_quality',
+  'derivatives_history',
+  'long_short_ratio',
+  'technicals',
+];
+
 // apps/api/src/pipeline/quality.ts:58-192 `dataQualityFlags()` -- 2 static codes, 11 suffixed
 // `code:value` codes. lookupQualityFlag() must key on the prefix for the suffixed ones.
 const STATIC_QUALITY_FLAGS = ['missing_symbol', 'missing_contract_symbol'];
@@ -275,6 +292,20 @@ describe('copy dictionaries cover every source-derived key', () => {
     for (const label of CALIBRATION_LABELS) {
       expect(CALIBRATION[label], `CALIBRATION missing "${label}"`).toBeDefined();
       assertHuman(lookupCalibration(label).label);
+    }
+  });
+
+  it('covers every walk-forward robustness verdict', () => {
+    for (const verdict of ROBUSTNESS_VERDICTS) {
+      expect(ROBUSTNESS_VERDICT[verdict], `ROBUSTNESS_VERDICT missing "${verdict}"`).toBeDefined();
+      assertHuman(lookupRobustnessVerdict(verdict).label);
+    }
+  });
+
+  it('covers every provider status key', () => {
+    for (const key of PROVIDER_KEYS) {
+      expect(PROVIDER[key], `PROVIDER missing "${key}"`).toBeDefined();
+      assertHuman(lookupProvider(key).label);
     }
   });
 
