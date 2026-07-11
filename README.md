@@ -224,25 +224,25 @@ POST /api/refresh                Protected manual refresh
 
 `/health` only implements `GET` (see `apps/api/src/http/routes/health.ts`) -- use `GET`, not `HEAD`, for health checks.
 
-`POST /api/refresh` is default-deny: it returns `403` unless `CRYPTO_DASHBOARD_REFRESH_TOKEN` is set *and* the request supplies it via an `X-Refresh-Token` header or an `Authorization: Bearer` header.
+`POST /api/refresh` is default-deny: it returns `403` unless `CRYPTO_DASHBOARD_REFRESH_TOKEN` is set _and_ the request supplies it via an `X-Refresh-Token` header or an `Authorization: Bearer` header.
 
 Dashboard environment:
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `API_PORT` | `4000` | Port apps/api's Express server binds on `127.0.0.1` (internal only) |
-| `PORT` | `3000` locally | Port apps/web (Next.js) binds on; public in production |
-| `CRYPTO_SCREENER_CONFIG` | `config/default.json` | Config path |
-| `CRYPTO_SCREENER_DB_PATH` | Config `storage_path` | SQLite path |
-| `CRYPTO_SCREENER_REPORT_DIR` | `reports` | Runtime work directory |
-| `CRYPTO_DASHBOARD_LIMIT` | Config `report.limit` | Rows per list |
-| `CRYPTO_DASHBOARD_AUTO_REFRESH_SECONDS` | `0` | Interval refresh threshold |
-| `CRYPTO_DASHBOARD_DAILY_REFRESH_TIME` | unset | One or more `HH:MM` daily refresh times |
-| `CRYPTO_DASHBOARD_REFRESH_TZ` | `Asia/Jakarta` | Refresh timezone |
-| `CRYPTO_DASHBOARD_RETAIN_RUNS` | `0` | Keep newest N full runs after refresh |
-| `CRYPTO_DASHBOARD_REFRESH_TOKEN` | unset | Required token for `POST /api/refresh` |
-| `COINGLASS_API_KEY` | unset | CoinGlass provider key |
-| `COINGECKO_API_KEY` | unset | Optional CoinGecko provider key |
+| Variable                                | Default               | Purpose                                                             |
+| --------------------------------------- | --------------------- | ------------------------------------------------------------------- |
+| `API_PORT`                              | `4000`                | Port apps/api's Express server binds on `127.0.0.1` (internal only) |
+| `PORT`                                  | `3000` locally        | Port apps/web (Next.js) binds on; public in production              |
+| `CRYPTO_SCREENER_CONFIG`                | `config/default.json` | Config path                                                         |
+| `CRYPTO_SCREENER_DB_PATH`               | Config `storage_path` | SQLite path                                                         |
+| `CRYPTO_SCREENER_REPORT_DIR`            | `reports`             | Runtime work directory                                              |
+| `CRYPTO_DASHBOARD_LIMIT`                | Config `report.limit` | Rows per list                                                       |
+| `CRYPTO_DASHBOARD_AUTO_REFRESH_SECONDS` | `0`                   | Interval refresh threshold                                          |
+| `CRYPTO_DASHBOARD_DAILY_REFRESH_TIME`   | unset                 | One or more `HH:MM` daily refresh times                             |
+| `CRYPTO_DASHBOARD_REFRESH_TZ`           | `Asia/Jakarta`        | Refresh timezone                                                    |
+| `CRYPTO_DASHBOARD_RETAIN_RUNS`          | `0`                   | Keep newest N full runs after refresh                               |
+| `CRYPTO_DASHBOARD_REFRESH_TOKEN`        | unset                 | Required token for `POST /api/refresh`                              |
+| `COINGLASS_API_KEY`                     | unset                 | CoinGlass provider key                                              |
+| `COINGECKO_API_KEY`                     | unset                 | Optional CoinGecko provider key                                     |
 
 Dashboard boot, `/health`, and `/api/dashboard` can work from an existing SQLite database without provider keys. Provider keys are required when the service runs a fresh screener refresh.
 
@@ -387,6 +387,13 @@ npm run check && npm run typecheck && npm test && npm run build
 - `npm run build` -- builds `packages/contracts`, then `apps/api`, then `apps/web`, in that order.
 
 This is the same gate `.github/workflows/deploy-railway.yml` runs before every deploy to Railway.
+
+Git hooks (husky + lint-staged, installed automatically by `npm install`):
+
+- **pre-commit** -- Biome lints and formats the staged JS/TS/JSON/CSS files, fixing what it can and re-staging the result; Prettier formats staged Markdown/YAML, the only formats Biome does not cover.
+- **pre-push** -- `npm run typecheck && npm test`. The build is left to CI.
+
+Use `git commit --no-verify` or `git push --no-verify` to bypass in an emergency.
 
 Local dashboard smoke test:
 
