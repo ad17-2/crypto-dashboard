@@ -10,6 +10,7 @@ import {
   topBy,
 } from '../dashboard/watchlists.js';
 import { runPipeline } from '../pipeline/runPipeline.js';
+import { parseNumberFlag, runIfMain } from './support.js';
 
 /** Port of crypto_screener/cli.py. */
 
@@ -22,17 +23,6 @@ export interface ScreenerCliArgs {
   coinglassCandidateSymbols?: number | undefined;
   noSave: boolean;
   noReports: boolean;
-}
-
-function parseNumberFlag(raw: string | undefined, flag: string): number | undefined {
-  if (raw === undefined) {
-    return undefined;
-  }
-  const parsed = Number(raw);
-  if (Number.isNaN(parsed)) {
-    throw new Error(`invalid value for ${flag}: "${raw}"`);
-  }
-  return parsed;
 }
 
 /** Port of cli.py::parse_args. `--coinglass-candidate-symbols` and its `--max-coinglass-symbols`
@@ -147,9 +137,4 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   return 0;
 }
 
-const isMainModule = import.meta.url === `file://${process.argv[1]}`;
-if (isMainModule) {
-  main().then((code) => {
-    process.exitCode = code;
-  });
-}
+runIfMain(import.meta.url, main);

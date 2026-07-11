@@ -133,12 +133,14 @@ export function derivativesSnapshot(
   return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== null));
 }
 
+/** Shared by the three normalize* functions below: sorts raw rows into chronological order. */
+function sortByTime(rows: RawHistoryRow[]): RawHistoryRow[] {
+  return [...rows].sort((a, b) => (toFloat(a.time, 0.0) ?? 0.0) - (toFloat(b.time, 0.0) ?? 0.0));
+}
+
 function normalizeCloseSeries(rows: RawHistoryRow[]): CloseRow[] {
-  const sorted = [...rows].sort(
-    (a, b) => (toFloat(a.time, 0.0) ?? 0.0) - (toFloat(b.time, 0.0) ?? 0.0),
-  );
   const normalized: CloseRow[] = [];
-  for (const row of sorted) {
+  for (const row of sortByTime(rows)) {
     const time = toFloat(row.time);
     const close = toFloat(row.close);
     if (time === null || close === null) {
@@ -150,11 +152,8 @@ function normalizeCloseSeries(rows: RawHistoryRow[]): CloseRow[] {
 }
 
 function normalizeLiquidations(rows: RawHistoryRow[]): LiquidationRow[] {
-  const sorted = [...rows].sort(
-    (a, b) => (toFloat(a.time, 0.0) ?? 0.0) - (toFloat(b.time, 0.0) ?? 0.0),
-  );
   const normalized: LiquidationRow[] = [];
-  for (const row of sorted) {
+  for (const row of sortByTime(rows)) {
     const time = toFloat(row.time);
     const long = toFloat(row.aggregated_long_liquidation_usd, 0.0) ?? 0.0;
     const short = toFloat(row.aggregated_short_liquidation_usd, 0.0) ?? 0.0;
@@ -167,11 +166,8 @@ function normalizeLiquidations(rows: RawHistoryRow[]): LiquidationRow[] {
 }
 
 function normalizeTaker(rows: RawHistoryRow[]): TakerRow[] {
-  const sorted = [...rows].sort(
-    (a, b) => (toFloat(a.time, 0.0) ?? 0.0) - (toFloat(b.time, 0.0) ?? 0.0),
-  );
   const normalized: TakerRow[] = [];
-  for (const row of sorted) {
+  for (const row of sortByTime(rows)) {
     const time = toFloat(row.time);
     const buy = toFloat(row.aggregated_buy_volume_usd, 0.0) ?? 0.0;
     const sell = toFloat(row.aggregated_sell_volume_usd, 0.0) ?? 0.0;

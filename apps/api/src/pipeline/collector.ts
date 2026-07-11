@@ -317,30 +317,12 @@ export function aggregateCoinglassPairs(
     (toFloat(pair.volume_usd, 0.0) ?? 0.0) > (toFloat(best.volume_usd, 0.0) ?? 0.0) ? pair : best,
   );
   const symbol = baseFromPair(primary, quoteAsset);
-  const totalVolume = filtered.reduce(
-    (sum, pair) => sum + (toFloat(pair.volume_usd, 0.0) ?? 0.0),
-    0,
-  );
-  const totalOi = filtered.reduce(
-    (sum, pair) => sum + (toFloat(pair.open_interest_usd, 0.0) ?? 0.0),
-    0,
-  );
-  const longVolume = filtered.reduce(
-    (sum, pair) => sum + (toFloat(pair.long_volume_usd, 0.0) ?? 0.0),
-    0,
-  );
-  const shortVolume = filtered.reduce(
-    (sum, pair) => sum + (toFloat(pair.short_volume_usd, 0.0) ?? 0.0),
-    0,
-  );
-  const longLiq = filtered.reduce(
-    (sum, pair) => sum + (toFloat(pair.long_liquidation_usd_24h, 0.0) ?? 0.0),
-    0,
-  );
-  const shortLiq = filtered.reduce(
-    (sum, pair) => sum + (toFloat(pair.short_liquidation_usd_24h, 0.0) ?? 0.0),
-    0,
-  );
+  const totalVolume = sumField(filtered, 'volume_usd');
+  const totalOi = sumField(filtered, 'open_interest_usd');
+  const longVolume = sumField(filtered, 'long_volume_usd');
+  const shortVolume = sumField(filtered, 'short_volume_usd');
+  const longLiq = sumField(filtered, 'long_liquidation_usd_24h');
+  const shortLiq = sumField(filtered, 'short_liquidation_usd_24h');
   const funding = weightedAverage(filtered, 'funding_rate', 'open_interest_usd');
 
   return {
@@ -415,6 +397,12 @@ function normalizeCoingeckoCategories(
     .sort((a, b) => (a.market_cap_change_24h_pct ?? 0) - (b.market_cap_change_24h_pct ?? 0))
     .slice(0, limit);
   return { leaders, laggards };
+}
+
+/** Sums a numeric field across rows, treating missing/non-numeric values as 0 (matches
+ * `toFloat(..., 0.0)`'s default), for the plain volume/OI/liquidation totals in the row above. */
+function sumField(rows: CoinGlassPair[], key: string): number {
+  return rows.reduce((sum, row) => sum + (toFloat(row[key], 0.0) ?? 0.0), 0);
 }
 
 function weightedAverage(

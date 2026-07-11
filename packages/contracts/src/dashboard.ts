@@ -17,6 +17,9 @@ import { z } from 'zod';
  * fully typed below per dashboard_rows.py.
  */
 
+/** Opaque JSON blob: dict[str, Any] on the Python side, no fixed schema. */
+const jsonRecord = z.record(z.string(), z.unknown());
+
 // ---------------------------------------------------------------------------
 // Dashboard row (crypto_screener/dashboard_rows.py::dashboard_row)
 // ---------------------------------------------------------------------------
@@ -194,10 +197,10 @@ export const RunSummarySchema = z.object({
   coinglass_status: z.string(),
 });
 
-export const SelectedRunSchema = z.object({
-  run_id: z.string(),
-  generated_at: z.string(),
-  row_count: z.number(),
+export const SelectedRunSchema = RunSummarySchema.pick({
+  run_id: true,
+  generated_at: true,
+  row_count: true,
 });
 
 // ---------------------------------------------------------------------------
@@ -266,11 +269,11 @@ const ModelWeightFactorSchema = z.object({
 
 export const ModelWeightsSchema = z.object({
   mode: z.string().nullable(),
-  regime: z.record(z.string(), z.unknown()),
+  regime: jsonRecord,
   factors: z.array(ModelWeightFactorSchema),
   factor_correlations: z.array(FactorCorrelationSchema),
-  factor_decay: z.record(z.string(), z.unknown()),
-  walk_forward: z.record(z.string(), z.unknown()),
+  factor_decay: jsonRecord,
+  walk_forward: jsonRecord,
 });
 
 // ---------------------------------------------------------------------------
@@ -305,9 +308,6 @@ export const WatchlistSchema = z.object({
 // ---------------------------------------------------------------------------
 // Top-level payload (crypto_screener/dashboard_payload.py::build_dashboard_payload)
 // ---------------------------------------------------------------------------
-
-/** Opaque JSON blob: dict[str, Any] on the Python side, no fixed schema. */
-const jsonRecord = z.record(z.string(), z.unknown());
 
 const DashboardPayloadEmptySchema = z.object({
   status: z.literal('empty'),

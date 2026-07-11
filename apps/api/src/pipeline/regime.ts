@@ -1,4 +1,4 @@
-import { clamp, pyRound, toFloat } from './scoring.js';
+import { clamp, mean, pyRound, toFloat } from './scoring.js';
 import type { MarketContext, PipelineConfig, Row } from './types.js';
 import { asRecord } from './types.js';
 
@@ -111,7 +111,7 @@ function btcChange(rows: Row[], marketContext: MarketContext): number | null {
 
 function avg(values: Array<number | null>): number | null {
   const valid = values.filter((value): value is number => value !== null);
-  return valid.length > 0 ? valid.reduce((sum, value) => sum + value, 0) / valid.length : null;
+  return valid.length > 0 ? mean(valid) : null;
 }
 
 export interface InferredRegime {

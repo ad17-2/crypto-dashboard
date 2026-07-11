@@ -1,5 +1,5 @@
 import { DIRECTIONAL_FACTORS } from './factorDefinitions.js';
-import { clamp, pyRound, toFloat } from './scoring.js';
+import { clamp, mean, pyRound, toFloat } from './scoring.js';
 import type { MarketContext, PipelineConfig, Row } from './types.js';
 import { asRecord } from './types.js';
 
@@ -315,9 +315,7 @@ function avgSignal(values: unknown[]): number | null {
   const numeric = values
     .map((value) => toFloat(value))
     .filter((value): value is number => value !== null);
-  return numeric.length > 0
-    ? numeric.reduce((sum, value) => sum + value, 0) / numeric.length
-    : null;
+  return numeric.length > 0 ? mean(numeric) : null;
 }
 
 function conflictItem(

@@ -15,6 +15,7 @@ import type { CoinGlassClient } from '../providers/coinglass.js';
 import { CoinGlassHttpClient } from '../providers/coinglass.js';
 import { ProviderError } from '../providers/errors.js';
 import { sleep } from '../providers/http.js';
+import { parseNumberFlag, runIfMain } from './support.js';
 
 /** Port of crypto_screener/backfill.py. */
 
@@ -26,17 +27,6 @@ export interface BackfillCliArgs {
   minCrossSection: number;
   requestDelaySeconds?: number | undefined;
   dryRun: boolean;
-}
-
-function parseNumberFlag(raw: string | undefined, flag: string): number | undefined {
-  if (raw === undefined) {
-    return undefined;
-  }
-  const parsed = Number(raw);
-  if (Number.isNaN(parsed)) {
-    throw new Error(`invalid value for ${flag}: "${raw}"`);
-  }
-  return parsed;
 }
 
 /** Port of backfill.py::parse_args. */
@@ -472,9 +462,4 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   return 0;
 }
 
-const isMainModule = import.meta.url === `file://${process.argv[1]}`;
-if (isMainModule) {
-  main().then((code) => {
-    process.exitCode = code;
-  });
-}
+runIfMain(import.meta.url, main);

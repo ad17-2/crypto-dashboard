@@ -136,6 +136,16 @@ export class CoinGlassHttpClient implements CoinGlassClient {
     return record.data;
   }
 
+  /** Shared tail of every list-returning endpoint below: fetch, then coerce a non-array payload
+   * to `[]` rather than throwing. */
+  private async getJsonArray(
+    path: string,
+    params?: QueryParams,
+  ): Promise<Record<string, unknown>[]> {
+    const data = await this.getJson(path, params);
+    return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+  }
+
   async supportedExchangePairs(exchange?: string): Promise<Record<string, CoinGlassPair[]>> {
     const data = await this.getJson(
       '/api/futures/supported-exchange-pairs',
@@ -154,8 +164,7 @@ export class CoinGlassHttpClient implements CoinGlassClient {
   }
 
   async futuresPairsMarkets(symbol: string): Promise<CoinGlassPair[]> {
-    const data = await this.getJson('/api/futures/pairs-markets', { symbol });
-    return Array.isArray(data) ? (data as CoinGlassPair[]) : [];
+    return this.getJsonArray('/api/futures/pairs-markets', { symbol });
   }
 
   async priceHistory(
@@ -166,7 +175,7 @@ export class CoinGlassHttpClient implements CoinGlassClient {
     startTime?: number,
     endTime?: number,
   ): Promise<CoinGlassHistoryRow[]> {
-    const data = await this.getJson('/api/futures/price/history', {
+    return this.getJsonArray('/api/futures/price/history', {
       exchange,
       symbol,
       interval,
@@ -174,7 +183,6 @@ export class CoinGlassHttpClient implements CoinGlassClient {
       start_time: startTime,
       end_time: endTime,
     });
-    return Array.isArray(data) ? (data as CoinGlassHistoryRow[]) : [];
   }
 
   async openInterestAggregatedHistory(
@@ -185,7 +193,7 @@ export class CoinGlassHttpClient implements CoinGlassClient {
     startTime?: number,
     endTime?: number,
   ): Promise<CoinGlassHistoryRow[]> {
-    const data = await this.getJson('/api/futures/open-interest/aggregated-history', {
+    return this.getJsonArray('/api/futures/open-interest/aggregated-history', {
       symbol,
       interval,
       limit,
@@ -193,7 +201,6 @@ export class CoinGlassHttpClient implements CoinGlassClient {
       start_time: startTime,
       end_time: endTime,
     });
-    return Array.isArray(data) ? (data as CoinGlassHistoryRow[]) : [];
   }
 
   async fundingOiWeightHistory(
@@ -203,14 +210,13 @@ export class CoinGlassHttpClient implements CoinGlassClient {
     startTime?: number,
     endTime?: number,
   ): Promise<CoinGlassHistoryRow[]> {
-    const data = await this.getJson('/api/futures/funding-rate/oi-weight-history', {
+    return this.getJsonArray('/api/futures/funding-rate/oi-weight-history', {
       symbol,
       interval,
       limit,
       start_time: startTime,
       end_time: endTime,
     });
-    return Array.isArray(data) ? (data as CoinGlassHistoryRow[]) : [];
   }
 
   async liquidationAggregatedHistory(
@@ -221,7 +227,7 @@ export class CoinGlassHttpClient implements CoinGlassClient {
     startTime?: number,
     endTime?: number,
   ): Promise<CoinGlassHistoryRow[]> {
-    const data = await this.getJson('/api/futures/liquidation/aggregated-history', {
+    return this.getJsonArray('/api/futures/liquidation/aggregated-history', {
       exchange_list: exchangeList.join(','),
       symbol,
       interval,
@@ -229,7 +235,6 @@ export class CoinGlassHttpClient implements CoinGlassClient {
       start_time: startTime,
       end_time: endTime,
     });
-    return Array.isArray(data) ? (data as CoinGlassHistoryRow[]) : [];
   }
 
   async aggregatedTakerBuySellHistory(
@@ -241,7 +246,7 @@ export class CoinGlassHttpClient implements CoinGlassClient {
     startTime?: number,
     endTime?: number,
   ): Promise<CoinGlassHistoryRow[]> {
-    const data = await this.getJson('/api/futures/aggregated-taker-buy-sell-volume/history', {
+    return this.getJsonArray('/api/futures/aggregated-taker-buy-sell-volume/history', {
       exchange_list: exchangeList.join(','),
       symbol,
       interval,
@@ -250,7 +255,6 @@ export class CoinGlassHttpClient implements CoinGlassClient {
       start_time: startTime,
       end_time: endTime,
     });
-    return Array.isArray(data) ? (data as CoinGlassHistoryRow[]) : [];
   }
 
   async globalLongShortAccountRatioHistory(
@@ -261,7 +265,7 @@ export class CoinGlassHttpClient implements CoinGlassClient {
     startTime?: number,
     endTime?: number,
   ): Promise<CoinGlassHistoryRow[]> {
-    const data = await this.getJson('/api/futures/global-long-short-account-ratio/history', {
+    return this.getJsonArray('/api/futures/global-long-short-account-ratio/history', {
       exchange,
       symbol,
       interval,
@@ -269,7 +273,6 @@ export class CoinGlassHttpClient implements CoinGlassClient {
       start_time: startTime,
       end_time: endTime,
     });
-    return Array.isArray(data) ? (data as CoinGlassHistoryRow[]) : [];
   }
 
   async topLongShortAccountRatioHistory(
@@ -280,7 +283,7 @@ export class CoinGlassHttpClient implements CoinGlassClient {
     startTime?: number,
     endTime?: number,
   ): Promise<CoinGlassHistoryRow[]> {
-    const data = await this.getJson('/api/futures/top-long-short-account-ratio/history', {
+    return this.getJsonArray('/api/futures/top-long-short-account-ratio/history', {
       exchange,
       symbol,
       interval,
@@ -288,6 +291,5 @@ export class CoinGlassHttpClient implements CoinGlassClient {
       start_time: startTime,
       end_time: endTime,
     });
-    return Array.isArray(data) ? (data as CoinGlassHistoryRow[]) : [];
   }
 }

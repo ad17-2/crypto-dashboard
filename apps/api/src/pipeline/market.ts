@@ -94,7 +94,7 @@ export function breadthSummary(rows: Row[], marketContext: MarketContext): Recor
   const advancerPct = (advancers / priceChanges.length) * 100.0;
   const declinerPct = (decliners / priceChanges.length) * 100.0;
   const priceBreadthScore = (advancerPct - declinerPct) / 100.0;
-  const avgReturn = priceChanges.reduce((sum, value) => sum + value, 0) / priceChanges.length;
+  const avgReturn = mean(priceChanges);
   const avgReturnScore = clamp(avgReturn / 4.0, -1.0, 1.0);
   const weightedReturnScore = clamp((weightedReturn ?? avgReturn) / 4.0, -1.0, 1.0);
 
