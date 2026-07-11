@@ -6,15 +6,14 @@ import { openDatabase } from '../../src/db/client.js';
 import { loadPriceLookback } from '../../src/db/factorHistory.js';
 import { formatJakartaIso } from '../../src/db/time.js';
 
-// Ported one-for-one from tests/test_dashboard.py::StorageLookbackTests, which
-// pins the horizon-matching behavior of storage.py's load_price_lookback:
-// an asymmetric 0.75x-1.5x tolerance band, matched to the candidate nearest
-// the REQUESTED horizon itself (not the midpoint of the tolerance band).
+// Pins the horizon-matching behavior of loadPriceLookback: an asymmetric 0.75x-1.5x tolerance
+// band, matched to the candidate nearest the REQUESTED horizon itself (not the midpoint of the
+// tolerance band).
 //
-// Fixtures use the same +07:00-offset string format real production rows
-// use (via formatJakartaIso), not raw Date#toISOString()'s "Z" suffix --
-// load_price_lookback's SQL bounds are compared lexically, so mixing offset
-// conventions in a test would silently stop exercising that real behavior.
+// Fixtures use the same +07:00-offset string format real production rows use (via
+// formatJakartaIso), not raw Date#toISOString()'s "Z" suffix -- loadPriceLookback's SQL bounds
+// are compared lexically, so mixing offset conventions in a test would silently stop exercising
+// that real behavior.
 
 let dir: string;
 let dbPath: string;

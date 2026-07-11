@@ -63,7 +63,6 @@ The main model uses:
 - Price plus open-interest confirmation.
 - Funding and long/short crowding.
 - Liquidation imbalance.
-- BTC-relative strength.
 - 4h technical trend and momentum.
 - Historical OI, funding, liquidation, and taker-flow confirmation.
 - Market breadth and sector rotation.
@@ -80,7 +79,7 @@ The model starts with liquidity and data quality. Thin or malformed markets can 
 
 After quality checks, the screener builds a cross-sectional view of the current futures universe. Each symbol is compared against the rest of the market instead of judged in isolation. That matters because a `+4%` move can mean very different things when the whole tape is up `+6%` versus when most coins are red. The model normalizes factor values so that momentum, reversal, open-interest behavior, funding, long/short crowding, technical state, and derivatives pressure can be combined without one raw unit dominating the score.
 
-The directional read asks a simple question: is this symbol showing useful long or short pressure relative to the rest of the market? Price plus open interest is the first layer. Rising price with rising OI can mean fresh participation; falling price with rising OI can mean active downside positioning. Reversal factors look for stretched one-day moves. BTC-relative strength asks whether the symbol is actually leading or just following the benchmark.
+The directional read asks a simple question: is this symbol showing useful long or short pressure relative to the rest of the market? Price plus open interest is the first layer. Rising price with rising OI can mean fresh participation; falling price with rising OI can mean active downside positioning. Reversal factors look for stretched three-day moves that are due to cool off.
 
 The crowding read is deliberately separate. Positive funding, aggressive long/short ratios, and one-sided liquidation context can identify crowded longs. Negative funding and short-heavy positioning can identify squeeze risk. These are not automatic contrarian trades. They are warnings that the market structure may be fragile and should be reviewed differently.
 
@@ -104,26 +103,23 @@ That is the intended edge: reduce the market to a defensible review queue, make 
 
 ## Requirements
 
-- Python 3.10 or newer.
-- Runtime dependencies from `requirements.txt`.
+- Node.js >= 20.9 (see `package.json`'s `engines` field).
+- npm workspaces -- this repo is a single npm workspace tree: `apps/api`, `apps/web`, and `packages/contracts`.
 - CoinGlass API key for fresh futures collection.
 - Optional CoinGecko API key.
 - Optional Railway CLI for cloud deployment and SQLite sync.
 
-Runtime dependencies are intentionally small:
-
-- `httpx` for provider HTTP clients.
-- `pydantic` for config and payload validation.
+`apps/api`'s runtime dependencies are intentionally small: `express` for the HTTP server, `better-sqlite3` for storage, and `zod` for config and payload validation (the same schemas are shared with `apps/web` via `packages/contracts`).
 
 No exchange account or trading API key is needed.
 
 ## Setup
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r requirements.txt
+npm install
 ```
+
+npm workspaces installs `apps/api`, `apps/web`, and `packages/contracts` from the repo root in one shot -- there is no separate per-package install step.
 
 Provider keys:
 
@@ -134,16 +130,25 @@ export COINGECKO_API_KEY="..." # optional
 
 ## Run The Screener
 
-Normal report-producing run:
+The screener CLI lives at `apps/api/src/cli/screener.ts` and is published as the `crypto-screener` bin once `apps/api` is built.
+
+Normal report-producing run, against the built JS:
 
 ```bash
-python -m crypto_screener.cli --config config/default.json --out-dir reports
+npm run build
+node apps/api/dist/cli/screener.js --config config/default.json --out-dir reports
+```
+
+Or run straight from source during development, via `tsx`:
+
+```bash
+npx tsx apps/api/src/cli/screener.ts --config config/default.json --out-dir reports
 ```
 
 Dashboard-only run, with no Markdown/JSON/CSV artifacts:
 
 ```bash
-python -m crypto_screener.cli \
+node apps/api/dist/cli/screener.js \
   --config config/default.json \
   --out-dir reports \
   --no-reports
@@ -152,7 +157,7 @@ python -m crypto_screener.cli \
 Fast smoke run without saving history:
 
 ```bash
-python -m crypto_screener.cli \
+node apps/api/dist/cli/screener.js \
   --config config/default.json \
   --out-dir reports \
   --top-symbols 25 \
@@ -162,7 +167,7 @@ python -m crypto_screener.cli \
   --no-save
 ```
 
-Expected CLI summary shape:
+Expected CLI summary shape (verified against `apps/api/src/cli/screener.ts`'s `main()`):
 
 ```text
 run_id=YYYYMMDD-HHMMSS-abcdef12
@@ -176,55 +181,57 @@ crowded_longs=4
 squeeze_risks=9
 ```
 
-Useful CLI flags:
+`reports=skipped` is printed when no report files were written (e.g. `--no-reports`); otherwise one `{label}={path}` line is printed per report file, in write order.
+
+CLI flags:
 
 ```text
---config PATH
---out-dir DIR
+--config PATH                          default config/default.json
+--out-dir DIR                          default reports
 --top-symbols N
 --report-limit N
 --min-quote-volume-usd N
---coinglass-candidate-symbols N
+--coinglass-candidate-symbols N        alias: --max-coinglass-symbols (same destination)
 --no-save
 --no-reports
 ```
 
 ## Dashboard
 
-Run locally:
+Run apps/api and apps/web together for local dev:
 
 ```bash
-python -m crypto_screener.dashboard
+npm run dev
 ```
 
-Open:
+This starts apps/api's Express server on `127.0.0.1:$API_PORT` (default `4000`, internal only) and apps/web's Next.js dev server on `$PORT` (default `3000`) as sibling processes. Open:
 
 ```text
-http://127.0.0.1:8080/
+http://localhost:3000/
 ```
 
-The dashboard is a stdlib Python HTTP server with packaged HTML, CSS, and JavaScript. It reads SQLite directly and does not need a frontend build.
+`apps/web`'s `next.config.ts` rewrites `/api/*` and `/health` to the Express origin (`API_BASE_URL`, default `http://127.0.0.1:4000`), so the dashboard UI, `/health`, and `/api/dashboard` are all reachable from the single public port.
 
-Main routes:
+Routes:
 
 ```text
-GET  /                         HTML dashboard
-GET  /assets/dashboard.css     Stylesheet
-GET  /assets/dashboard.js      JavaScript
-GET  /health                   Health and database status
-GET  /api/dashboard            Latest dashboard payload
-GET  /api/dashboard?run_id=... Specific run payload
-POST /api/refresh              Protected manual refresh
+GET  /                          HTML dashboard (Next.js)
+GET  /health                    {"status":"ok","database_exists":bool,"refresh":{...}}
+GET  /api/dashboard              Latest dashboard payload
+GET  /api/dashboard?run_id=...   Specific run payload
+POST /api/refresh                Protected manual refresh
 ```
 
-Use `GET` for health checks. Some Railway hosts do not handle `HEAD` reliably.
+`/health` only implements `GET` (see `apps/api/src/http/routes/health.ts`) -- use `GET`, not `HEAD`, for health checks.
+
+`POST /api/refresh` is default-deny: it returns `403` unless `CRYPTO_DASHBOARD_REFRESH_TOKEN` is set *and* the request supplies it via an `X-Refresh-Token` header or an `Authorization: Bearer` header.
 
 Dashboard environment:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PORT` | `8080` | Web port |
-| `HOST` | `0.0.0.0` | Bind host |
+| `API_PORT` | `4000` | Port apps/api's Express server binds on `127.0.0.1` (internal only) |
+| `PORT` | `3000` locally | Port apps/web (Next.js) binds on; public in production |
 | `CRYPTO_SCREENER_CONFIG` | `config/default.json` | Config path |
 | `CRYPTO_SCREENER_DB_PATH` | Config `storage_path` | SQLite path |
 | `CRYPTO_SCREENER_REPORT_DIR` | `reports` | Runtime work directory |
@@ -234,18 +241,26 @@ Dashboard environment:
 | `CRYPTO_DASHBOARD_REFRESH_TZ` | `Asia/Jakarta` | Refresh timezone |
 | `CRYPTO_DASHBOARD_RETAIN_RUNS` | `0` | Keep newest N full runs after refresh |
 | `CRYPTO_DASHBOARD_REFRESH_TOKEN` | unset | Required token for `POST /api/refresh` |
+| `COINGLASS_API_KEY` | unset | CoinGlass provider key |
+| `COINGECKO_API_KEY` | unset | Optional CoinGecko provider key |
+
+Dashboard boot, `/health`, and `/api/dashboard` can work from an existing SQLite database without provider keys. Provider keys are required when the service runs a fresh screener refresh.
 
 ## Railway
 
-`railway.json` deploys the dashboard with:
+One Railway service (`crypto-dashboard`), with a volume mounted at `/data`.
 
-```bash
-python -m crypto_screener.dashboard
-```
+`nixpacks.toml` sets `providers = ["node"]`, `NIXPACKS_NODE_VERSION = "22"`, and `NPM_CONFIG_PRODUCTION = "false"` -- devDependencies must survive install because the build needs `typescript`, Tailwind, and Next's toolchain.
 
-The Railway healthcheck path is `/health`. Runtime dependencies install from `requirements.txt`; `.python-version` pins the Railway/GitHub runtime to Python 3.11.
+`railway.json`:
 
-Deploy:
+- `build.buildCommand`: `npm run build` (must NOT re-run `npm ci` -- that fails with `EBUSY` on the mounted `node_modules/.cache`).
+- `deploy.startCommand`: `npm start`, which runs `scripts/start.mjs` -- the production supervisor that spawns `apps/api/dist/server.js` and `next start -p $PORT` (apps/web) as sibling processes, forwards `SIGTERM`/`SIGINT` to both, and exits non-zero the instant either one dies so Railway's restart policy kicks in.
+- `deploy.healthcheckPath`: `/health`.
+
+`.github/workflows/deploy-railway.yml` runs the test job (`npm ci --include=dev`, `npm run check`, `npm run typecheck`, `npm test`, `npm run build`) then `railway up` on every push to `main`.
+
+Manual deploy:
 
 ```bash
 railway up --detach --message "Update crypto dashboard"
@@ -275,97 +290,111 @@ CRYPTO_DASHBOARD_REFRESH_TZ=Asia/Jakarta
 CRYPTO_DASHBOARD_RETAIN_RUNS=1
 ```
 
-Dashboard boot, `/health`, static assets, and `/api/dashboard` can work from an existing SQLite database without provider keys. Provider keys are required when the service runs a fresh screener refresh.
-
 ## Local Run, Cloud Dashboard
 
 A common operating mode is to run the screener locally, then sync SQLite to Railway:
 
 ```bash
-python -m crypto_screener.cli --config config/default.json --out-dir reports --no-reports
+npm run build
+node apps/api/dist/cli/screener.js --config config/default.json --out-dir reports --no-reports
 scripts/sync_sqlite_to_railway.sh data/crypto_screener.sqlite3
 ```
 
-The sync script uploads the local SQLite database over `railway ssh`, checks the remote temporary DB with `pragma quick_check`, then atomically moves it into `CRYPTO_SCREENER_DB_PATH`.
+The sync script gzip+base64-chunks the local SQLite database up over `railway ssh`, verifies the remote temporary file with better-sqlite3's `pragma quick_check` integrity check, then atomically moves it into `CRYPTO_SCREENER_DB_PATH`.
 
 ## Backfill
 
 Backfill writes compact factor history only. It does not create fake dashboard runs.
 
-Dry run:
+The backfill CLI lives at `apps/api/src/cli/backfill.ts` and is published as the `crypto-screener-backfill` bin once `apps/api` is built.
+
+Dry run, against the built JS:
 
 ```bash
-python -m crypto_screener.backfill --config config/default.json --dry-run
+npm run build
+node apps/api/dist/cli/backfill.js --config config/default.json --dry-run
+```
+
+Or from source during development:
+
+```bash
+npx tsx apps/api/src/cli/backfill.ts --config config/default.json --dry-run
 ```
 
 Specific symbols:
 
 ```bash
-python -m crypto_screener.backfill \
+node apps/api/dist/cli/backfill.js \
   --config config/default.json \
   --symbols BTC,ETH,SOL,SUI,HYPE,LINK \
   --interval 4h \
   --limit 220
 ```
 
+CLI flags:
+
+```text
+--config PATH                default config/default.json
+--symbols SYM,SYM,...
+--interval INTERVAL
+--limit N
+--min-cross-section N         default 3
+--request-delay-seconds N
+--dry-run
+```
+
 ## Project Structure
 
 ```text
-config/default.json        Main config
-crypto_screener/cli.py     CLI entrypoint
-crypto_screener/pipeline.py
-crypto_screener/collector.py
-crypto_screener/factors.py
-crypto_screener/report.py
-crypto_screener/storage.py
-crypto_screener/dashboard.py
-crypto_screener/dashboard_static/
-scripts/sync_sqlite_to_railway.sh
-tests/
+apps/api/src/
+  cli/                  screener.ts, backfill.ts CLIs (+ shared support.ts helpers)
+  config/                config loading + schema (config/default.json contract)
+  dashboard/              dashboard payload builder, row shaping, watchlists, freshness
+  db/                     better-sqlite3 client, schema, runs/factor-history persistence
+  http/                   Express app + routes (health, dashboard, refresh)
+  pipeline/               collector, factors, scoring, regime, IC weighting, validation, technicals
+  providers/              CoinGlass and CoinGecko HTTP clients
+  refresh/                refresh runtime + scheduler (interval and daily-time triggers)
+  reports/                Markdown/JSON/CSV report writers
+  env.ts                  process.env loading + validation
+  server.ts               process entrypoint (opens DB, starts scheduler, listens on 127.0.0.1:API_PORT)
+apps/api/tests/           vitest suite, including the two parity gates and tests/fixtures/
+apps/web/app/             Next.js App Router pages, layout, globals.css
+apps/web/components/       dashboard UI components (layout/, context/, watchlist/)
+packages/contracts/src/    zod schemas + shared TS types for the wire payload
+scripts/start.mjs          production supervisor (spawns apps/api + `next start -p $PORT`)
+scripts/sync_sqlite_to_railway.sh   local-DB -> Railway sync script
+config/default.json        main config
+data/crypto_screener.sqlite3   SQLite database
 railway.json
-pyproject.toml
-requirements.txt
+nixpacks.toml
+package.json                npm workspaces root
 ```
 
-The code is split around stable boundaries:
-
-- Provider clients: `coinglass.py`, `coingecko.py`.
-- Collection/enrichment: `collector.py`, `coinglass_enrichment.py`, `coinglass_pairs.py`.
-- Scoring: `factors.py`, `factor_definitions.py`, `factor_explanations.py`, `scoring.py`.
-- Dashboard shaping: `dashboard_payload.py`, `dashboard_rows.py`, `dashboard_taxonomy.py`, `dashboard_freshness.py`.
-- Persistence: `storage.py`.
+The SQLite schema is unchanged from the previous implementation -- same four tables (`runs`, `market_rows`, `factor_history`, `market_regime_history`) -- so an existing database keeps working. Pruning (`CRYPTO_DASHBOARD_RETAIN_RUNS`) only ever deletes from `runs` and `market_rows`; it never touches `factor_history` or `market_regime_history`, because the IC / decay / walk-forward engine depends on the full, unpruned history.
 
 ## Development
-
-Install dev tools:
-
-```bash
-python -m pip install -e ".[dev]"
-```
 
 Run the local gate:
 
 ```bash
-python -m unittest discover -s tests -v
-python -m py_compile crypto_screener/*.py
-node --check crypto_screener/dashboard_static/dashboard.js
-python -m ruff check .
-python -m ruff format --check .
-python -m mypy crypto_screener
+npm run check && npm run typecheck && npm test && npm run build
 ```
 
-Local dashboard smoke:
+- `npm run check` / `npm run check:fix` -- Biome handles lint and format in one tool (2-space indent, single quotes, 100-column width; see `biome.json`).
+- `npm run typecheck` -- runs each workspace's `typecheck` script (`tsc --noEmit`).
+- `npm test` -- `vitest run`, covering apps/api's suite, including the two parity gates under `apps/api/tests/`.
+- `npm run build` -- builds `packages/contracts`, then `apps/api`, then `apps/web`, in that order.
+
+This is the same gate `.github/workflows/deploy-railway.yml` runs before every deploy to Railway.
+
+Local dashboard smoke test:
 
 ```bash
-PORT=8097 HOST=127.0.0.1 python -m crypto_screener.dashboard
-curl -fsS http://127.0.0.1:8097/health
-curl -fsS http://127.0.0.1:8097/
-curl -fsS http://127.0.0.1:8097/assets/dashboard.css
-curl -fsS http://127.0.0.1:8097/assets/dashboard.js
-curl -fsS http://127.0.0.1:8097/api/dashboard
+npm run dev
+curl -fsS http://localhost:3000/health
+curl -fsS http://localhost:3000/api/dashboard
 ```
-
-GitHub Actions runs the same dependency install, unit tests, Python compile check, Ruff, mypy, and dashboard JavaScript syntax check before Railway deploy.
 
 ## Security
 

@@ -1,5 +1,3 @@
-/** Port of crypto_screener/factor_definitions.py. */
-
 /**
  * The canonical directional factor list. `btc_relative_strength` and `reversal_1d` are RETIRED
  * (collinearity bug: btc_relative_strength == momentum_24h, reversal_1d == -momentum_24h) and must

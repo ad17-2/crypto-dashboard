@@ -3,9 +3,6 @@ import { rawFactors, scoreSnapshot } from '../../src/pipeline/factors.js';
 import type { Row } from '../../src/pipeline/types.js';
 import { factorWeights } from '../../src/pipeline/weighting.js';
 
-/** Port of tests/test_scoring.py's factor-engine tests (the math-primitive-only tests in that
- * file are ported separately in scoringMath.test.ts). */
-
 describe('factorWeights', () => {
   it('falls back to prior weights without history (test_prior_weights_without_history)', () => {
     const config = { factors: { min_observations: 30 } };

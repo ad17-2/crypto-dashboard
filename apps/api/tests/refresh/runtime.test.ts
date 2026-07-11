@@ -7,9 +7,6 @@ import { AppConfigSchema } from '../../src/config/schema.js';
 import { openDatabase } from '../../src/db/client.js';
 import { RefreshRuntime } from '../../src/refresh/runtime.js';
 
-/** Port of the RefreshRuntime half of tests/test_dashboard.py, notably
- * test_dashboard_refresh_saves_sqlite_without_report_files. */
-
 let dir: string;
 let dbPath: string;
 let db: Database.Database;

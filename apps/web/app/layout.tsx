@@ -9,9 +9,9 @@ export const metadata: Metadata = {
 };
 
 /**
- * Ported verbatim from crypto_screener/dashboard_static/index.html's inline <head> script. Runs
- * via next/script's beforeInteractive strategy, which Next.js injects into <head> and executes
- * before hydration — so `data-theme` is already correct on <html> by first paint, no flash.
+ * Runs via next/script's beforeInteractive strategy, which Next.js injects into <head> and
+ * executes before hydration — so `data-theme` is already correct on <html> by first paint, no
+ * flash of the wrong theme.
  */
 const THEME_INIT_SCRIPT = `
 (function () {

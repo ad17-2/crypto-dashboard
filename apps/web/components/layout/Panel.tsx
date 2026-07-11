@@ -17,10 +17,9 @@ export interface PanelProps {
 }
 
 /**
- * Shared panel chrome: a bordered, titled card with an optional right-aligned meta slot. Ports
- * the legacy dashboard's two panel skins — plain `.panel` (Watchlist, Selected Coin) and accented
- * `.module-panel` (the bottom context panels) — as one component so every section stays visually
- * consistent.
+ * Shared panel chrome: a bordered, titled card with an optional right-aligned meta slot. Unifies
+ * the plain `.panel` skin (Watchlist, Selected Coin) and the accented `.module-panel` skin (the
+ * bottom context panels) into one component so every section stays visually consistent.
  */
 export function Panel({ title, meta, accent, id, className, children, ...rest }: PanelProps) {
   const shellClassName = [

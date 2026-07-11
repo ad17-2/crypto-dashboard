@@ -5,9 +5,8 @@ import { recordRegimeHistory } from './regimeHistory.js';
 import type { PruneResult, SnapshotPayload } from './types.js';
 
 /**
- * Mirrors storage.py's `save_snapshot`: upserts the `runs` row, upserts
- * `market_rows` + `factor_history` for every row in the payload, and appends
- * a `market_regime_history` entry, all in one transaction.
+ * Upserts the `runs` row, upserts `market_rows` + `factor_history` for every row in the payload,
+ * and appends a `market_regime_history` entry, all in one transaction.
  */
 export function saveSnapshot(
   db: Database.Database,
@@ -67,13 +66,12 @@ export function saveSnapshot(
 }
 
 /**
- * Mirrors storage.py's `prune_old_runs`: deletes from `runs` and
- * `market_rows` ONLY, keeping the `keep` most recent runs by `generated_at`.
+ * Deletes from `runs` and `market_rows` ONLY, keeping the `keep` most recent runs by
+ * `generated_at`.
  *
- * factor_history and market_regime_history are NEVER touched here -- the
- * IC / decay / walk-forward engine depends on the full, unpruned
- * factor_history series. Do not add deletes for them, and do not add
- * ON DELETE CASCADE to the schema.
+ * factor_history and market_regime_history are NEVER touched here — the IC / decay / walk-forward
+ * engine depends on the full, unpruned factor_history series. Do not add deletes for them, and do
+ * not add ON DELETE CASCADE to the schema.
  */
 export function pruneOldRuns(db: Database.Database, keep: number): PruneResult {
   if (keep <= 0) {

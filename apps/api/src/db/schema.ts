@@ -1,14 +1,11 @@
 import type Database from 'better-sqlite3';
 
 /**
- * DDL mirrors crypto_screener/storage.py::ensure_schema exactly (table names,
- * column names, types, defaults, PRIMARY/FOREIGN KEYs, indexes). The existing
- * production database was created by that Python code, so this must stay
- * byte-compatible: CREATE TABLE IF NOT EXISTS is idempotent against an
- * already-populated database and never rewrites existing rows.
+ * CREATE TABLE IF NOT EXISTS is idempotent against the existing production database and never
+ * rewrites existing rows.
  *
- * factor_history deliberately has NO FOREIGN KEY on run_id — backfill jobs
- * write factor_history rows with no matching runs row. Do not add one.
+ * factor_history deliberately has NO FOREIGN KEY on run_id — backfill jobs write factor_history
+ * rows with no matching runs row. Do not add one.
  */
 const DDL = `
 CREATE TABLE IF NOT EXISTS runs (
@@ -68,10 +65,8 @@ CREATE INDEX IF NOT EXISTS idx_market_regime_history_time
 `;
 
 /**
- * Creates all tables/indexes if missing, then applies the same legacy
- * ALTER TABLE ADD COLUMN migration storage.py runs on every connect() so
- * older database files (created before regime_json/factor_weights_json
- * existed on `runs`) get the missing columns without losing data.
+ * Creates all tables/indexes if missing, then adds any legacy `runs` columns
+ * (regime_json, factor_weights_json) that older database files predate.
  */
 export function ensureSchema(db: Database.Database): void {
   db.exec(DDL);

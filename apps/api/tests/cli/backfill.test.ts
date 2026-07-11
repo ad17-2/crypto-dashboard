@@ -14,9 +14,6 @@ import type { FactorHistoryRecordInput } from '../../src/db/types.js';
 import type { Row } from '../../src/pipeline/types.js';
 import { ProviderError } from '../../src/providers/errors.js';
 
-/** Port of tests/test_backfill.py. */
-
-// Mirrors tests/test_backfill.py::synthetic_histories.
 function syntheticHistories(basePrice: number): BackfillHistories {
   const price: Record<string, unknown>[] = [];
   const oi: Record<string, unknown>[] = [];

@@ -1,5 +1,7 @@
 'use server';
 
+import { errorMessage } from './errors';
+
 /**
  * Server Actions must live in their own "use server" file when they're called from Client
  * Components (Next.js forbids inline `'use server'` functions inside a module that also ends up
@@ -18,10 +20,9 @@ export type RefreshResult =
 
 /**
  * Server action backing the Reload button. POSTs /api/refresh with the refresh token forwarded as
- * `X-Refresh-Token` (parity with crypto_screener/dashboard.py::_refresh_allowed). The token is a
- * server-only secret — apps/web and apps/api run as sibling processes sharing one env (see
- * scripts/start.mjs), so CRYPTO_DASHBOARD_REFRESH_TOKEN is readable here without ever reaching the
- * browser.
+ * `X-Refresh-Token`. The token is a server-only secret — apps/web and apps/api run as sibling
+ * processes sharing one env (see scripts/start.mjs), so CRYPTO_DASHBOARD_REFRESH_TOKEN is readable
+ * here without ever reaching the browser.
  */
 export async function triggerRefresh(): Promise<RefreshResult> {
   const token = process.env.CRYPTO_DASHBOARD_REFRESH_TOKEN;
@@ -58,8 +59,4 @@ export async function triggerRefresh(): Promise<RefreshResult> {
   }
 
   return { ok: true, status: response.status, body };
-}
-
-function errorMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
 }

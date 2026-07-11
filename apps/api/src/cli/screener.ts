@@ -12,8 +12,6 @@ import {
 import { runPipeline } from '../pipeline/runPipeline.js';
 import { parseNumberFlag, runIfMain } from './support.js';
 
-/** Port of crypto_screener/cli.py. */
-
 export interface ScreenerCliArgs {
   config: string;
   outDir: string;
@@ -25,8 +23,7 @@ export interface ScreenerCliArgs {
   noReports: boolean;
 }
 
-/** Port of cli.py::parse_args. `--coinglass-candidate-symbols` and its `--max-coinglass-symbols`
- * alias share one destination, exactly like argparse's two option strings for one `dest`. */
+/** `--coinglass-candidate-symbols` and its `--max-coinglass-symbols` alias share one destination. */
 export function parseCliArgs(argv: string[]): ScreenerCliArgs {
   const { values } = nodeParseArgs({
     args: argv,
@@ -63,8 +60,7 @@ export function parseCliArgs(argv: string[]): ScreenerCliArgs {
   };
 }
 
-/** Port of cli.py::apply_overrides. `config` is already fully defaulted by zod, so this mutates
- * the relevant fields directly instead of Python's `dict.setdefault` dance. */
+/** `config` is already fully defaulted by zod, so this mutates the relevant fields directly. */
 export function applyOverrides(config: AppConfig, args: ScreenerCliArgs): AppConfig {
   if (args.topSymbols !== undefined) {
     config.universe.top_symbols_by_volume = args.topSymbols;
@@ -81,8 +77,7 @@ export function applyOverrides(config: AppConfig, args: ScreenerCliArgs): AppCon
   return config;
 }
 
-/** Mirrors Python's implicit f-string `str()` conversion for a `dict.get(key)` result (`None` for
- * a missing key, printed as the literal text `None`). */
+/** null/undefined -> 'None', booleans -> 'True'/'False', everything else -> its plain string form. */
 function pyStr(value: unknown): string {
   if (value === null || value === undefined) {
     return 'None';
@@ -94,9 +89,9 @@ function pyStr(value: unknown): string {
 }
 
 /**
- * Port of cli.py::main. Its stdout contract is locked by tests/test_cli.py: same keys, same
- * order, `reports=skipped` when no report files were written, else one `{label}={path}` line per
- * report file in `paths` insertion order.
+ * The stdout contract is locked by tests/cli/screener.test.ts: same keys, same order,
+ * `reports=skipped` when no report files were written, else one `{label}={path}` line per report
+ * file in `paths` insertion order.
  */
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   const args = parseCliArgs(argv);

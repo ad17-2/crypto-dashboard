@@ -17,8 +17,6 @@ import { ProviderError } from '../providers/errors.js';
 import { sleep } from '../providers/http.js';
 import { parseNumberFlag, runIfMain } from './support.js';
 
-/** Port of crypto_screener/backfill.py. */
-
 export interface BackfillCliArgs {
   config: string;
   symbols?: string | undefined;
@@ -29,7 +27,6 @@ export interface BackfillCliArgs {
   dryRun: boolean;
 }
 
-/** Port of backfill.py::parse_args. */
 export function parseBackfillCliArgs(argv: string[]): BackfillCliArgs {
   const { values } = nodeParseArgs({
     args: argv,
@@ -59,7 +56,6 @@ export function parseBackfillCliArgs(argv: string[]): BackfillCliArgs {
   };
 }
 
-/** Port of backfill.py::_dedupe_symbols. */
 function dedupeSymbols(symbols: string[]): string[] {
   const result: string[] = [];
   for (const symbol of symbols) {
@@ -71,7 +67,6 @@ function dedupeSymbols(symbols: string[]): string[] {
   return result;
 }
 
-/** Port of backfill.py::_symbols_from_args. */
 function symbolsFromArgs(rawSymbols: string | undefined, config: AppConfig): string[] {
   if (rawSymbols) {
     return dedupeSymbols(rawSymbols.split(','));
@@ -88,7 +83,6 @@ interface NormalizedCandle {
   volume_usd: number;
 }
 
-/** Port of backfill.py::_normalize_price_candles. */
 function normalizePriceCandles(candles: Record<string, unknown>[]): NormalizedCandle[] {
   const sorted = [...candles].sort(
     (a, b) => (toFloat(a.time, 0.0) ?? 0.0) - (toFloat(b.time, 0.0) ?? 0.0),
@@ -112,7 +106,6 @@ function normalizePriceCandles(candles: Record<string, unknown>[]): NormalizedCa
   return normalized;
 }
 
-/** Port of backfill.py::_raw_candles_until. */
 function rawCandlesUntil(
   candles: Record<string, unknown>[],
   endTime: number,
@@ -121,14 +114,14 @@ function rawCandlesUntil(
 }
 
 /**
- * Sums `values[start:end]` with Python `list` slicing semantics: a negative `end` counts back
- * from the list's own length instead of clamping to 0. backfill.py's rolling-volume sums only
- * clamp their slice *start* via an explicit `max(0, ...)`, leaving the *end* index unclamped, so a
- * sufficiently fine-grained interval (whose 24h candle window exceeds the 49-candle warmup) can
- * make it go negative -- faithfully reproducing Python's wraparound-from-the-end behavior here
- * instead of silently clamping it to an empty sum.
+ * Sums `values[start:end]` where a negative `end` wraps by counting back from the array's own
+ * length, rather than clamping to 0. The rolling-volume callers below clamp only the slice START
+ * via `max(0, ...)`; END is deliberately left unclamped, so a sufficiently fine-grained interval
+ * (whose 24h candle window exceeds the 49-candle warmup) can drive `end` negative -- and it must
+ * still wrap, not silently produce an empty sum. This wraparound behavior is pinned by the parity
+ * fixture; do not "fix" it into a simple clamped-both-ends sum.
  */
-function pythonSliceSum(values: number[], start: number, end: number): number {
+function wrappingSliceSum(values: number[], start: number, end: number): number {
   const length = values.length;
   const normalize = (index: number): number => {
     const shifted = index < 0 ? index + length : index;
@@ -143,7 +136,7 @@ function pythonSliceSum(values: number[], start: number, end: number): number {
   return total;
 }
 
-/** Port of backfill.py::_timestamp_id ("YYYYMMDDHHMM", minute precision, no separators). */
+/** "YYYYMMDDHHMM", minute precision, no separators. */
 function timestampId(timeMs: number): string {
   return formatJakartaIso(new Date(timeMs)).slice(0, 16).replace(/[-:T]/g, '');
 }
@@ -156,7 +149,6 @@ export interface BackfillHistories {
   taker: Record<string, unknown>[];
 }
 
-/** Port of backfill.py::_build_symbol_rows. */
 export function buildSymbolRows(
   symbol: string,
   exchange: string,
@@ -186,12 +178,12 @@ export function buildSymbolRows(
       index >= window72h
         ? pctChange(closes[index - window72h] as number, closes[index] as number)
         : null;
-    const previousVolume = pythonSliceSum(
+    const previousVolume = wrappingSliceSum(
       rollingVolumes,
       Math.max(0, index - window * 2 + 1),
       index - window + 1,
     );
-    const currentVolume = pythonSliceSum(
+    const currentVolume = wrappingSliceSum(
       rollingVolumes,
       Math.max(0, index - window + 1),
       index + 1,
@@ -251,8 +243,6 @@ export function buildSymbolRows(
   return rows;
 }
 
-/** Port of backfill.py::_btc_change(rows, {}) -- `market_context` is always `{}` at this call
- * site, so the fallback branch (`market_context.get("btc_price_change_24h_pct")`) never fires. */
 function btcPriceChange24hPct(rows: Row[]): number | null {
   for (const row of rows) {
     if (row.symbol === 'BTC') {
@@ -262,7 +252,6 @@ function btcPriceChange24hPct(rows: Row[]): number | null {
   return null;
 }
 
-/** Port of backfill.py::_backfill_market_context. */
 function backfillMarketContext(rows: Row[]): Record<string, unknown> {
   const atrValues = rows
     .map((row) => toFloat(row.atr_14_pct))
@@ -273,7 +262,6 @@ function backfillMarketContext(rows: Row[]): Record<string, unknown> {
   };
 }
 
-/** Port of backfill.py::_score_backfill_rows. */
 export function scoreBackfillRows(
   rowsByTime: Map<number, Row[]>,
   config: AppConfig,
@@ -300,7 +288,6 @@ export function scoreBackfillRows(
   return records;
 }
 
-/** Port of backfill.py::_fetch_histories. */
 async function fetchHistories(
   client: CoinGlassClient,
   exchanges: string[],
@@ -336,12 +323,11 @@ export interface BackfillSummary {
 }
 
 /**
- * Port of backfill.py::run_backfill. CRITICAL ordering (locked by the Python
- * `test_backfill_honors_railway_db_path_env_before_provider_validation` contract): the
- * CRYPTO_SCREENER_DB_PATH override is applied to `config.storage_path` BEFORE the
- * COINGLASS_API_KEY validation runs, so a missing key still surfaces the env override in
- * `config`. Writes ONLY to factor_history (via `saveFactorHistoryRecords`) -- never touches
- * `runs`/`market_rows`.
+ * CRITICAL ordering, locked by tests/cli/backfill.test.ts's
+ * "CRYPTO_SCREENER_DB_PATH ordering contract": the CRYPTO_SCREENER_DB_PATH override is applied to
+ * `config.storage_path` BEFORE the COINGLASS_API_KEY validation runs, so a missing key still
+ * surfaces the env override in `config`. Writes ONLY to factor_history (via
+ * `saveFactorHistoryRecords`) -- never touches `runs`/`market_rows`.
  */
 export async function runBackfill(
   config: AppConfig,
@@ -410,8 +396,8 @@ export async function runBackfill(
         }
       }
     } catch (error) {
-      // Mirrors Python's `except (ProviderError, ValueError)`: selectPricePair's "no supported
-      // configured price pair" is the ValueError-equivalent here.
+      // Catches selectPricePair's "no supported configured price pair" alongside ProviderError,
+      // recording it against this symbol instead of aborting the whole backfill.
       if (error instanceof Error) {
         errors.push(`${symbol}: ${error.message}`);
       } else {
@@ -443,7 +429,6 @@ export async function runBackfill(
   };
 }
 
-/** Port of backfill.py::main. */
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   const args = parseBackfillCliArgs(argv);
   const config = loadConfig(args.config);

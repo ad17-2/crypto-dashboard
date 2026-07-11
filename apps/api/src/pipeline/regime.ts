@@ -2,7 +2,8 @@ import { clamp, mean, pyRound, toFloat } from './scoring.js';
 import type { MarketContext, PipelineConfig, Row } from './types.js';
 import { asRecord } from './types.js';
 
-/** Port of crypto_screener/regime.py plus crypto_screener/factors.py::infer_regime. */
+/** Regime classification (btc-led/alts-strong/neutral/chaos) and the higher-level risk-on/off
+ * inference built on top of it. */
 
 export const REGIME_STATES = ['btc-led', 'alts-strong', 'neutral', 'chaos'] as const;
 export type RegimeState = (typeof REGIME_STATES)[number];
@@ -13,7 +14,6 @@ export interface ClassifiedRegime {
   scores: Record<RegimeState, number>;
 }
 
-/** Port of regime.py::classify_regime. */
 export function classifyRegime(
   context: MarketContext,
   priorState: string | null | undefined,
@@ -132,10 +132,9 @@ export interface InferredRegime {
 }
 
 /**
- * Port of factors.py::infer_regime. `weights` is accepted but intentionally unused -- the Python
- * source never reads it either (see tests/test_regime.py::test_infer_regime_independent_of_weights,
- * ported as "does not depend on factor weights" below); it is kept in the signature purely for call
- * site parity with score_snapshot's `infer_regime(weights, rows, market_context, prior_state, config)`.
+ * `_weights` is accepted but intentionally unused (see regime.test.ts's "is independent of factor
+ * weights" test); it is kept in the signature purely for call-site parity with scoreSnapshot's
+ * `inferRegime(weights, rows, marketContext, priorState, config)`.
  */
 export function inferRegime(
   _weights: unknown,

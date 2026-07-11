@@ -2,10 +2,10 @@ import { mean, spearmanCorr, stdev, toFloat } from './scoring.js';
 import { asRecord } from './types.js';
 
 /**
- * Port of crypto_screener/factors.py::_cross_sectional_ic. Shared by weighting.ts::factorWeights
+ * Cross-sectional information-coefficient computation, shared by weighting.ts::factorWeights
  * (pooled + regime-conditional IC) and validation.ts::walkForward/factorDecay (in-sample/
- * out-of-sample and per-horizon IC) -- kept in its own module since both of those import it and
- * also import each other's exports, and this avoids a circular dependency between them.
+ * out-of-sample and per-horizon IC). Kept in its own module because those two also import each
+ * other's exports; folding this into either one would create a circular dependency.
  */
 
 export interface CrossSectionalIcResult {
@@ -24,8 +24,7 @@ export interface FactorRecord {
   [key: string]: unknown;
 }
 
-/** Port of factors.py::_cross_sectional_ic. Per-section rank IC already neutralizes cross-time
- * market drift; no explicit demeaning needed. */
+/** Per-section rank IC already neutralizes cross-time market drift; no explicit demeaning needed. */
 export function crossSectionalIc(
   records: FactorRecord[],
   factor: string,

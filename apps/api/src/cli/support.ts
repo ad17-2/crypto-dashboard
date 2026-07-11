@@ -1,9 +1,7 @@
 /**
- * Small pieces of Node CLI bootstrapping shared by cli/backfill.ts and cli/screener.ts. Neither
- * helper corresponds to a specific function in the Python originals (backfill.py / cli.py) --
- * they're TS/Node-only glue (node:util's `parseArgs` needs a manual numeric-flag validator; ESM
- * has no `if __name__ == "__main__"`), so, unlike the ported business logic elsewhere in this
- * port, sharing them across the two CLIs doesn't diverge from any Python source of truth.
+ * Small pieces of Node CLI bootstrapping shared by cli/backfill.ts and cli/screener.ts:
+ * node:util's `parseArgs` needs a manual numeric-flag validator, and ESM has no
+ * `if __name__ == "__main__"` equivalent.
  */
 
 /** Parses an optional numeric CLI flag, throwing with the flag's name on non-numeric input. */

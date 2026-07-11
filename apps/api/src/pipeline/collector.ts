@@ -18,16 +18,13 @@ import {
   appendCoinglassTechnicals,
 } from './enrichment.js';
 import { applyDataQuality } from './quality.js';
-import { fundingAnnualizedPct, toFloat } from './scoring.js';
+import { fundingAnnualizedPct, toFloat, weightedAverage } from './scoring.js';
 import type { Row } from './types.js';
 import { asRecord } from './types.js';
 
 /**
- * Port of crypto_screener/collector.py.
- *
  * Provider clients are dependency-injected (defaulting to the real HTTP implementations) so
- * tests can pass stub clients and never touch the network -- Python achieves the same isolation
- * by monkeypatching attributes on a fake client instance.
+ * tests can pass stub clients and never touch the network.
  */
 
 export type { ProviderStatus } from './enrichment.js';
@@ -43,7 +40,6 @@ export interface CollectDeps {
   coingeckoClient?: CoinGeckoClient;
 }
 
-/** Port of collector.py::collect_market. */
 export async function collectMarket(
   config: AppConfig,
   deps: CollectDeps = {},
@@ -55,7 +51,6 @@ export async function collectMarket(
   return { rows, market_context: marketContext, provider_status: status };
 }
 
-/** Port of collector.py::collect_coinglass_futures. */
 export async function collectCoinglassFutures(
   config: AppConfig,
   status?: ProviderStatus,
@@ -150,7 +145,6 @@ export async function collectCoinglassFutures(
   return topRows;
 }
 
-/** Port of collector.py::collect_coingecko_context. */
 export async function collectCoingeckoContext(
   config: AppConfig,
   status: ProviderStatus,
@@ -208,7 +202,6 @@ export async function collectCoingeckoContext(
   return context;
 }
 
-/** Exported for unit testing -- mirrors `_coinglass_candidate_stats`'s internal `stats` dict shape. */
 export interface CandidateStats {
   symbol: string;
   exchanges: Set<string>;
@@ -216,7 +209,7 @@ export interface CandidateStats {
   maxLeverage: number;
 }
 
-/** Port of collector.py::_coinglass_candidate_stats. Exported for unit testing. */
+/** Exported for unit testing. */
 export function coinglassCandidateStats(options: {
   supportedPairs: Record<string, CoinGlassPair[]>;
   exchanges: Set<string>;
@@ -261,7 +254,7 @@ export function coinglassCandidateStats(options: {
   return stats;
 }
 
-/** Port of collector.py::_rank_coinglass_candidates. Exported for unit testing. */
+/** Exported for unit testing. */
 export function rankCoinglassCandidates(
   candidateStats: Map<string, CandidateStats>,
   coreSymbols: string[],
@@ -297,7 +290,7 @@ export function rankCoinglassCandidates(
   return ordered;
 }
 
-/** Port of collector.py::_aggregate_coinglass_pairs. Exported for unit testing. */
+/** Exported for unit testing. */
 export function aggregateCoinglassPairs(
   pairs: CoinGlassPair[],
   exchanges: Set<string>,
@@ -399,27 +392,7 @@ function normalizeCoingeckoCategories(
   return { leaders, laggards };
 }
 
-/** Sums a numeric field across rows, treating missing/non-numeric values as 0 (matches
- * `toFloat(..., 0.0)`'s default), for the plain volume/OI/liquidation totals in the row above. */
+/** Sums a numeric field across rows, treating missing/non-numeric values as 0. */
 function sumField(rows: CoinGlassPair[], key: string): number {
   return rows.reduce((sum, row) => sum + (toFloat(row[key], 0.0) ?? 0.0), 0);
-}
-
-function weightedAverage(
-  rows: CoinGlassPair[],
-  valueKey: string,
-  weightKey: string,
-): number | null {
-  let weightedSum = 0.0;
-  let totalWeight = 0.0;
-  for (const row of rows) {
-    const value = toFloat(row[valueKey]);
-    const weight = toFloat(row[weightKey], 0.0) ?? 0.0;
-    if (value === null || weight <= 0) {
-      continue;
-    }
-    weightedSum += value * weight;
-    totalWeight += weight;
-  }
-  return totalWeight > 0 ? weightedSum / totalWeight : null;
 }

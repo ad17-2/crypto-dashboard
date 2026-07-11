@@ -1,8 +1,5 @@
 import type { CoinGlassPair } from '../providers/coinglass.js';
 
-/** Port of crypto_screener/coinglass_pairs.py. */
-
-/** Port of coinglass_pairs.py::quote_matches. */
 export function quoteMatches(pair: CoinGlassPair, quoteAsset: string): boolean {
   const expected = quoteAsset.toUpperCase();
   return (
@@ -11,7 +8,6 @@ export function quoteMatches(pair: CoinGlassPair, quoteAsset: string): boolean {
   );
 }
 
-/** Port of coinglass_pairs.py::pair_symbol_matches_quote. */
 export function pairSymbolMatchesQuote(pair: CoinGlassPair, quoteAsset: string): boolean {
   const expected = quoteAsset.toUpperCase();
   const symbol = String(pair.symbol ?? '').toUpperCase();
@@ -19,7 +15,8 @@ export function pairSymbolMatchesQuote(pair: CoinGlassPair, quoteAsset: string):
   return symbol.endsWith(`/${expected}`) || instrumentId.includes(expected);
 }
 
-/** Port of coinglass_pairs.py::is_likely_perpetual_instrument. */
+/** A pair counts as perpetual unless its instrument id ends in a dated-contract suffix
+ * (`_YYMMDD`/`_YYYYMMDD`-style, 6-8 trailing digits) and doesn't explicitly say "perp"/"swap". */
 export function isLikelyPerpetualInstrument(instrumentId: string): boolean {
   const lowered = instrumentId.toLowerCase();
   if (lowered.includes('perp') || lowered.includes('swap')) {
@@ -28,12 +25,10 @@ export function isLikelyPerpetualInstrument(instrumentId: string): boolean {
   return !/[_-]\d{6,8}$/.test(instrumentId);
 }
 
-/** Port of coinglass_pairs.py::is_likely_perpetual_pair. */
 export function isLikelyPerpetualPair(pair: CoinGlassPair): boolean {
   return isLikelyPerpetualInstrument(String(pair.instrument_id ?? ''));
 }
 
-/** Port of coinglass_pairs.py::base_from_pair. */
 export function baseFromPair(pair: CoinGlassPair, quoteAsset = 'USDT'): string {
   const symbol = String(pair.symbol ?? '');
   if (symbol.includes('/')) {
@@ -45,9 +40,8 @@ export function baseFromPair(pair: CoinGlassPair, quoteAsset = 'USDT'): string {
 }
 
 /**
- * Port of coinglass_pairs.py::select_price_pair. Used only by backfill.ts: picks the first
- * configured exchange (in caller-supplied preference order) that supports a likely-perpetual
- * `symbol/quoteAsset` pair, mirroring the nested-loop preference scan exactly.
+ * Used only by backfill.ts: returns the first configured exchange (in caller-supplied preference
+ * order) that supports a likely-perpetual `symbol/quoteAsset` pair.
  */
 export function selectPricePair(
   supportedPairs: Record<string, CoinGlassPair[]>,

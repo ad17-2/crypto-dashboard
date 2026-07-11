@@ -7,13 +7,10 @@ import { renderJson } from './json.js';
 import { renderMarkdown } from './markdown.js';
 
 /**
- * Derives "YYYYMMDD-HHMMSS" from a `generated_at` string already formatted as Jakarta-local
- * ISO-8601 with an explicit offset (`db/time.ts::formatJakartaIso`'s output shape). Mirrors
- * report.py's `datetime.fromisoformat(payload["generated_at"]).strftime("%Y%m%d-%H%M%S")`, which
- * re-derives the stamp from that string rather than depending on run_id already carrying it --
- * report.py never reads `run_id`, and pipeline.py never imports report.py's stem logic, so this
- * intentionally does not share code with runPipeline.ts's identical-looking run_id stamp: the two
- * modules independently format the same instant, exactly like the Python originals do.
+ * Derives "YYYYMMDD-HHMMSS" from `generated_at`, already formatted as Jakarta-local ISO-8601 with
+ * an explicit offset (see db/time.ts::formatJakartaIso). This intentionally does not share code
+ * with runPipeline.ts's similar-looking run_id stamp -- the two independently format the same
+ * instant; do not "deduplicate" them into a shared dependency.
  */
 function compactJakartaStamp(generatedAtIso: string): string {
   const [datePart, timePart] = generatedAtIso.slice(0, 19).split('T');
@@ -21,9 +18,9 @@ function compactJakartaStamp(generatedAtIso: string): string {
 }
 
 /**
- * Port of report.py::write_reports: writes the JSON/CSV/Markdown trio for one run and returns
- * their paths keyed exactly like the Python dict (`json`/`csv`/`markdown`) -- cli/screener.ts's
- * stdout contract iterates these keys directly, in this insertion order.
+ * Writes the JSON/CSV/Markdown trio for one run and returns their paths keyed `json`/`csv`/
+ * `markdown` -- cli/screener.ts's stdout contract iterates these keys directly, in this insertion
+ * order.
  */
 export function writeReports(
   payload: RunPayload,

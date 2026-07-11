@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
 import { Panel } from '@/components/layout/Panel';
 import { fmtNum, fmtRate } from '@/lib/format';
+import { Row } from './Row';
 
 export interface ValidationPanelProps {
-  /** Untyped on the wire (crypto_screener/dashboard_payload.py::_validation_summary). */
+  /** Untyped on the wire (the API returns a free-form object here) — read defensively. */
   validation: Record<string, unknown>;
 }
 
@@ -19,8 +19,8 @@ interface ConflictBucket {
 }
 
 /**
- * Ports validationBlock() from dashboard.js: Status / Observations / Model Hit / Best Factor /
- * Weak Factor rows, then the "Current Signal Mix" conflict-bucket sub-table (first 4 buckets).
+ * Status / Observations / Model Hit / Best Factor / Weak Factor rows, then the "Current Signal
+ * Mix" conflict-bucket sub-table (first 4 buckets).
  */
 export function ValidationPanel({ validation }: ValidationPanelProps) {
   const hasData = Object.keys(validation).length > 0;
@@ -66,15 +66,6 @@ export function ValidationPanel({ validation }: ValidationPanelProps) {
         </div>
       )}
     </Panel>
-  );
-}
-
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="list-row flex justify-between gap-3 text-[13px]">
-      <strong>{label}</strong>
-      <span>{value}</span>
-    </div>
   );
 }
 

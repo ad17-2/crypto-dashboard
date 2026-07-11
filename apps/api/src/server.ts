@@ -6,10 +6,8 @@ import { RefreshRuntime } from './refresh/runtime.js';
 import { startAutoRefresh } from './refresh/scheduler.js';
 
 /**
- * Port of crypto_screener/dashboard.py::serve()/main(): loads env + config, opens the DB, starts
- * the auto-refresh scheduler, and listens. Bound to 127.0.0.1 -- unlike the Python original (which
- * bound the public HOST/PORT directly), apps/web now owns the public port and proxies /api/* and
- * /health to this process, so this only ever needs to be reachable from the same host.
+ * Bound to 127.0.0.1: apps/web owns the public port and proxies /api/* and /health to this
+ * process, so it only ever needs to be reachable from the same host.
  */
 
 const env = loadEnv();

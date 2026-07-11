@@ -1,11 +1,9 @@
 @import "tailwindcss";
 
 /*
- * Tailwind v4 CSS-first theme. Ported 1:1 from the legacy dashboard's
- * crypto_screener/dashboard_static/src/input.css + tailwind.config.js — same token names, same
- * dark-first palette, same light-theme overrides, same component classes. Do not rename tokens;
- * the watchlist/context panel implementations (and this file's own @layer components below) key
- * off these exact class names (`bg-panel`, `text-up`, `.setup-badge`, etc.).
+ * Tailwind v4 CSS-first theme. Do not rename tokens; the watchlist/context panel implementations
+ * (and this file's own @layer components below) key off these exact class names (`bg-panel`,
+ * `text-up`, `.setup-badge`, etc.).
  */
 @theme {
   --color-bg: var(--bg);
@@ -38,11 +36,6 @@
     --warn: #e0a33a;
     --blue: #5b8def;
     --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-    /* legacy aliases mapped onto tokens so both themes stay consistent */
-    --green: var(--up);
-    --red: var(--down);
-    --amber: var(--warn);
-    --teal: var(--gold);
   }
   :root[data-theme="light"] {
     /* refined paper-white mirror of the same token names */
@@ -785,9 +778,9 @@
   /*
    * Bottom context-panel chrome (Providers, Data Quality, Validation, Factor Weights,
    * Freshness/Runs, Sector Rotation). The accent-colored left edge is applied by the Panel
-   * component via Tailwind's own `border-l-4 border-l-{gold,blue}` utilities, which — living in
-   * Tailwind's `utilities` layer — override this rule's plain `border` shorthand on the left side
-   * only, same as the legacy `.module-panel` + `border-l-gold`/`border-l-blue` combo.
+   * component via Tailwind's own `border-l-4 border-l-{gold,blue}` utilities. Tailwind v4's
+   * `utilities` layer always wins over `components` (this rule), regardless of selector
+   * specificity, which is why a plain `border` shorthand here doesn't clobber that left edge.
    */
   .module-panel {
     border-radius: 6px;

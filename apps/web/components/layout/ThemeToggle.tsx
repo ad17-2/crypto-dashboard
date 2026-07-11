@@ -2,7 +2,7 @@
 
 import { useTheme } from './ThemeProvider';
 
-/** Mirrors the legacy `#themeToggle` button: label shows the theme you'd switch *to*. */
+/** Label shows the theme you'd switch *to*, not the current theme. */
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
   return (

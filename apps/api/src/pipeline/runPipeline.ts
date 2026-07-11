@@ -19,8 +19,7 @@ import { pctChange, toFloat } from './scoring.js';
 import { factorDecay } from './validation.js';
 
 /**
- * Port of crypto_screener/pipeline.py::run_pipeline (pipeline.py:21-67). Mirrors its call order
- * and argument shapes exactly:
+ * Orchestrates one full pipeline run in a fixed stage order:
  *   collectMarket -> loadLabeledFactorRecords -> loadPriceLookback (adds price_change_72h_pct) ->
  *   loadLatestRegimeState -> scoreSnapshot -> loadLabeledRecordsByHorizon -> factorDecay ->
  *   build RunPayload -> saveSnapshot -> writeReports.
@@ -41,17 +40,15 @@ export interface RunPipelineResult {
 
 /**
  * Derives "YYYYMMDD-HHMMSS" from a Jakarta-local ISO-8601 string (with explicit `+07:00` offset,
- * i.e. `formatJakartaIso`'s own output) for the run_id stamp -- mirrors pipeline.py:28's
- * `generated_at.strftime("%Y%m%d-%H%M%S")`. reports/writeReports.ts carries an independent copy
- * of this same formatting for its report-file stem, matching how report.py never imports
- * pipeline.py's run_id logic and instead re-derives the stamp from `payload["generated_at"]`.
+ * i.e. `formatJakartaIso`'s own output) for the run_id stamp. reports/writeReports.ts keeps an
+ * independent copy of this same formatting for its report-file stem -- both derive from
+ * `payload.generated_at` rather than sharing this helper; keep them in sync if either changes.
  */
 function compactJakartaStamp(generatedAtIso: string): string {
   const [datePart, timePart] = generatedAtIso.slice(0, 19).split('T');
   return `${(datePart ?? '').replace(/-/g, '')}-${(timePart ?? '').replace(/:/g, '')}`;
 }
 
-/** Port of pipeline.py::run_pipeline. */
 export async function runPipeline(
   config: AppConfig,
   outDir: string,
@@ -61,8 +58,8 @@ export async function runPipeline(
   const writeReportFiles = options.writeReportFiles ?? true;
 
   const generatedAtIso = formatJakartaIso(new Date());
-  // uuid4().hex[:8] in Python -- randomUUID()'s hyphens are stripped, and its embedded version
-  // nibble falls after the first 8 hex characters, so this slice is uniformly random too.
+  // randomUUID()'s embedded version nibble falls after the first 8 hex characters (once hyphens
+  // are stripped), so slicing the first 8 hex chars stays uniformly random.
   const runId = `${compactJakartaStamp(generatedAtIso)}-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
 
   const db = openDatabase(config.storage_path);
@@ -89,10 +86,10 @@ export async function runPipeline(
     // Same fresh-literal exemption as `regime` below: RegimeStateSummary has no index signature.
     const priorMarketState = latestRegimeState ? { ...latestRegimeState } : null;
     // LabeledFactorRecordWithRegime (db/types.ts) and FactorRecord (pipeline/ic.ts) are two
-    // independently-typed "open dict" ports of the same Python labeled-record dict; FactorRecord
-    // declares an index signature (`[key: string]: unknown`) that LabeledFactorRecordWithRegime,
-    // being a closed set of named fields, does not, which is a type-checker-only distinction --
-    // every field FactorRecord reads is present on LabeledFactorRecordWithRegime.
+    // independently-typed shapes for the same open dict-of-fields record; FactorRecord declares an
+    // index signature (`[key: string]: unknown`) that LabeledFactorRecordWithRegime, being a
+    // closed set of named fields, does not -- a type-checker-only distinction, since every field
+    // FactorRecord reads is present on LabeledFactorRecordWithRegime.
     const scored = scoreSnapshot(
       collected.rows,
       collected.market_context,
@@ -111,7 +108,6 @@ export async function runPipeline(
       run_id: runId,
       generated_at: generatedAtIso,
       rows: scored.rows,
-      // Mirrors pipeline.py:58's `scored.get("market_context", collected.get("market_context", {}))`.
       market_context: scored.market_context ?? collected.market_context,
       provider_status: collected.provider_status,
       factor_weights: { ...scored.factor_weights, factor_decay: decay },
@@ -123,10 +119,10 @@ export async function runPipeline(
     };
 
     if (save) {
-      // Row (pipeline/types.ts) and MarketRow (db/types.ts) are two independently-typed "open
-      // dict" ports of the same Python dict[str, Any] row; they differ only in whether `symbol`
-      // is required, which always holds at runtime by this point (collectMarket/scoreSnapshot
-      // always populate it) even though the type checker can't see that across module boundaries.
+      // Row (pipeline/types.ts) and MarketRow (db/types.ts) are two independently-typed shapes for
+      // the same open dict-of-fields row; they differ only in whether `symbol` is required, which
+      // always holds at runtime by this point (collectMarket/scoreSnapshot always populate it)
+      // even though the type checker can't see that across module boundaries.
       saveSnapshot(db, payload as unknown as SnapshotPayload, config);
     }
     const paths = writeReportFiles ? writeReports(payload, config, outDir) : {};

@@ -1,10 +1,9 @@
 /**
  * Shared shapes for the factor-ranking stage (factors.ts, weighting.ts, regime.ts, market.ts,
- * validation.ts, rowScoring.ts, independence.ts). The Python source passes loosely-typed
- * `dict[str, Any]` rows/context/config everywhere and reads them with `.get(key, default)`; these
- * types and helpers preserve that same tolerance instead of assuming every field is present, since
- * the ported unit tests (and the parity fixture) build partial objects by hand exactly like the
- * Python tests do.
+ * validation.ts, rowScoring.ts, independence.ts). Rows/context/config are treated as open bags of
+ * fields rather than fully-required shapes, because callers (and the parity fixtures) routinely
+ * build partial objects -- the `[key: string]: unknown` index signatures preserve that tolerance
+ * intentionally; do not tighten these into closed interfaces.
  */
 
 /** A market/factor row flowing through the scoring pipeline: an open bag of metric fields. */
@@ -17,23 +16,25 @@ export interface Row {
 /** The enriched market-context dict (breadth, categories, sector_rotation, dominance, ...). */
 export type MarketContext = Record<string, unknown>;
 
-/** Narrows an unknown value to a plain object, mirroring Python's `dict.get(key, {})`. */
+/** Narrows an unknown value to a plain object; missing/wrong-shaped input becomes `{}` rather
+ * than throwing. */
 export function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
-/** Narrows an unknown value to an array, mirroring Python's `list.get(key, []) or []`. */
+/** Narrows an unknown value to an array; missing/wrong-shaped input becomes `[]` rather than
+ * throwing. */
 export function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
 // ---------------------------------------------------------------------------
-// config.factors, ported as an all-optional shape (mirrors `factor_cfg.get(key, default)`
-// tolerating a missing or partially-populated config, exactly like the Python unit tests do).
-// Structurally compatible with `AppConfig['factors']` from ../config/schema.ts, so a config
-// loaded/validated through the zod schema can be passed here as-is.
+// config.factors, as an all-optional shape: every field may be absent (a partially-populated
+// config), so every reader below supplies its own default. Structurally compatible with
+// `AppConfig['factors']` from ../config/schema.ts, so a config loaded/validated through the zod
+// schema can be passed here as-is.
 
 export interface RegimeWeightingConfigInput {
   enabled?: boolean;

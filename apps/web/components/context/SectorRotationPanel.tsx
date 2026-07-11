@@ -1,8 +1,10 @@
 import { Panel } from '@/components/layout/Panel';
 import { clsFor, fmtNum, fmtPct } from '@/lib/format';
+import { asRecord } from '@/lib/wire';
+import { Row } from './Row';
 
 export interface SectorRotationPanelProps {
-  /** Untyped on the wire (crypto_screener/dashboard_payload.py::_market_context). */
+  /** Untyped on the wire (the API returns a free-form object here) — read defensively. */
   marketContext: Record<string, unknown>;
 }
 
@@ -12,7 +14,7 @@ interface CategoryItem {
   changePct: unknown;
 }
 
-/** Ports sectorList() from dashboard.js: Breadth / Sector Tape rows, then Leaders / Laggards. */
+/** Breadth / Sector Tape rows, then Leaders / Laggards. */
 export function SectorRotationPanel({ marketContext }: SectorRotationPanelProps) {
   const breadth = asRecord(marketContext.breadth);
   const rotation = asRecord(marketContext.sector_rotation);
@@ -56,19 +58,6 @@ function CategoryRow({ item }: { item: CategoryItem }) {
       <span className={clsFor(item.changePct)}>{fmtPct(item.changePct)}</span>
     </div>
   );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="list-row flex justify-between gap-3 text-[13px]">
-      <strong>{label}</strong>
-      <span>{value}</span>
-    </div>
-  );
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
 function asCategoryItems(value: unknown): CategoryItem[] {

@@ -4,14 +4,6 @@ import { normalizeFactors, rawFactors } from '../../src/pipeline/factors.js';
 import { factorCorrelations } from '../../src/pipeline/independence.js';
 import type { Row } from '../../src/pipeline/types.js';
 
-/**
- * Port of tests/test_factor_independence.py. The upstream
- * `test_btc_relative_strength_removed_from_definitions` also asserts against
- * `crypto_screener.confluence.FAMILY_DEFINITIONS`; confluence.py is out of scope for this port
- * (not part of the factor engine), so only the DIRECTIONAL_FACTORS/DEFAULT_PRIORS half of that
- * assertion is ported here.
- */
-
 describe('factorCorrelations', () => {
   it('flags a duplicate pair (test_factor_correlations_flags_duplicate_pair)', () => {
     const rows = Array.from({ length: 12 }, (_, index) => ({
@@ -57,8 +49,6 @@ describe('factorCorrelations', () => {
   });
 
   it('finds no duplicate pairs among the 15 directional factors on a synthetic cross-section (test_no_duplicate_pairs_in_synthetic_cross_section)', () => {
-    // Verbatim port of the 12-row synthetic cross-section from
-    // tests/test_factor_independence.py::test_no_duplicate_pairs_in_synthetic_cross_section.
     const rows: Row[] = [
       {
         symbol: 'S0',

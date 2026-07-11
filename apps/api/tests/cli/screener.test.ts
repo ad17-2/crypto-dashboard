@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-/** Port of tests/test_cli.py::test_cli_summary_output_and_no_report_flags_stay_stable. */
-
 const { runPipelineMock } = vi.hoisted(() => ({ runPipelineMock: vi.fn() }));
 
 vi.mock('../../src/pipeline/runPipeline.js', () => ({ runPipeline: runPipelineMock }));

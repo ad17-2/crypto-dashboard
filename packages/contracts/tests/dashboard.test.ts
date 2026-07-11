@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DashboardPayloadSchema, DashboardRowSchema } from '../src/dashboard';
 
-// Representative row shaped exactly like crypto_screener/dashboard_rows.py::dashboard_row's
-// return value. No real fixture exists for this HTTP-layer payload (unlike config/default.json
-// for the config schema), so this is hand-built from the Python source fields.
+// Representative dashboard row. No real fixture exists for this HTTP-layer payload (unlike
+// config/default.json for the config schema), so this is hand-built to match DashboardRowSchema.
 const sampleRow = {
   symbol: 'BTC',
   side: 'long',

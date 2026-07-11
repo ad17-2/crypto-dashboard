@@ -1,9 +1,6 @@
 import { formatSigned } from '../pipeline/factorExplanations.js';
 import { toFloat } from '../pipeline/scoring.js';
 
-/** Port of report.py's `format_usd`/`format_pct` string-formatting helpers. */
-
-/** Port of report.py::format_usd. */
 export function formatUsd(value: unknown): string {
   const numeric = toFloat(value);
   if (numeric === null) {
@@ -25,7 +22,6 @@ export function formatUsd(value: unknown): string {
   return `$${numeric.toFixed(2)}`;
 }
 
-/** Port of report.py::format_pct. `digits`/`signed` default exactly like the Python signature. */
 export function formatPct(value: unknown, digits = 2, signed = true): string {
   const numeric = toFloat(value);
   if (numeric === null) {

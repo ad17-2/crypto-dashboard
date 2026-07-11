@@ -1,9 +1,10 @@
 /**
- * Shared formatting helpers ported 1:1 from the legacy dashboard.js (fmtNum/fmtPct/fmtUsd/clsFor/
- * arrowPct/qualityTone). Kept deliberately faithful, including the asymmetry between `numeric()`
- * (used for sort/arrow-direction decisions, where `Number(null) === 0` is treated as a real zero)
- * and `fmtNum`/`fmtPct` (used for display, where `null`/`undefined` render as "-"). Both the
- * watchlist and the bottom context panels are meant to import from this single module.
+ * Shared formatting helpers for the watchlist and the bottom context panels.
+ *
+ * `numeric()` and the `fmt*` functions deliberately disagree on how to treat null: `numeric()`
+ * feeds sort and arrow-direction comparisons, where `Number(null) === 0` is a real zero the
+ * comparator can order against. `fmtNum`/`fmtPct` feed display, where `null`/`undefined` render
+ * as "-" so "absent" never looks like "zero". Do not unify the two.
  */
 
 /** `Number(value)` guarded against NaN. Note: `numeric(null) === 0`, not `null` — see file header. */
@@ -77,4 +78,11 @@ export function conflictTone(label: unknown): ConflictTone {
   if (normalized === 'high-conflict' || normalized === 'excluded') return 'bad';
   if (normalized && normalized !== 'unknown') return 'warn';
   return 'neutral';
+}
+
+/** Confluence-segment color class for a family's tone ('pos'/'neg'/anything else -> neutral). */
+export function confluenceToneClass(tone: string): string {
+  if (tone === 'pos') return 'conf-pos';
+  if (tone === 'neg') return 'conf-neg';
+  return 'conf-neutral';
 }

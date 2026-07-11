@@ -1,6 +1,7 @@
 import type { FactorCorrelation, ModelWeights } from '@crypto-screener/contracts';
 import { Panel } from '@/components/layout/Panel';
 import { fmtNum } from '@/lib/format';
+import { asRecord } from '@/lib/wire';
 
 export interface FactorWeightsPanelProps {
   modelWeights: ModelWeights;
@@ -21,22 +22,13 @@ interface FactorDecay {
 }
 
 /**
- * Ports weightsBlock() from dashboard.js: one row per factor (sorted by weight descending), each
- * with its IC/PRIOR badge, numeric weight, a proportional weight bar, an IC stats line where
- * applicable, and the factor-decay sparkline + holds/robustness badges. Then the collinearity
- * (factor_correlations) list, when non-empty.
+ * One row per factor (sorted by weight descending), each with its IC/PRIOR badge, numeric weight,
+ * a proportional weight bar, an IC stats line where applicable, and the factor-decay sparkline +
+ * holds/robustness badges. Then the collinearity (factor_correlations) list, when non-empty.
  *
- * Deviation from the legacy markup, called out explicitly: dashboard.js renders `.factor-track` /
- * `.factor-fill` as bare `<span>`s. `.factor-track` is a grid item so the browser blockifies it
- * (it fills the column, as seen in the reference screenshot), but `.factor-fill` is a plain inline
- * descendant of that span, and CSS `width` has no effect on non-replaced inline elements — so the
- * proportional colored fill never actually renders in production, despite the CSS defining
- * `.factor-fill.pos`/`.neg` colors for exactly that purpose (verified by sampling pixels in
- * apps/web/reference/legacy-dashboard-full.png: every row's bar is the flat, uncolored track
- * regardless of weight or sign). That default renders a bar chart that conveys no information,
- * which isn't a design choice worth preserving, so here `.factor-track`/`.factor-fill` are `<div>`s
- * (block by default) instead of `<span>`s — same classes, same colors, but the width now actually
- * shows.
+ * `.factor-track`/`.factor-fill` below are `<div>`s, not `<span>`s: CSS `width` has no effect on
+ * non-replaced inline elements, so the proportional fill would never actually render if these were
+ * inline.
  */
 export function FactorWeightsPanel({ modelWeights }: FactorWeightsPanelProps) {
   const regime = asRecord(modelWeights.regime);
@@ -49,9 +41,7 @@ export function FactorWeightsPanel({ modelWeights }: FactorWeightsPanelProps) {
   const mode = modelWeights.mode || 'prior';
   const meta = `${mode} · ${regimeLabel} · ${regimeIcFactors.length} regime-IC / ${pooledCount} pooled`;
 
-  // Sorted by |weight| descending (bar length, not sign) — matches the order the backend already
-  // sends (verified against the fixture) and the screenshot, where the largest-magnitude negative
-  // factors lead the negative tail rather than trailing it.
+  // Sorted by |weight| descending (magnitude, not sign).
   const factors = [...modelWeights.factors].sort(
     (a, b) => Math.abs(b.weight ?? 0) - Math.abs(a.weight ?? 0),
   );
@@ -215,10 +205,6 @@ function correlationTone(verdict: string): string {
   if (verdict === 'duplicate') return 'bad';
   if (verdict === 'redundant') return 'warn';
   return 'neutral';
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
 function asFactorDecay(value: unknown): FactorDecay {

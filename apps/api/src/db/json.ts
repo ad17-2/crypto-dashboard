@@ -1,11 +1,7 @@
 /**
- * Serializes a value the same way Python's `json.dumps(value, sort_keys=True)`
- * orders it: object keys are sorted lexicographically at every nesting level;
- * array order is left untouched. storage.py uses `sort_keys=True` on every
- * JSON column it writes (config_json, context_json, factors_json, ...), so
- * this keeps key ordering deterministic and consistent with the existing
- * data. Exact whitespace/separator bytes are not matched (JSON.parse /
- * json.loads on both sides make that irrelevant) -- only key order is.
+ * Sorts object keys lexicographically at every nesting level before serializing (array order is
+ * left untouched), so every JSON column (config_json, context_json, factors_json, ...) gets a
+ * deterministic byte representation regardless of insertion order.
  */
 export function stableStringify(value: unknown): string {
   return JSON.stringify(sortKeysDeep(value));

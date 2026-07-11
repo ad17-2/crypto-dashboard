@@ -1,8 +1,6 @@
 import type { DashboardRow } from '@crypto-screener/contracts';
 import { sourceParts } from './dashboard-row';
 
-/** Filter state + row-matching logic ported 1:1 from the legacy dashboard.js's `filterValues()` /
- * `rowMatches()`. */
 export interface WatchlistFilterState {
   /** Raw text as typed into the filter input; trimmed/lowercased at match-time in `rowMatches()`
    * (not on every keystroke) so the input never rewrites what the user is typing. */
@@ -59,8 +57,7 @@ export function filterRows(rows: DashboardRow[], filters: WatchlistFilterState):
   return rows.filter((row) => rowMatches(row, filters));
 }
 
-/** Sources available across every watchlist tab (not just the active one), for the Source select —
- * ports `updateSourceOptions()`, which scans `watchlistsFrom(data)` rather than the active list. */
+/** Sources available across every watchlist tab (not just the active one), for the Source select. */
 export function collectSources(watchlists: { rows: DashboardRow[] }[]): string[] {
   const sources = new Set<string>();
   for (const list of watchlists) {

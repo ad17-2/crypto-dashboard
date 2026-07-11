@@ -3,8 +3,8 @@ import { DEFAULT_PRIORS } from '../../src/pipeline/factorDefinitions.js';
 import type { FactorRecord } from '../../src/pipeline/ic.js';
 import { factorWeights } from '../../src/pipeline/weighting.js';
 
-/** Port of tests/test_regime_conditional.py plus the factorWeights-level gating tests from
- * tests/test_walkforward.py (walkForward()'s own direct tests are ported in validation.test.ts). */
+/** Covers factorWeights()-level walk-forward GATING plus regime-conditional IC (walkForward()'s
+ * own direct tests are in validation.test.ts). */
 
 function strongPositive(
   periodIdx: number,

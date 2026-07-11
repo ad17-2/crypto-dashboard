@@ -1,5 +1,6 @@
 import type { DashboardPayload } from '@crypto-screener/contracts';
 import { DashboardPayloadSchema } from '@crypto-screener/contracts';
+import { errorMessage } from './errors';
 
 /**
  * Express API origin. Must match next.config.ts's rewrite target — this module talks to the API
@@ -58,7 +59,3 @@ export async function getDashboard(runId?: string): Promise<DashboardResult> {
 
 // triggerRefresh() (the Reload button's server action) lives in lib/actions.ts, not here — see
 // that file's header comment for why it can't share a module with getDashboard().
-
-function errorMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
-}

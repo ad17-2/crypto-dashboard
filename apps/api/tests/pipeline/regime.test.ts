@@ -4,8 +4,6 @@ import { marketSensingSummary } from '../../src/pipeline/market.js';
 import { classifyRegime, inferRegime } from '../../src/pipeline/regime.js';
 import type { Row } from '../../src/pipeline/types.js';
 
-/** Port of tests/test_regime.py. */
-
 const config = { factors: { regime: {} } };
 
 function btcEthRows(btcChange: number, ethChange: number): Row[] {

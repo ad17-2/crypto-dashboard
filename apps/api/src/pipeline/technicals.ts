@@ -1,7 +1,5 @@
 import { clamp, mean, stdev, toFloat } from './scoring.js';
 
-/** Port of crypto_screener/technicals.py. */
-
 export type RawCandle = Record<string, unknown>;
 
 interface Candle {
@@ -25,7 +23,7 @@ interface Bollinger {
   widthPct: number | null;
 }
 
-/** Port of technicals.py::technical_snapshot. Returns `{}` when fewer than 50 usable candles. */
+/** Returns `{}` when fewer than 50 usable candles. */
 export function technicalSnapshot(candles: RawCandle[], interval: string): Record<string, unknown> {
   const series = normalizeCandles(candles);
   const closes = series.map((item) => item.close);
@@ -105,17 +103,12 @@ function normalizeCandles(candles: RawCandle[]): Candle[] {
 }
 
 function lastEma(values: number[], period: number): number | null {
-  if (values.length < period) {
-    return null;
-  }
-  const alpha = 2.0 / (period + 1.0);
-  let ema = mean(values.slice(0, period));
-  for (const value of values.slice(period)) {
-    ema = value * alpha + ema * (1.0 - alpha);
-  }
-  return ema;
+  const series = emaSeries(values, period);
+  return series.length ? (series.at(-1) as number) : null;
 }
 
+/** Seeded from the SMA of the first `period` values (not from the first single value), matching
+ * how the rest of the indicator stack (RSI, ATR) seeds its own smoothing average. */
 function emaSeries(values: number[], period: number): number[] {
   if (values.length < period) {
     return [];
@@ -130,6 +123,9 @@ function emaSeries(values: number[], period: number): number[] {
   return result;
 }
 
+/** Wilder smoothing: the rolling average is seeded from the plain mean of the first `period`
+ * gains/losses, then updated as `(avg * (period - 1) + next) / period` -- not a plain SMA or a
+ * standard EMA. */
 function rsi(values: number[], period: number): number | null {
   if (values.length <= period) {
     return null;
@@ -171,6 +167,7 @@ function macdOf(values: number[]): Macd {
   return { line: latestLine, signal, histogram: latestLine - signal };
 }
 
+/** Wilder smoothing, same seeding/update rule as `rsi` above. */
 function atr(highs: number[], lows: number[], closes: number[], period: number): number | null {
   if (closes.length <= period) {
     return null;

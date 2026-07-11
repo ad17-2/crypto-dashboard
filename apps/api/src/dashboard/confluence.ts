@@ -2,8 +2,6 @@ import { clamp, pyRound, toFloat } from '../pipeline/scoring.js';
 import type { Row } from '../pipeline/types.js';
 import { asRecord } from '../pipeline/types.js';
 
-/** Port of crypto_screener/confluence.py. */
-
 const SCALE = 1.5;
 const SCALE_ALIGN = 1.0;
 const TONE_POS_THRESHOLD = 0.15;
@@ -46,7 +44,6 @@ export interface ConfluenceSummary {
   families: ConfluenceFamily[];
 }
 
-/** Port of confluence.py::thesis_sign. */
 export function thesisSign(side: string, row: Row): number {
   if (side === 'long' || side === 'squeeze-risk') {
     return 1;
@@ -64,7 +61,6 @@ export function thesisSign(side: string, row: Row): number {
   return factorScore >= 0 ? 1 : -1;
 }
 
-/** Port of confluence.py::thesis_direction. */
 export function thesisDirection(sign: number): string {
   return sign >= 0 ? 'long' : 'short';
 }
@@ -103,7 +99,6 @@ function regimeContribution(row: Row): number | null {
   return clamp(raw / SCALE_ALIGN, -1.0, 1.0);
 }
 
-/** Port of confluence.py::contribution_tone. */
 export function contributionTone(contribution: number | null): string {
   if (contribution === null) {
     return 'neutral';
@@ -126,7 +121,6 @@ function familyEntry(key: string, label: string, contribution: number | null): C
   };
 }
 
-/** Port of confluence.py::confluence_summary. */
 export function confluenceSummary(row: Row, side: string): ConfluenceSummary {
   const sign = thesisSign(side, row);
   const direction = thesisDirection(sign);

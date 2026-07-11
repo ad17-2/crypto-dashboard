@@ -8,16 +8,13 @@ import { runPipeline as runPipelineDefault } from '../pipeline/runPipeline.js';
 import { pyRound } from '../pipeline/scoring.js';
 
 /**
- * Port of crypto_screener/dashboard.py::RefreshRuntime. Tracks the four `self.status` shapes the
- * Python class assigns (idle / running / ok / error) and mirrors `refresh`/`refresh_async`
- * exactly, including the "merge current status with state forced to running" fallback each uses
- * when a refresh is already in flight (dashboard.py:54 and :92: `self.status | {"state": "running"}`).
+ * Tracks four status shapes: idle / running / ok / error. When a refresh is already in flight,
+ * both `refresh` and `refreshAsync` return the current status with `state` forced to "running"
+ * rather than starting a second one.
  *
- * Python guards re-entrancy with a `threading.Lock` because `refresh()` can run on a background
- * thread. Node has no real threads, so a boolean flag does the same job: the flag is checked and
- * set synchronously (no `await` between the check and the set), so there is no window for a
- * second caller to interleave and see a stale `false` -- strictly simpler than the Python lock,
- * not weaker.
+ * Re-entrancy is guarded by a plain boolean flag, checked and set synchronously with no `await`
+ * between the check and the set -- there is no window for a second caller to interleave and see a
+ * stale `false`.
  */
 
 export type RefreshStatus =
@@ -61,9 +58,7 @@ export interface RefreshRuntimeDeps {
   ) => Promise<RunPipelineResult>;
 }
 
-/** Formats an instant as "YYYY-MM-DDTHH:mm:ss+00:00" -- Python's
- * `datetime.now(timezone.utc).isoformat(timespec="seconds")`, which uses an explicit "+00:00"
- * suffix rather than "Z". */
+/** Formats an instant as "YYYY-MM-DDTHH:mm:ss+00:00" -- an explicit "+00:00" suffix, not "Z". */
 function isoSecondsUtc(date: Date): string {
   return `${date.toISOString().slice(0, 19)}+00:00`;
 }
@@ -91,9 +86,11 @@ export class RefreshRuntime {
     return this.status;
   }
 
-  /** Port of `RefreshRuntime.refresh`: runs the pipeline, saves the snapshot, applies retention,
-   * and records the outcome. Returns the current status unchanged (state forced to "running") if
-   * a refresh is already in flight, instead of starting a second one. */
+  /**
+   * Runs the pipeline, saves the snapshot, applies retention, and records the outcome. Returns
+   * the current status with state forced to "running" if a refresh is already in flight, instead
+   * of starting a second one.
+   */
   async refresh(reason: string): Promise<RefreshStatus> {
     if (this.busy) {
       return { ...this.status, state: 'running' } as RefreshStatus;
@@ -137,8 +134,7 @@ export class RefreshRuntime {
     return this.status;
   }
 
-  /** Port of `RefreshRuntime.refresh_async`: fires the refresh in the background (never awaited
-   * here, matching Python's daemon thread) and returns immediately. */
+  /** Fires the refresh in the background (never awaited here) and returns immediately. */
   refreshAsync(reason: string): RefreshAsyncResult {
     if (this.busy) {
       return { ...this.status, state: 'running' } as RefreshAsyncResult;
@@ -147,8 +143,8 @@ export class RefreshRuntime {
     return { state: 'queued', reason };
   }
 
-  /** Port of `dashboard.py::_load_runtime_config`: reload the config file fresh on every refresh
-   * (in case it changed on disk) and override `storage_path` with the runtime DB path. */
+  /** Reloads the config file fresh on every refresh (in case it changed on disk) and overrides
+   * `storage_path` with the runtime DB path. */
   private loadRuntimeConfig(): AppConfig {
     const config = this.loadConfigFn(this.settings.configPath);
     return { ...config, storage_path: this.settings.dbPath };

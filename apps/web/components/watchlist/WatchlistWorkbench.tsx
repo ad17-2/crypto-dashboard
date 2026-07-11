@@ -3,6 +3,7 @@
 import type { Watchlist, WatchlistId } from '@crypto-screener/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { rowKey } from '@/lib/dashboard-row';
+import { readPrefs, writePrefs } from '@/lib/prefs';
 import type { WatchlistFilterState } from '@/lib/watchlist-filters';
 import { collectSources, DEFAULT_WATCHLIST_FILTERS, filterRows } from '@/lib/watchlist-filters';
 import type { SortColumnKey, SortDirection } from '@/lib/watchlist-sort';
@@ -12,17 +13,6 @@ import { type Density, WatchlistPanel } from './WatchlistPanel';
 
 export interface WatchlistWorkbenchProps {
   watchlists: Watchlist[];
-}
-
-/** localStorage key + shape shared with ThemeProvider — reads/writes here merge rather than
- * overwrite so this never clobbers the `theme` key it doesn't own (see ThemeProvider's header). */
-const PREFS_KEY = 'tape.prefs';
-
-interface TapePrefs {
-  density?: Density;
-  sortKey?: SortColumnKey;
-  sortDir?: SortDirection;
-  [key: string]: unknown;
 }
 
 const SORT_KEYS: readonly SortColumnKey[] = [
@@ -39,24 +29,6 @@ const SORT_KEYS: readonly SortColumnKey[] = [
   'source',
 ];
 
-function readPrefs(): TapePrefs {
-  try {
-    const raw = window.localStorage.getItem(PREFS_KEY);
-    return raw ? (JSON.parse(raw) as TapePrefs) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writePrefs(patch: Partial<TapePrefs>): void {
-  try {
-    const prefs = readPrefs();
-    window.localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefs, ...patch }));
-  } catch {
-    // storage unavailable (private browsing, quota) — prefs still apply for this session
-  }
-}
-
 function defaultTab(watchlists: Watchlist[]): WatchlistId {
   return watchlists.some((list) => list.id === 'chart_next')
     ? 'chart_next'
@@ -65,8 +37,7 @@ function defaultTab(watchlists: Watchlist[]): WatchlistId {
 
 /**
  * Owns every piece of interactive watchlist state — active tab, density, filters, sort, and the
- * selected row — and renders the two-column workbench (table + detail rail) that shares it. Ports
- * the `state` object and its associated handlers from the legacy dashboard.js.
+ * selected row — and renders the two-column workbench (table + detail rail) that shares it.
  */
 export function WatchlistWorkbench({ watchlists }: WatchlistWorkbenchProps) {
   const [activeTab, setActiveTab] = useState<WatchlistId>(() => defaultTab(watchlists));
@@ -82,8 +53,8 @@ export function WatchlistWorkbench({ watchlists }: WatchlistWorkbenchProps) {
   useEffect(() => {
     const prefs = readPrefs();
     if (prefs.density === 'compact' || prefs.density === 'comfortable') setDensity(prefs.density);
-    if (typeof prefs.sortKey === 'string' && SORT_KEYS.includes(prefs.sortKey))
-      setSortKey(prefs.sortKey);
+    const matchedSortKey = SORT_KEYS.find((key) => key === prefs.sortKey);
+    if (matchedSortKey) setSortKey(matchedSortKey);
     if (prefs.sortDir === 'asc' || prefs.sortDir === 'desc') setSortDir(prefs.sortDir);
   }, []);
 

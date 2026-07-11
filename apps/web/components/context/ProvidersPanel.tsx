@@ -1,16 +1,11 @@
 import { Panel } from '@/components/layout/Panel';
+import { asProviderEntry, providerTone } from '@/lib/provider-status';
 
 export interface ProvidersPanelProps {
-  /** Untyped on the wire (crypto_screener/dashboard_payload.py::_provider_status). */
+  /** Untyped on the wire (the API returns a free-form object here) — read defensively. */
   providerStatus: Record<string, unknown>;
 }
 
-interface ProviderEntry {
-  status: string;
-  rows?: number | undefined;
-}
-
-/** Ports providerList() + renderSideModules()'s provider-issue header logic from dashboard.js. */
 export function ProvidersPanel({ providerStatus }: ProvidersPanelProps) {
   const entries = Object.entries(providerStatus);
   const hasIssue = entries.some(([, raw]) => asProviderEntry(raw).status !== 'ok');
@@ -24,19 +19,15 @@ export function ProvidersPanel({ providerStatus }: ProvidersPanelProps) {
         <div className="provider-list p-3 grid gap-2">
           {entries.map(([name, raw]) => {
             const details = asProviderEntry(raw);
-            const tone =
-              details.status === 'ok'
-                ? ''
-                : details.status === 'skipped' || details.status === 'disabled'
-                  ? 'warn'
-                  : 'bad';
             return (
               <div
                 key={name}
                 className="provider-row grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center min-h-[30px] text-[13px]"
               >
                 <strong>{name}</strong>
-                <span className={`status-pill ${tone}`}>{details.status}</span>
+                <span className={`status-pill ${providerTone(details.status)}`}>
+                  {details.status}
+                </span>
                 <span className="provider-count text-muted text-xs font-mono text-right min-w-[38px]">
                   {details.rows === undefined ? '-' : details.rows}
                 </span>
@@ -47,15 +38,4 @@ export function ProvidersPanel({ providerStatus }: ProvidersPanelProps) {
       )}
     </Panel>
   );
-}
-
-function asProviderEntry(value: unknown): ProviderEntry {
-  if (typeof value !== 'object' || value === null) {
-    return { status: '-' };
-  }
-  const record = value as Record<string, unknown>;
-  return {
-    status: typeof record.status === 'string' ? record.status : '-',
-    rows: typeof record.rows === 'number' ? record.rows : undefined,
-  };
 }

@@ -7,11 +7,8 @@ import { healthRoute } from './routes/health.js';
 import { refreshRoute } from './routes/refresh.js';
 
 /**
- * Port of crypto_screener/dashboard.py::DashboardHandler as an Express 5 app. Pure and injectable
- * (no `listen()` call here -- see server.ts) so tests can drive it directly with supertest.
- *
- * The static routes ("/", "/assets/dashboard.css", "/assets/dashboard.js") are intentionally not
- * ported: apps/web now owns the UI.
+ * Pure and injectable (no `listen()` call here -- see server.ts) so tests can drive it directly
+ * with supertest. There are no static UI routes here: apps/web owns the UI.
  */
 export interface AppDeps {
   db: Database.Database;
@@ -27,8 +24,8 @@ export function createApp(deps: AppDeps): Express {
   const app = express();
   app.disable('x-powered-by');
 
-  // Every JSON response in dashboard.py's `_send_json` sets this; carried over so the Next.js
-  // proxy / any intermediary never caches a stale refresh_status or run.
+  // Every JSON response sets this, so the Next.js proxy / any intermediary never caches a stale
+  // refresh_status or run.
   app.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();

@@ -9,7 +9,7 @@ import { openDatabase } from '../src/db/client.js';
 
 /**
  * THE PARITY GATE: apps/api/tests/fixtures/dashboard-payload.json is a REAL `GET /api/dashboard`
- * response captured from the running Python server (crypto_screener/dashboard.py), and
+ * response (see apps/api/tests/fixtures/README.md for provenance), and
  * apps/api/tests/fixtures/parity.sqlite3 is a frozen snapshot of the database it was captured
  * against. This test copies that snapshot to a temp path (never opens the fixture read-write),
  * builds the payload with the ported TypeScript buildDashboardPayload(), and deep-compares the
@@ -31,9 +31,9 @@ import { openDatabase } from '../src/db/client.js';
  *      "how old is this run right now".
  *   2. freshness.age_minutes  -- derived from age_seconds (age_seconds / 60, rounded); same
  *      justification.
- *   3. top-level refresh_status -- injected by the HTTP handler (dashboard.py's do_GET:
- *      `payload["refresh_status"] = self.runtime.status`) AFTER calling build_dashboard_payload,
- *      not by the payload builder itself. packages/contracts/src/dashboard.ts's
+ *   3. top-level refresh_status -- injected by the HTTP handler (http/routes/dashboard.ts's
+ *      dashboardRoute) AFTER calling buildDashboardPayload, not by the payload builder itself.
+ *      packages/contracts/src/dashboard.ts's
  *      DashboardPayloadOkSchema already documents this ("optional here so this schema also
  *      validates the payload-builder's raw return value"). This is genuinely an HTTP-layer field,
  *      not a payload-builder field, so buildDashboardPayload() correctly never produces it.
@@ -152,8 +152,8 @@ describe('buildDashboardPayload parity vs. captured Python /api/dashboard respon
 
   const fixture = loadFixture();
   // config.storage_path/report.limit default to exactly 'data/crypto_screener.sqlite3' / 12 (see
-  // config/schema.ts), matching both the fixture's "database" field and the Python server's
-  // CRYPTO_DASHBOARD_LIMIT default (config.report.limit) used to capture it.
+  // config/schema.ts), matching both the fixture's "database" field and the CRYPTO_DASHBOARD_LIMIT
+  // default (config.report.limit) used to capture it.
   const config = AppConfigSchema.parse({});
   expect(config.storage_path).toBe('data/crypto_screener.sqlite3');
   expect(config.report.limit).toBe(12);

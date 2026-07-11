@@ -1,8 +1,6 @@
 /**
- * Port of crypto_screener/report.py::REPORT_FIELDS (report.py:13-63). This is a FIXED 46-column
- * CSV allowlist -- do not add, remove, reorder, or rename entries without updating report.py
- * first, since downstream tooling (spreadsheets, ad-hoc analysis) depends on this exact column
- * order.
+ * A FIXED 49-column CSV allowlist -- do not add, remove, reorder, or rename entries; downstream
+ * tooling (spreadsheets, ad-hoc analysis) depends on this exact column order.
  */
 export const REPORT_FIELDS: readonly string[] = [
   'symbol',

@@ -8,12 +8,8 @@ import {
   zscoreByKey,
 } from '../../src/pipeline/scoring.js';
 
-/** Ports the factor-engine-specific subset of tests/test_scoring.py's math tests (the collector
- * task's own scoring.test.ts, if any, covers the pre-existing toFloat/clamp/pctChange/mean/stdev
- * subset -- this file only covers what apps/api/src/pipeline/scoring.ts gained for the factor
- * engine: median/zscore/robust-zscore/spearman, plus pyRound/copysign, which have no Python
- * counterpart test since they port stdlib functions (round(), math.copysign()) rather than
- * hand-written ones). */
+/** Covers the factor-engine math primitives: median/zscore/robust-zscore/spearman, plus
+ * pyRound/copysign. */
 
 describe('median', () => {
   it('returns 0 for an empty list', () => {
@@ -26,7 +22,7 @@ describe('median', () => {
 });
 
 describe('zscoreByKey', () => {
-  it('mirrors tests/test_scoring.py::test_zscore_by_key', () => {
+  it('sums to ~0 and preserves ordering', () => {
     const rows = [{ value: 10 }, { value: 20 }, { value: 30 }];
     const zscores = zscoreByKey(rows, 'value');
     expect(zscores.reduce((sum, value) => sum + value, 0)).toBeCloseTo(0.0, 7);
@@ -36,7 +32,7 @@ describe('zscoreByKey', () => {
 });
 
 describe('robustZscoreByKey', () => {
-  it('mirrors tests/test_scoring.py::test_robust_zscore_resists_single_outlier', () => {
+  it('compares plain and robust zscore spread with a single outlier', () => {
     const rows = [{ value: 1.0 }, { value: 2.0 }, { value: 3.0 }, { value: 100.0 }];
     const plain = zscoreByKey(rows, 'value');
     const robust = robustZscoreByKey(rows, 'value');
@@ -47,7 +43,7 @@ describe('robustZscoreByKey', () => {
 });
 
 describe('spearmanCorr', () => {
-  it('mirrors tests/test_scoring.py::test_spearman_corr', () => {
+  it('returns +/-1 for perfectly monotonic sequences', () => {
     expect(spearmanCorr([1, 2, 3], [10, 20, 30])).toBeCloseTo(1.0, 9);
     expect(spearmanCorr([1, 2, 3], [30, 20, 10])).toBeCloseTo(-1.0, 9);
   });

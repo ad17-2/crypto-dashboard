@@ -4,12 +4,10 @@ import type { MarketContext, PipelineConfig, Row } from './types.js';
 import { asRecord } from './types.js';
 
 /**
- * Port of crypto_screener/factors.py's row-level scoring functions: `_apply_scores`,
- * `_apply_excluded_scores`, and everything they call (`_signal_conflict_summary`,
- * `_confidence_score`, ...). Named `rowScoring.ts` rather than `scoring.ts` because
- * `apps/api/src/pipeline/scoring.ts` already exists as the port of crypto_screener/scoring.py's
- * shared math primitives (owned by the collector/enrichment task) -- this module builds on that
- * one instead of duplicating it.
+ * Row-level scoring: `applyScores`, `applyExcludedScores`, and everything they call
+ * (`signalConflictSummary`, `confidenceScore`, ...). Named `rowScoring.ts` rather than
+ * `scoring.ts` because `pipeline/scoring.ts` already holds the shared math primitives
+ * (median/zscore/rank/...) that this module builds on instead of duplicating.
  */
 
 export interface ConflictItem {
@@ -49,7 +47,7 @@ export interface RegimeLike {
   bias_score?: number | null;
 }
 
-/** Port of factors.py::_apply_scores. Mutates `row` in place, mirroring the Python source. */
+/** Mutates `row` in place. */
 export function applyScores(
   row: Row,
   factors: Record<string, number>,
@@ -133,7 +131,7 @@ export function applyScores(
   Object.assign(row, scores);
 }
 
-/** Port of factors.py::_apply_excluded_scores. Mutates `row` in place. */
+/** Mutates `row` in place. */
 export function applyExcludedScores(row: Row): void {
   const scores: RowScores = {
     factor_score: 0.0,
@@ -154,7 +152,7 @@ export function applyExcludedScores(row: Row): void {
 }
 
 function qualityPercentile(zscore: number): number {
-  // Smooth z-score to a 0-100 quality range without scipy.
+  // Logistic squashing of a z-score into a 0-100 quality range.
   return 100.0 / (1.0 + Math.exp(-zscore));
 }
 

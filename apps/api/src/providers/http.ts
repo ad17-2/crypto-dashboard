@@ -1,10 +1,9 @@
 import { ProviderError } from './errors.js';
 
 /**
- * Non-blocking throttle delay shared by every provider client and pipeline enrichment pass.
- * Mirrors the `time.sleep(request_delay)` calls sprinkled through collector.py /
- * coinglass_enrichment.py, but as a real `setTimeout`-based await so the event loop keeps
- * serving other requests while a pipeline run is rate-limiting itself between symbols.
+ * Non-blocking throttle delay used by every provider client and pipeline enrichment pass between
+ * requests. Implemented as a real `setTimeout`-based await (not a blocking sleep) so the event
+ * loop keeps serving other requests while a pipeline run is rate-limiting itself between symbols.
  */
 export function sleep(seconds: number): Promise<void> {
   if (seconds <= 0) {
@@ -21,9 +20,8 @@ export interface HttpResponse {
 
 /**
  * Fetches `url` with a hard timeout, returning the raw status/headers/body without interpreting
- * them -- each provider client maps this to its own `ProviderError` messages (CoinGlass and
- * CoinGecko format errors differently in the Python reference), and CoinGecko additionally layers
- * 429 retry behavior on top.
+ * them -- each provider client maps this to its own `ProviderError` messages, and CoinGecko
+ * additionally layers 429 retry behavior on top.
  */
 export async function fetchWithTimeout(
   url: string,
@@ -50,7 +48,7 @@ export async function fetchWithTimeout(
   }
 }
 
-/** Appends query params the same way `httpx.get(url, params=...)` does, dropping undefined/null. */
+/** Appends query params to the URL, dropping any that are undefined or null. */
 export function buildUrl(
   baseUrl: string,
   path: string,

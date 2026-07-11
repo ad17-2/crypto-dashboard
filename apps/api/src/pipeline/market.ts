@@ -1,13 +1,10 @@
-import { clamp, mean, pyRound, stdev, toFloat } from './scoring.js';
+import { clamp, mean, pyRound, stdev, toFloat, weightedAverage } from './scoring.js';
 import { asArray, asRecord, type MarketContext, type Row } from './types.js';
-
-/** Port of crypto_screener/market.py. */
 
 function trustedRows(rows: Row[]): Row[] {
   return rows.filter((row) => row.is_trusted !== false);
 }
 
-/** Port of market.py::market_sensing_summary. */
 export function marketSensingSummary(
   rows: Row[],
   marketContext: MarketContext,
@@ -51,7 +48,6 @@ function ethBtcPerformancePct(rows: Row[]): number | null {
   return ((1.0 + ethChange / 100.0) / (1.0 + btcChange / 100.0) - 1.0) * 100.0;
 }
 
-/** Port of market.py::market_structure_summary. */
 export function marketStructureSummary(
   rows: Row[],
   marketContext: MarketContext,
@@ -63,7 +59,6 @@ export function marketStructureSummary(
   };
 }
 
-/** Port of market.py::breadth_summary. */
 export function breadthSummary(rows: Row[], marketContext: MarketContext): Record<string, unknown> {
   const priceChanges = rows
     .map((row) => toFloat(row.price_change_24h_pct))
@@ -138,7 +133,6 @@ export function breadthSummary(rows: Row[], marketContext: MarketContext): Recor
   };
 }
 
-/** Port of market.py::sector_rotation_summary. */
 export function sectorRotationSummary(marketContext: MarketContext): Record<string, unknown> {
   const categories = asRecord(marketContext.categories);
   const leaders = asArray(categories.leaders);
@@ -169,18 +163,7 @@ export function sectorRotationSummary(marketContext: MarketContext): Record<stri
 }
 
 function volumeWeightedReturn(rows: Row[]): number | null {
-  let weightedSum = 0.0;
-  let totalVolume = 0.0;
-  for (const row of rows) {
-    const change = toFloat(row.price_change_24h_pct);
-    const volume = toFloat(row.quote_volume_usd, 0.0) ?? 0.0;
-    if (change === null || volume <= 0) {
-      continue;
-    }
-    weightedSum += change * volume;
-    totalVolume += volume;
-  }
-  return totalVolume > 0 ? weightedSum / totalVolume : null;
+  return weightedAverage(rows, 'price_change_24h_pct', 'quote_volume_usd');
 }
 
 function categoryMomentumScore(marketContext: MarketContext): number | null {

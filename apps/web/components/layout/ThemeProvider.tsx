@@ -2,39 +2,9 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { writePrefs } from '@/lib/prefs';
 
 export type Theme = 'dark' | 'light';
-
-/**
- * localStorage key + shape ported from the legacy dashboard (`tape.prefs`). Other prefs
- * (density, sort) live in the same blob once the watchlist panel is implemented — reads/writes
- * here merge rather than overwrite so this provider never clobbers keys it doesn't own.
- */
-const PREFS_KEY = 'tape.prefs';
-
-interface TapePrefs {
-  theme?: Theme;
-  [key: string]: unknown;
-}
-
-function readPrefs(): TapePrefs {
-  try {
-    const raw = window.localStorage.getItem(PREFS_KEY);
-    return raw ? (JSON.parse(raw) as TapePrefs) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeTheme(theme: Theme): void {
-  try {
-    const prefs = readPrefs();
-    prefs.theme = theme;
-    window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  } catch {
-    // storage unavailable (private browsing, quota) — theme still applies for this session
-  }
-}
 
 interface ThemeContextValue {
   theme: Theme;
@@ -62,7 +32,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setTheme((previous) => {
       const next: Theme = previous === 'light' ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', next);
-      writeTheme(next);
+      writePrefs({ theme: next });
       return next;
     });
   }, []);

@@ -28,9 +28,7 @@ import {
 } from './watchlists.js';
 
 /**
- * Port of crypto_screener/dashboard_payload.py. Unlike the Python function (which takes a DB
- * *path* and opens/closes its own connection per call), this takes an already-open `db` handle --
- * this port's established convention (see db/client.ts::openDatabase) -- plus `config` so the
+ * Takes an already-open `db` handle (see db/client.ts::openDatabase) plus `config` so the
  * `database` field can report the CONFIGURED storage path (config.storage_path) rather than
  * whatever physical file `db` happens to be backed by right now (e.g. a test's temp copy).
  */
@@ -43,7 +41,6 @@ export interface BuildDashboardPayloadOptions {
   limit: number;
 }
 
-/** Port of dashboard_payload.py::_loads_json. */
 function loadsJson<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) {
     return fallback;
@@ -62,7 +59,6 @@ interface RunsDbRow {
   regime_json: string;
 }
 
-/** Port of dashboard_payload.py::_recent_runs. */
 function recentRuns(db: Database.Database, limit = 30): RunSummary[] {
   const dbRows = db
     .prepare(
@@ -122,7 +118,6 @@ interface SelectedRunDbRow {
 const SELECTED_RUN_COLUMNS =
   'run_id, generated_at, context_json, provider_status_json, regime_json, factor_weights_json';
 
-/** Port of dashboard_payload.py::_selected_run. */
 function selectedRunRow(
   db: Database.Database,
   runId: string | undefined,
@@ -146,7 +141,6 @@ interface FactorHistoryDbRow {
   metrics_json: string;
 }
 
-/** Port of dashboard_payload.py::_history_by_symbol. */
 function historyBySymbol(
   db: Database.Database,
   symbols: string[],
@@ -186,9 +180,8 @@ function historyBySymbol(
       long_short_account_ratio: numberOrNull(item.long_short_account_ratio),
       top_trader_long_short_ratio: numberOrNull(item.top_trader_long_short_ratio),
       quote_volume_usd: numberOrNull(item.quote_volume_usd),
-      // Python: `scores.get("confidence_score") or item.get("confidence_score")` -- a genuine
-      // cross-field OR-fallback (falls through even on an explicit 0, not just None/missing), NOT
-      // the "same default either side" idiom used elsewhere. `||` is required here, not `??`.
+      // Deliberate `||`, not `??`: falls through to item.confidence_score even when
+      // scores.confidence_score is an explicit 0, not just null/undefined.
       confidence_score:
         numberOrNull(scores.confidence_score) || numberOrNull(item.confidence_score),
       technical_trend_4h: numberOrNull(factors.technical_trend_4h),
@@ -223,17 +216,13 @@ interface MarketRowLegacyDbRow {
 }
 
 /**
- * Port of dashboard_payload.py::_legacy_history_by_symbol -- the pre-factor_history fallback for
- * databases where that table has no rows yet in the window. Unreachable against the real
- * production database (factor_history is always populated by saveSnapshot alongside market_rows),
- * so it is not exercised by the parity fixture; ported for completeness regardless.
+ * Fallback for databases where factor_history has no rows yet in the window. Unreachable against
+ * the real production database (factor_history is always populated by saveSnapshot alongside
+ * market_rows), so it is not exercised by the parity fixture.
  *
- * Python's dict literal here OMITS technical_trend_4h/technical_momentum_4h/rsi_14/
- * signal_conflict_score entirely (row_json has no top-level "factors"/technical fields the way
- * factor_history's factors_json/metrics_json do) -- those keys are simply absent from the
- * resulting JSON, not null. This port fills them with `null` instead so the return type stays the
- * single HistoryPoint shape used everywhere else; since this path never actually executes against
- * real data, that is a type-safety trade with no observable effect on the parity-gated output.
+ * row_json has no top-level "factors"/technical fields the way factor_history's
+ * factors_json/metrics_json do, so technical_trend_4h/technical_momentum_4h/rsi_14/
+ * signal_conflict_score are always null here rather than derived.
  */
 function legacyHistoryBySymbol(
   db: Database.Database,
@@ -290,7 +279,6 @@ function legacyHistoryBySymbol(
   return result;
 }
 
-/** Port of dashboard_payload.py::_regime_fit_score_field. */
 function regimeFitScoreField(
   row: Row,
   regime: Record<string, unknown>,
@@ -322,7 +310,6 @@ function regimeFitScoreField(
   return ['long_score', 'long'];
 }
 
-/** Port of dashboard_payload.py::_regime_fit_rows. */
 function regimeFitRows(
   rows: Row[],
   limit: number,
@@ -372,9 +359,11 @@ function regimeFitRows(
   });
 }
 
-/** Port of dashboard_payload.py::_sections. Core symbols are hardcoded exactly as in Python
- * (NOT read from config.report.core_symbols) -- dashboard_payload.py::_sections takes no config
- * argument at all, so this preserves that faithfully rather than "improving" it. */
+/**
+ * `CORE_SYMBOLS` is deliberately hardcoded, NOT read from config.report.core_symbols -- this
+ * function takes no config argument at all. The two happen to hold the same three symbols today,
+ * but they are not the same source of truth; do not wire this to config.
+ */
 function buildSections(
   rows: Row[],
   limit: number,
@@ -411,7 +400,6 @@ function buildSections(
   };
 }
 
-/** Port of dashboard_payload.py::_chart_next_rows. */
 function chartNextRows(sections: Sections, limit: number): DashboardRow[] {
   const candidates = new Map<string, DashboardRow>();
   const keys: Array<keyof Sections> = [
@@ -436,7 +424,6 @@ function chartNextRows(sections: Sections, limit: number): DashboardRow[] {
     .slice(0, Math.max(limit, 12));
 }
 
-/** Port of dashboard_payload.py::_watchlists. */
 function buildWatchlists(sections: Sections, limit: number): Watchlist[] {
   const ordered: Array<[WatchlistId, DashboardRow[]]> = [
     ['chart_next', chartNextRows(sections, limit)],
@@ -450,7 +437,6 @@ function buildWatchlists(sections: Sections, limit: number): Watchlist[] {
   return ordered.map(([id, rows]) => ({ id, label: WATCHLIST_LABELS[id], rows }));
 }
 
-/** Port of dashboard_payload.py::_quality_summary. */
 function qualitySummary(rows: Row[]): Quality {
   const flagged = rows.filter((row) => asArray(row.data_quality_flags).length > 0);
   const trusted = rows.filter((row) => row.is_trusted ?? true).length;
@@ -468,7 +454,6 @@ function qualitySummary(rows: Row[]): Quality {
   };
 }
 
-/** Port of dashboard_payload.py::_calibration_label. */
 function calibrationLabel(hitRate: number | null, observations: number): string {
   if (observations < 20 || hitRate === null) {
     return 'learning';
@@ -503,7 +488,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Port of dashboard_payload.py::_model_weights_summary. */
 function modelWeightsSummary(factorWeights: Record<string, unknown>): ModelWeights {
   const stats = asRecord(factorWeights.stats);
   const factors: ModelWeightFactor[] = [];
@@ -522,10 +506,9 @@ function modelWeightsSummary(factorWeights: Record<string, unknown>): ModelWeigh
       n_periods: Math.trunc(toFloat(details.n_periods, 0) ?? 0),
       credibility_k: toFloat(details.credibility_k),
       regime_multiplier: toFloat(details.regime_multiplier),
-      // `?? null`: Python's `details.get("robustness")` (and regime_mode below) returns None for
-      // a MISSING key, not `undefined` -- these two fields are only ever set when a factor
-      // actually went through walk-forward/regime-conditional scoring, so plenty of factors have
-      // no such key in their stats dict at all.
+      // `?? null`, not left `undefined`: JSON.stringify drops undefined-valued keys entirely, and
+      // these two fields are only ever set when a factor went through walk-forward/regime-
+      // conditional scoring, so most factors have no such key in their stats object at all.
       robustness: details.robustness ?? null,
       oos_ic: toFloat(details.oos_ic),
       regime_ic: toFloat(details.regime_ic),
@@ -551,7 +534,6 @@ interface ValidationFactorRank {
   avg_forward_return_pct: number | null;
 }
 
-/** Port of dashboard_payload.py::_rank_validation_factors. */
 function rankValidationFactors(
   factors: Record<string, unknown>,
   reverse: boolean,
@@ -574,10 +556,9 @@ function rankValidationFactors(
       avg_forward_return_pct: toFloat(details.avg_forward_return_pct),
     });
   }
-  // Mirrors Python's `sorted(ranked, key=lambda i: (i["hit_rate"], i["observations"]),
-  // reverse=reverse)`: compare the (hit_rate, observations) tuple lexicographically, then flip the
-  // whole comparison when reverse is true. A stable sort (JS Array#sort is stable) then keeps
-  // original relative order for exact ties, matching Python's documented reverse=True guarantee.
+  // Sorts by the (hit_rate, observations) tuple lexicographically, then flips the whole
+  // comparison when reverse is true (not two independent sorts) -- ties keep their original
+  // relative order because Array#sort is stable.
   const sign = reverse ? -1 : 1;
   return ranked
     .sort((a, b) => sign * (a.hit_rate - b.hit_rate || a.observations - b.observations))
@@ -590,7 +571,6 @@ interface ConflictBucket {
   avg_confidence: number | null;
 }
 
-/** Port of dashboard_payload.py::_conflict_buckets. */
 function conflictBuckets(rows: Row[]): ConflictBucket[] {
   const buckets = new Map<string, { label: string; count: number; avgConfidence: number }>();
   for (const row of rows) {
@@ -611,9 +591,11 @@ function conflictBuckets(rows: Row[]): ConflictBucket[] {
   return result.sort((a, b) => b.count - a.count);
 }
 
-/** Port of dashboard_payload.py::_validation_summary. Returns an opaque record (matches the
- * contract's `validation: jsonRecord` -- factor_weights.validation carries no fixed schema on the
- * Python producing side either, see packages/contracts/src/dashboard.ts's file-level scope note). */
+/**
+ * Returns an opaque record: the contract types `validation` as `jsonRecord` because
+ * factor_weights.validation carries no fixed schema (see packages/contracts/src/dashboard.ts's
+ * file-level scope note).
+ */
 function validationSummary(
   validation: Record<string, unknown>,
   rows: Row[],
@@ -643,8 +625,6 @@ function validationSummary(
   return summary;
 }
 
-/** Port of dashboard_payload.py::build_dashboard_payload. See the file header for how this
- * signature deliberately differs from the Python one (open db handle + config, not a db path). */
 export function buildDashboardPayload(
   db: Database.Database,
   config: AppConfig,

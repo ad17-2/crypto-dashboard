@@ -2,10 +2,10 @@ import type { WatchlistId } from '@crypto-screener/contracts';
 import { toFloat } from '../pipeline/scoring.js';
 import type { Row } from '../pipeline/types.js';
 
-/** Port of crypto_screener/watchlists.py (WATCHLIST_ORDER is unused by dashboard_payload.py and
- * is not ported). Keyed by the full WatchlistId union (rather than `Record<string, string>`) so
- * indexing it is a plain `string`, not `string | undefined`, under tsconfig's
- * noUncheckedIndexedAccess. */
+/**
+ * Keyed by the full WatchlistId union (rather than `Record<string, string>`) so indexing it is a
+ * plain `string`, not `string | undefined`, under tsconfig's noUncheckedIndexedAccess.
+ */
 export const WATCHLIST_LABELS: Record<WatchlistId, string> = {
   chart_next: 'Top Setups',
   regime_fit: 'Regime Fit',
@@ -16,7 +16,6 @@ export const WATCHLIST_LABELS: Record<WatchlistId, string> = {
   core: 'Core',
 };
 
-/** Port of watchlists.py::top_by. */
 export function topBy(
   rows: Row[],
   field: string,
@@ -43,24 +42,20 @@ export function topBy(
   return ranked.filter((row) => (toFloat(row[field], 0) ?? 0) >= minimum).slice(0, limit);
 }
 
-/** Port of watchlists.py::is_long_candidate. */
 export function isLongCandidate(row: Row): boolean {
   return (toFloat(row.factor_score, 0) ?? 0) > 0;
 }
 
-/** Port of watchlists.py::is_short_candidate. */
 export function isShortCandidate(row: Row): boolean {
   return (toFloat(row.factor_score, 0) ?? 0) < 0;
 }
 
-/** Port of watchlists.py::is_crowded_long. */
 export function isCrowdedLong(row: Row): boolean {
   const funding = toFloat(row.funding_rate_pct, 0) ?? 0;
   const lsRatio = toFloat(row.long_short_ratio);
   return funding > 0.015 || (lsRatio !== null && lsRatio >= 1.3);
 }
 
-/** Port of watchlists.py::is_crowded_short. */
 export function isCrowdedShort(row: Row): boolean {
   const funding = toFloat(row.funding_rate_pct, 0) ?? 0;
   const lsRatio = toFloat(row.long_short_ratio);

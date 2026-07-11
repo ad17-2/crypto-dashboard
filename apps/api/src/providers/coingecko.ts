@@ -1,7 +1,6 @@
 import { ProviderError } from './errors.js';
 import { buildUrl, fetchWithTimeout, sleep } from './http.js';
 
-/** Port of crypto_screener/coingecko.py::CoinGeckoClient. */
 export interface CoinGeckoClient {
   globalData(): Promise<Record<string, unknown>>;
   categories(): Promise<Record<string, unknown>[]>;

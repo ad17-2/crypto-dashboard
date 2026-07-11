@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AppConfigSchema } from '../../src/config/schema.js';
 
-/** Port of tests/test_pipeline.py::test_pipeline_can_save_sqlite_without_report_files. */
-
 const { collectMarketMock, scoreSnapshotMock, saveSnapshotMock, writeReportsMock } = vi.hoisted(
   () => ({
     collectMarketMock: vi.fn(),
@@ -12,12 +10,10 @@ const { collectMarketMock, scoreSnapshotMock, saveSnapshotMock, writeReportsMock
   }),
 );
 
-// Mirrors the Python test's `patch("crypto_screener.pipeline.collect_market", ...)` /
-// `patch("crypto_screener.pipeline.score_snapshot", ...)` / `patch(".save_snapshot")` /
-// `patch(".write_reports")`. `db/index.js`'s read-path functions (loadLabeledFactorRecords,
-// loadPriceLookback, loadLatestRegimeState, loadLabeledRecordsByHorizon, openDatabase) are left
-// real -- pointed at config.storage_path=":memory:" below, they run against a genuine but
-// freshly-empty in-memory database and naturally return empty results, no network/disk touched.
+// `db/index.js`'s read-path functions (loadLabeledFactorRecords, loadPriceLookback,
+// loadLatestRegimeState, loadLabeledRecordsByHorizon, openDatabase) are left real -- pointed at
+// config.storage_path=":memory:" below, they run against a genuine but freshly-empty in-memory
+// database and naturally return empty results, no network/disk touched.
 vi.mock('../../src/pipeline/collector.js', () => ({ collectMarket: collectMarketMock }));
 vi.mock('../../src/pipeline/factors.js', () => ({ scoreSnapshot: scoreSnapshotMock }));
 vi.mock('../../src/reports/writeReports.js', () => ({ writeReports: writeReportsMock }));
@@ -37,8 +33,7 @@ describe('runPipeline', () => {
       provider_status: { coinglass: { status: 'ok' } },
     };
     // `market_context` intentionally omitted from the mocked scoreSnapshot result, exercising
-    // pipeline.py:58's `scored.get("market_context", collected.get("market_context", {}))`
-    // fallback to `collected.market_context`.
+    // runPipeline's fallback to collected.market_context when scored.market_context is absent.
     const scored = {
       rows: [{ symbol: 'BTC', scores: {}, factors: {} }],
       factor_weights: { mode: 'prior' },

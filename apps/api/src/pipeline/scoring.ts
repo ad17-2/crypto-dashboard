@@ -1,11 +1,10 @@
 /**
  * Numeric primitives shared by the collector/enrichment/quality stages and the factor-ranking
- * stage. Port of crypto_screener/scoring.py. median/zscore/rank/correlation helpers below back
- * the factor engine (apps/api/src/pipeline/factors.ts, weighting.ts, regime.ts, ...).
+ * stage. median/zscore/rank/correlation helpers below back the factor engine
+ * (factors.ts, weighting.ts, regime.ts, ...).
  */
 
-/** Port of scoring.py::to_float. Mirrors Python's `float(value)` coercion, including that
- * `float("")`/`float("not-a-number")` raise (-> default) rather than parsing to 0/NaN. */
+/** An empty or non-numeric string returns `defaultValue` rather than parsing to 0/NaN. */
 export function toFloat(value: unknown, defaultValue: number | null = null): number | null {
   if (value === null || value === undefined) {
     return defaultValue;
@@ -27,12 +26,10 @@ export function toFloat(value: unknown, defaultValue: number | null = null): num
   return defaultValue;
 }
 
-/** Port of scoring.py::clamp. */
 export function clamp(value: number, low = 0.0, high = 1.0): number {
   return Math.max(low, Math.min(high, value));
 }
 
-/** Port of scoring.py::pct_change. */
 export function pctChange(oldValue: number | null, newValue: number | null): number | null {
   if (oldValue === null || oldValue === 0 || newValue === null) {
     return null;
@@ -40,8 +37,7 @@ export function pctChange(oldValue: number | null, newValue: number | null): num
   return ((newValue - oldValue) / oldValue) * 100.0;
 }
 
-/** Port of scoring.py::funding_annualized_pct. Perpetual funding is commonly 8-hourly;
- * annualization assumes 3 periods/day. */
+/** Perpetual funding is commonly 8-hourly; annualization assumes 3 periods/day. */
 export function fundingAnnualizedPct(rate: number | null): number | null {
   if (rate === null) {
     return null;
@@ -49,12 +45,11 @@ export function fundingAnnualizedPct(rate: number | null): number | null {
   return rate * 3 * 365 * 100.0;
 }
 
-/** Port of scoring.py::mean. */
 export function mean(values: number[]): number {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0.0;
 }
 
-/** Port of scoring.py::stdev (population standard deviation, not sample). */
+/** Population standard deviation (ddof=0), not sample stdev. */
 export function stdev(values: number[]): number {
   if (values.length < 2) {
     return 0.0;
@@ -65,9 +60,9 @@ export function stdev(values: number[]): number {
 }
 
 /**
- * Port of Python's `round(x, ndigits)` for the non-negative-ndigits case used throughout the
- * factor engine, including Python's round-HALF-TO-EVEN tie-break (`round(2.5) == 2`,
- * `round(-2.5) == -2`) -- `Number.prototype.toFixed` rounds exact ties AWAY from zero instead
+ * Rounds to `digits` decimal places (non-negative only) using round-HALF-TO-EVEN tie-breaking
+ * (`pyRound(2.5, 0) === 2`, `pyRound(-2.5, 0) === -2`), the convention used throughout the factor
+ * engine -- `Number.prototype.toFixed` rounds exact ties AWAY from zero instead
  * (`(2.5).toFixed(0) === '3'`), which is the wrong rule for values that land on an exact decimal
  * tie (plausible here: e.g. a weight ratio of two simple priors).
  *
@@ -114,8 +109,8 @@ export function pyRound(value: number, digits = 0): number {
 }
 
 /**
- * Port of Python's `math.copysign(magnitude, sign)`: `|magnitude|` carrying the sign of `sign`,
- * including the sign of a signed zero (`sign = -0.0` yields a negative result).
+ * `|magnitude|` carrying the sign of `sign`, including the sign of a signed zero (`sign = -0.0`
+ * yields a negative result).
  */
 export function copysign(magnitude: number, sign: number): number {
   const negative = sign < 0 || Object.is(sign, -0);
@@ -123,7 +118,6 @@ export function copysign(magnitude: number, sign: number): number {
   return negative ? -absMagnitude : absMagnitude;
 }
 
-/** Port of scoring.py::safe_log10. */
 export function safeLog10(value: number | null): number {
   if (value === null || value <= 0) {
     return 0.0;
@@ -131,7 +125,6 @@ export function safeLog10(value: number | null): number {
   return Math.log10(value);
 }
 
-/** Port of scoring.py::median. */
 export function median(values: number[]): number {
   if (values.length === 0) {
     return 0.0;
@@ -144,7 +137,27 @@ export function median(values: number[]): number {
   return sorted[middle] as number;
 }
 
-/** Port of scoring.py::zscore_by_key. */
+/** Weighted average of `valueKey` by `weightKey`; rows with a missing value or non-positive
+ * weight are excluded, and `null` is returned when total weight is 0. */
+export function weightedAverage(
+  rows: Array<Record<string, unknown>>,
+  valueKey: string,
+  weightKey: string,
+): number | null {
+  let weightedSum = 0.0;
+  let totalWeight = 0.0;
+  for (const row of rows) {
+    const value = toFloat(row[valueKey]);
+    const weight = toFloat(row[weightKey], 0.0) ?? 0.0;
+    if (value === null || weight <= 0) {
+      continue;
+    }
+    weightedSum += value * weight;
+    totalWeight += weight;
+  }
+  return totalWeight > 0 ? weightedSum / totalWeight : null;
+}
+
 export function zscoreByKey(rows: Array<Record<string, unknown>>, key: string): number[] {
   const values = rows.map((row) => toFloat(row[key]));
   const valid = values.filter((value): value is number => value !== null);
@@ -163,7 +176,6 @@ export function zscoreByKey(rows: Array<Record<string, unknown>>, key: string): 
 // Scale MAD to approximate standard deviation under normality.
 const MAD_SCALE = 1.4826;
 
-/** Port of scoring.py::robust_zscore_by_key. */
 export function robustZscoreByKey(
   rows: Array<Record<string, unknown>>,
   key: string,
@@ -188,7 +200,7 @@ export function robustZscoreByKey(
   );
 }
 
-/** Port of scoring.py::average_ranks (1-indexed, ties get the average rank of the tied span). */
+/** Ranks are 1-indexed; ties get the average rank of the tied span (tied-rank Spearman). */
 export function averageRanks(values: number[]): number[] {
   const indexed = values
     .map((value, index) => ({ index, value }))
@@ -210,7 +222,6 @@ export function averageRanks(values: number[]): number[] {
   return ranks;
 }
 
-/** Port of scoring.py::pearson_corr. */
 export function pearsonCorr(xValues: number[], yValues: number[]): number | null {
   if (xValues.length !== yValues.length || xValues.length < 2) {
     return null;
@@ -235,7 +246,6 @@ export function pearsonCorr(xValues: number[], yValues: number[]): number | null
   return numerator / (xDen * yDen);
 }
 
-/** Port of scoring.py::spearman_corr. */
 export function spearmanCorr(xValues: number[], yValues: number[]): number | null {
   if (xValues.length !== yValues.length || xValues.length < 2) {
     return null;

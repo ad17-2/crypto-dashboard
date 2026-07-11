@@ -1,17 +1,13 @@
 import type Database from 'better-sqlite3';
 import { pyRound } from '../pipeline/scoring.js';
 
-/** Port of crypto_screener/dashboard_freshness.py. */
-
 const EXPLICIT_OFFSET_PATTERN = /(Z|[+-]\d{2}:\d{2})$/;
 
 /**
- * Parses an ISO-8601 `generated_at` string the way `datetime.fromisoformat` does, with the SAME
- * naive-string fallback dashboard_freshness.py uses: a string with no offset/Z suffix is assumed
- * to be **UTC**. This deliberately differs from db/time.ts::parseGeneratedAt, which assumes
- * Asia/Jakarta (+07:00) for naive strings -- that is storage.py's convention for its own cutoff
- * math, not dashboard_freshness.py's. Returns null on an unparseable string (mirrors the
- * `except ValueError` branch).
+ * A string with no offset/Z suffix is assumed to be **UTC** here — this deliberately differs from
+ * db/time.ts::parseGeneratedAt, which assumes Asia/Jakarta (+07:00) for naive strings; that
+ * assumption belongs to the storage layer's own cutoff math, not this freshness computation.
+ * Returns null on an unparseable string.
  */
 function parseIsoAssumingUtc(text: string): Date | null {
   const withOffset = EXPLICIT_OFFSET_PATTERN.test(text) ? text : `${text}Z`;
@@ -28,7 +24,6 @@ export interface FreshnessSummary {
   help?: string;
 }
 
-/** Port of dashboard_freshness.py::freshness_summary. */
 export function freshnessSummary(generatedAt: string | null | undefined): FreshnessSummary {
   if (!generatedAt) {
     return { status: 'unknown', label: 'unknown', age_seconds: null, age_minutes: null };
@@ -64,8 +59,7 @@ export function freshnessSummary(generatedAt: string | null | undefined): Freshn
   };
 }
 
-/** Port of dashboard_freshness.py::latest_run_generated_at, taking an already-open db handle
- * instead of a db path (this port's convention -- see apps/api/src/db/client.ts::openDatabase). */
+/** Takes an already-open db handle rather than a path (see db/client.ts::openDatabase). */
 export function latestRunGeneratedAt(db: Database.Database): Date | null {
   const row = db
     .prepare('SELECT generated_at FROM runs ORDER BY generated_at DESC LIMIT 1')
@@ -76,7 +70,6 @@ export function latestRunGeneratedAt(db: Database.Database): Date | null {
   return parseIsoAssumingUtc(row.generated_at);
 }
 
-/** Port of dashboard_freshness.py::latest_run_age_seconds. */
 export function latestRunAgeSeconds(db: Database.Database): number | null {
   const generatedAt = latestRunGeneratedAt(db);
   if (generatedAt === null) {

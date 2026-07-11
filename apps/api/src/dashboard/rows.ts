@@ -8,12 +8,9 @@ import { asArray, asRecord } from '../pipeline/types.js';
 import { confluenceSummary } from './confluence.js';
 import { factorLabel } from './taxonomy.js';
 
-/** Port of crypto_screener/dashboard_rows.py. */
-
 const MIN_HISTORY_POINTS = 6;
 
-/** One point of factor_history built by dashboard/payload.ts::historyBySymbol. Field set mirrors
- * dashboard_payload.py::_history_by_symbol's per-point dict exactly. */
+/** One point of factor_history built by dashboard/payload.ts::historyBySymbol. */
 export interface HistoryPoint {
   generated_at: string;
   price_usd: number | null;
@@ -36,8 +33,7 @@ export interface HistoryPoint {
   signal_conflict_score: number | null;
 }
 
-/** Passes a value through only if it is already a JS `number` (Python's `dict.get(key)` with no
- * coercion), else `null`. Exported for reuse by dashboard/payload.ts's own row-field pass-through. */
+/** Passes a value through only if it is already a JS `number`, else `null`; no coercion. */
 export function numberOrNull(value: unknown): number | null {
   return typeof value === 'number' ? value : null;
 }
@@ -47,7 +43,6 @@ export function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-/** Port of dashboard_rows.py::history_percentile. */
 export function historyPercentile(
   history: HistoryPoint[] | null | undefined,
   historyKey: keyof HistoryPoint,
@@ -75,7 +70,6 @@ export function historyPercentile(
   return pyRound(rank, 0);
 }
 
-/** Port of dashboard_rows.py::setup_label. */
 export function setupLabel(row: Row, side: string): string {
   const technicalSetup = typeof row.technical_setup === 'string' ? row.technical_setup : '';
   if (technicalSetup && (side === 'long' || side === 'short')) {
@@ -122,7 +116,6 @@ export function setupLabel(row: Row, side: string): string {
   return 'Watchlist';
 }
 
-/** Port of dashboard_rows.py::setup_tone. */
 export function setupTone(side: string): string {
   if (side === 'long') {
     return 'pos';
@@ -136,7 +129,6 @@ export function setupTone(side: string): string {
   return 'neutral';
 }
 
-/** Port of dashboard_rows.py::chart_priority. */
 export function chartPriority(row: Row, scoreField: string, score: unknown): number {
   const numericScore =
     Math.abs(toFloat(score) ?? 0.0) * (scoreField === 'factor_score' ? 100.0 : 1.0);
@@ -160,7 +152,6 @@ export interface FactorPart {
   tone: string;
 }
 
-/** Port of dashboard_rows.py::reason_tone. */
 export function reasonTone(value: number): string {
   if (value > 0) {
     return 'pos';
@@ -171,7 +162,6 @@ export function reasonTone(value: number): string {
   return 'neutral';
 }
 
-/** Port of dashboard_rows.py::factor_parts. */
 export function factorParts(factors: Record<string, unknown>): FactorPart[] {
   const parts: FactorPart[] = [];
   for (const name of DIRECTIONAL_FACTORS) {
@@ -189,7 +179,6 @@ export function factorParts(factors: Record<string, unknown>): FactorPart[] {
   return parts.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
 }
 
-/** Port of dashboard_rows.py::primary_driver. */
 export function primaryDriver(factors: Record<string, unknown>): FactorPart | null {
   const parts = factorParts(factors);
   return parts.length > 0 ? (parts[0] as FactorPart) : null;
@@ -201,7 +190,6 @@ export interface RowExplanation {
   risk: string[];
 }
 
-/** Port of dashboard_rows.py::token_explanation. */
 export function tokenExplanation(row: Row, side: string, setup: string): RowExplanation {
   const symbol = row.symbol ? String(row.symbol) : '-';
   const driver = primaryDriver(asRecord(row.factors));
@@ -284,7 +272,6 @@ function appendReasonMetric(
   });
 }
 
-/** Port of dashboard_rows.py::reason_parts. */
 export function reasonParts(row: Row, side: string): ReasonPart[] {
   const parts: ReasonPart[] = [];
   const scores = asRecord(row.scores);
@@ -439,10 +426,9 @@ const TECHNICAL_STATE_KEYS = [
 ] as const;
 
 /**
- * Port of dashboard_rows.py::technical_state: `{key: row.get(key) for key in keys if row.get(key)
- * is not None}` -- every present value is copied through as-is, whatever its type. The cast back
+ * Copies every present (non-null/undefined) key through as-is, whatever its type. The cast back
  * to DashboardRow['technical_state'] is safe because these keys are only ever written by
- * technicals.ts (already-verified pipeline stage) as the string/number types that schema expects.
+ * technicals.ts (already-verified pipeline stage) as the string/number types the schema expects.
  */
 export function technicalState(row: Row): DashboardRow['technical_state'] {
   const state: Record<string, unknown> = {};
@@ -455,7 +441,6 @@ export function technicalState(row: Row): DashboardRow['technical_state'] {
   return state as DashboardRow['technical_state'];
 }
 
-/** Port of dashboard_rows.py::technical_tone. */
 export function technicalTone(row: Row): string {
   const trend = toFloat(row.technical_trend_score);
   const momentum = toFloat(row.technical_momentum_score);
@@ -466,7 +451,6 @@ export function technicalTone(row: Row): string {
   return reasonTone(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
-/** The exact key tuple dashboard_rows.py::dashboard_row builds its "scores" sub-object from. */
 const SCORE_KEYS = [
   'factor_score',
   'long_score',
@@ -487,7 +471,6 @@ function rowScores(scores: Record<string, unknown>): DashboardRow['scores'] {
   return result;
 }
 
-/** Port of dashboard_rows.py::dashboard_row. */
 export function dashboardRow(
   row: Row,
   scoreField: string,

@@ -4,10 +4,8 @@ import type { AppConfig } from './config/index.js';
 import { loadConfig } from './config/index.js';
 
 /**
- * Port of crypto_screener/dashboard.py::settings_from_env, split out as its own module per the
- * TS monorepo layout (Express owns the pipeline + scheduler; apps/web no longer serves this).
- * Names and defaults are preserved exactly; HOST/PORT are dropped because apps/web now owns the
- * public $PORT and apps/api only ever binds 127.0.0.1:API_PORT.
+ * No HOST/PORT here: apps/web owns the public $PORT and proxies to this process, which only ever
+ * binds 127.0.0.1:API_PORT.
  */
 
 const rawEnvSchema = z.object({
@@ -94,8 +92,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
 }
 
 /**
- * Parity with `dashboard.py::_refresh_allowed`: an unset/empty configured token means
- * POST /api/refresh is ALWAYS forbidden. Never default-allow.
+ * Default-deny: an unset/empty configured token means POST /api/refresh is ALWAYS forbidden.
+ * Never default-allow.
  *
  * Compares with `timingSafeEqual` rather than `===`: a refresh token is a bearer credential
  * reachable over the public POST /api/refresh route, and `===` short-circuits on the first
@@ -117,7 +115,6 @@ export function isRefreshAllowed(configuredToken: string | null, suppliedToken: 
   return timingSafeEqual(configured, supplied);
 }
 
-/** Parity with `dashboard.py::_parse_daily_refresh_times`: dedupe, then sort ascending. */
 export function parseDailyRefreshTimes(raw: string): DailyRefreshTime[] {
   const times: DailyRefreshTime[] = [];
   for (const part of raw.split(',')) {
@@ -132,7 +129,7 @@ export function parseDailyRefreshTimes(raw: string): DailyRefreshTime[] {
   return times.sort((a, b) => a.hour - b.hour || a.minute - b.minute);
 }
 
-/** Parity with `dashboard.py::_parse_daily_refresh_time`: strict "HH:MM", throws on garbage. */
+/** Strict "HH:MM"; throws on anything else, including a missing colon or non-integer parts. */
 function parseDailyRefreshTime(raw: string): DailyRefreshTime | null {
   const value = raw.trim();
   if (!value) {

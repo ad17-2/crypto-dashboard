@@ -3,8 +3,6 @@ import { pctChange, toFloat } from './scoring.js';
 import type { Row } from './types.js';
 
 /**
- * Port of crypto_screener/quality.py.
- *
  * Rows failing checks are NEVER dropped here -- they stay in the returned array with
  * `is_trusted: false` and a populated `data_quality_flags` array. A later ranking stage is
  * responsible for excluding untrusted rows from factor ranking; this module only flags them.
@@ -28,7 +26,7 @@ export interface DataQualityStatus {
   note: string;
 }
 
-/** Port of quality.py::apply_data_quality. Mutates every row in place with the quality fields. */
+/** Mutates every row in place with the quality fields. */
 export function applyDataQuality(
   rows: Row[],
   config: { data_quality?: Partial<DataQualityConfig> },
@@ -62,7 +60,6 @@ export function applyDataQuality(
   };
 }
 
-/** Port of quality.py::data_quality_flags. */
 export function dataQualityFlags(row: Row, config: DataQualityConfig): string[] {
   const flags: string[] = [];
 
@@ -199,17 +196,16 @@ function flagAbsThreshold(
   }
 }
 
-/** Python `str.isalnum()`: non-empty and every character is a Unicode letter or digit. */
+/** Non-empty and every character is a Unicode letter or digit (an empty string is not alnum). */
 function isAlnum(text: string): boolean {
   return text.length > 0 && /^[\p{L}\p{N}]+$/u.test(text);
 }
 
-/** Python `f"{value:.2f}"`-style fixed formatting. */
 function formatFixed(value: number, decimals: number): string {
   return value.toFixed(decimals);
 }
 
-/** Python `f"{value:+.2f}"`-style signed fixed formatting. */
+/** Fixed-point formatting with an explicit sign, e.g. `+3.14`/`-3.14`. */
 function formatSigned(value: number, decimals: number): string {
   const fixed = value.toFixed(decimals);
   return value >= 0 ? `+${fixed}` : fixed;

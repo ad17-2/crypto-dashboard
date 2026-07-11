@@ -1,14 +1,9 @@
 import type { DashboardRow } from '@crypto-screener/contracts';
 import { numeric } from './format';
 
-/**
- * Row-domain helpers ported 1:1 from the legacy dashboard.js: the TradingView link builder, the
- * retail-vs-top-trader positioning divergence read, and the row identity key used to track table
- * selection across re-sorts/re-filters.
- */
-
-/** Stable identity for a row within a watchlist (symbol + side + score field can repeat across
- * watchlists, so this triple is what the legacy dashboard keys selection/DOM diffing on). */
+/** Stable identity for a row within a single watchlist tab: symbol + side + score field. The same
+ * triple can appear in more than one watchlist, so this key is only unique within the currently
+ * active list — selection is reset on tab change. */
 export function rowKey(row: DashboardRow): string {
   return `${row.symbol || '-'}:${row.side || '-'}:${row.score_field || '-'}`;
 }
@@ -35,7 +30,7 @@ function tradingViewExchange(exchange: string | null | undefined): string {
   return TRADINGVIEW_EXCHANGES[key] || 'BYBIT';
 }
 
-export function tradingViewSymbol(row: Pick<DashboardRow, 'symbol' | 'primary_exchange'>): string {
+function tradingViewSymbol(row: Pick<DashboardRow, 'symbol' | 'primary_exchange'>): string {
   const base = String(row.symbol || '')
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
@@ -104,8 +99,8 @@ export function positioningDivergence(
 
 const HIDDEN_CONFLICT_LABELS = new Set(['aligned', 'neutral', 'unknown']);
 
-/** The conflict sub-label shown under the SETUP badge (e.g. "high-conflict"); null when it's one
- * of the "nothing to flag" labels the legacy dashboard hides. */
+/** The conflict sub-label shown under the SETUP badge (e.g. "high-conflict"); null when the label
+ * is non-actionable (aligned/neutral/unknown) and shouldn't be surfaced. */
 export function setupConflictMeta(row: Pick<DashboardRow, 'signal_conflict_label'>): string | null {
   const conflict = String(row.signal_conflict_label || '');
   return conflict && !HIDDEN_CONFLICT_LABELS.has(conflict) ? conflict : null;

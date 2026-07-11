@@ -1,8 +1,6 @@
 import { pyRound, spearmanCorr, toFloat } from './scoring.js';
 import { asRecord } from './types.js';
 
-/** Port of crypto_screener/independence.py. */
-
 const DUPLICATE_THRESHOLD = 0.95;
 const REDUNDANT_THRESHOLD = 0.8;
 const FLAG_THRESHOLD = 0.6;
@@ -14,7 +12,6 @@ export interface FactorCorrelationFlag {
   verdict: 'duplicate' | 'redundant' | 'correlated';
 }
 
-/** Port of independence.py::factor_correlations. */
 export function factorCorrelations(
   rows: Array<Record<string, unknown>>,
   factorNames: string[],

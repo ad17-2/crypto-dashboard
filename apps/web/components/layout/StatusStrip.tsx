@@ -1,12 +1,14 @@
 import type { Freshness, Quality } from '@crypto-screener/contracts';
 import type { ReactNode } from 'react';
+import { clsFor, fmtPct } from '@/lib/format';
+import { asProviderEntry, providerTone } from '@/lib/provider-status';
 
 export interface StatusStripProps {
   freshness: Freshness;
   quality: Quality;
-  /** Untyped on the wire (crypto_screener/regime.py builds a free-form dict) — read defensively. */
+  /** Untyped on the wire (the API returns a free-form object here) — read defensively. */
   regime: Record<string, unknown>;
-  /** Untyped on the wire (crypto_screener/dashboard_payload.py::_market_context) — read defensively. */
+  /** Untyped on the wire (the API returns a free-form object here) — read defensively. */
   marketContext: Record<string, unknown>;
   /** Untyped on the wire, one entry per data provider (coingecko, coinglass, ...). */
   providerStatus: Record<string, unknown>;
@@ -14,7 +16,7 @@ export interface StatusStripProps {
 
 /**
  * The LIVE/age pill, BIAS, REGIME, MC 24H, BTC.D, BTC.D delta, ETH/BTC, TRUSTED/EXCL counts, and
- * the PROVIDERS chips row. Ports `marketTape()` from the legacy dashboard.js 1:1.
+ * the PROVIDERS chips row.
  */
 export function StatusStrip({
   freshness,
@@ -91,11 +93,6 @@ function Segment({
   );
 }
 
-interface ProviderEntry {
-  status: string;
-  rows?: number | undefined;
-}
-
 function ProviderDots({ providers }: { providers: Record<string, unknown> }) {
   const entries = Object.entries(providers);
   if (entries.length === 0) {
@@ -105,33 +102,16 @@ function ProviderDots({ providers }: { providers: Record<string, unknown> }) {
     <span className="provider-dots">
       {entries.map(([name, raw]) => {
         const details = asProviderEntry(raw);
-        const tone =
-          details.status === 'ok'
-            ? ''
-            : details.status === 'skipped' || details.status === 'disabled'
-              ? 'warn'
-              : 'bad';
         const title =
           details.rows === undefined ? details.status : `${details.status} / ${details.rows} rows`;
         return (
-          <span key={name} className={`provider-dot ${tone}`} title={title}>
+          <span key={name} className={`provider-dot ${providerTone(details.status)}`} title={title}>
             {name}
           </span>
         );
       })}
     </span>
   );
-}
-
-function asProviderEntry(value: unknown): ProviderEntry {
-  if (typeof value !== 'object' || value === null) {
-    return { status: '-' };
-  }
-  const record = value as Record<string, unknown>;
-  return {
-    status: asString(record.status) ?? '-',
-    rows: typeof record.rows === 'number' ? record.rows : undefined,
-  };
 }
 
 function asString(value: unknown): string | undefined {
@@ -144,16 +124,4 @@ function tapeAge(freshness: Freshness): string {
     return `${freshness.age_minutes.toFixed(0)}m ago`;
   }
   return freshness.label || 'unknown';
-}
-
-function clsFor(value: unknown): string {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n) || n === 0) return '';
-  return n > 0 ? 'text-up' : 'text-down';
-}
-
-function fmtPct(value: unknown, digits = 2): string {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n)) return '-';
-  return `${n >= 0 ? '+' : ''}${n.toFixed(digits)}%`;
 }

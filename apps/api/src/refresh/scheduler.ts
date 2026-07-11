@@ -4,18 +4,14 @@ import type { DailyRefreshTime } from '../env.js';
 import type { RefreshRuntime } from './runtime.js';
 
 /**
- * Port of the scheduling half of crypto_screener/dashboard.py: `start_auto_refresh`,
- * `_start_daily_refresh`, `_daily_refresh_due`, `_scheduled_refresh_due`,
- * `_seconds_until_next_daily_check`, and `_scheduled_datetime` (dashboard.py:130-207).
- *
- * Python runs each loop on a dedicated OS thread and blocks it with `time.sleep`. Node has one
- * event loop, so every loop here is a `setTimeout`-driven async recursion instead: it awaits the
- * (possible) refresh, then schedules its next tick, never blocking the loop while idle.
+ * Node has one event loop, so every scheduler loop here is `setTimeout`-driven async recursion:
+ * it awaits the (possible) refresh, then schedules its next tick, never blocking the loop while
+ * idle.
  *
  * Due-ness is recomputed from the LATEST RUN's `generated_at` in SQLite on every tick -- there is
- * no persisted "next fire time" -- so a process restart mid-day can never double-fire (the just-
- * written run is already newer than today's target) or skip a day (a missed target is still in
- * the past and still due, exactly like the Python original tests assert).
+ * no persisted "next fire time" -- so a process restart mid-day can never double-fire (the
+ * just-written run is already newer than today's target) or skip a day (a missed target is still
+ * in the past and still due).
  */
 
 interface ZonedParts {
@@ -88,8 +84,8 @@ function offsetMinutesAt(instant: Date, timeZone: string): number {
  * Converts a wall-clock date + time in `timeZone` to the absolute instant it represents. Standard
  * "guess as UTC, then correct by the zone's actual offset at that guess" technique: correct for
  * all fixed-offset zones (Asia/Jakarta, the default, included) and for DST-observing zones except
- * within the ambiguous/skipped hour of a transition itself, which Python's `zoneinfo` also has to
- * pick a convention for -- not a concern for daily refresh windows in practice.
+ * within the ambiguous/skipped hour of a transition itself -- not a concern for daily refresh
+ * windows in practice.
  */
 function zonedTimeToUtc(
   year: number,
@@ -104,8 +100,8 @@ function zonedTimeToUtc(
   return new Date(guessMs - offset * 60_000);
 }
 
-/** Port of `dashboard.py::_scheduled_datetime`: today's (in `timeZone`, "today" being `now`'s
- * calendar date in that zone) occurrence of `refreshTime`. */
+/** Today's (in `timeZone`, "today" being `now`'s calendar date in that zone) occurrence of
+ * `refreshTime`. */
 export function scheduledDatetime(
   now: Date,
   refreshTime: DailyRefreshTime,
@@ -115,7 +111,6 @@ export function scheduledDatetime(
   return zonedTimeToUtc(year, month, day, refreshTime.hour, refreshTime.minute, timeZone);
 }
 
-/** Port of `dashboard.py::_daily_refresh_due`. */
 export function dailyRefreshDue(
   db: Database.Database,
   now: Date,
@@ -133,7 +128,6 @@ export function dailyRefreshDue(
   return latest.getTime() < target.getTime();
 }
 
-/** Port of `dashboard.py::_scheduled_refresh_due`. */
 export function scheduledRefreshDue(
   db: Database.Database,
   now: Date,
@@ -143,7 +137,6 @@ export function scheduledRefreshDue(
   return refreshTimes.some((refreshTime) => dailyRefreshDue(db, now, refreshTime, timeZone));
 }
 
-/** Port of `dashboard.py::_seconds_until_next_daily_check`. */
 export function secondsUntilNextDailyCheck(
   now: Date,
   refreshTimes: readonly DailyRefreshTime[],
@@ -168,7 +161,7 @@ export interface AutoRefreshOptions {
   autoRefreshSeconds: number;
 }
 
-/** Port of `dashboard.py::start_auto_refresh`: daily mode takes precedence over interval mode. */
+/** Daily mode takes precedence over interval mode. */
 export function startAutoRefresh(
   runtime: RefreshRuntime,
   db: Database.Database,
@@ -183,7 +176,6 @@ export function startAutoRefresh(
   return startIntervalRefresh(runtime, db, options.autoRefreshSeconds);
 }
 
-/** Port of the `loop()` closure inside `dashboard.py::start_auto_refresh` (interval mode). */
 function startIntervalRefresh(
   runtime: RefreshRuntime,
   db: Database.Database,
@@ -213,7 +205,6 @@ function startIntervalRefresh(
   };
 }
 
-/** Port of `dashboard.py::_start_daily_refresh`. */
 function startDailyRefresh(
   runtime: RefreshRuntime,
   db: Database.Database,

@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import { stableStringify } from './json.js';
 import type { RegimeStateSummary, SnapshotPayload } from './types.js';
 
-/** Mirrors scoring.py's `to_float`: best-effort numeric coercion, None/unparseable -> null. */
+/** Best-effort numeric coercion: null/undefined/unparseable all become null. */
 function toFloat(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
@@ -12,8 +12,7 @@ function toFloat(value: unknown): number | null {
 }
 
 /**
- * Mirrors storage.py's `_persist_market_regime_history`: appends one row per
- * run to market_regime_history. Plain INSERT, not INSERT OR REPLACE -- this
+ * Appends one row per run to market_regime_history. Plain INSERT, not INSERT OR REPLACE — this
  * table has no primary key and is meant to accumulate a full history.
  */
 export function recordRegimeHistory(db: Database.Database, payload: SnapshotPayload): void {
@@ -33,7 +32,6 @@ export function recordRegimeHistory(db: Database.Database, payload: SnapshotPayl
   );
 }
 
-/** Mirrors storage.py's `load_regime_states`. */
 export function loadRegimeStates(db: Database.Database): Record<string, string> {
   const rows = db
     .prepare(`
@@ -50,7 +48,6 @@ export function loadRegimeStates(db: Database.Database): Record<string, string> 
   return result;
 }
 
-/** Mirrors storage.py's `load_latest_regime_state`. */
 export function loadLatestRegimeState(db: Database.Database): RegimeStateSummary | null {
   const row = db
     .prepare(`

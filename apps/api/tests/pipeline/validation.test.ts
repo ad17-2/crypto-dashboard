@@ -13,8 +13,7 @@ import { formatJakartaIso } from '../../src/db/time.js';
 import type { FactorRecord } from '../../src/pipeline/ic.js';
 import { factorDecay, walkForward } from '../../src/pipeline/validation.js';
 
-/** Port of tests/test_walkforward.py's direct walkForward() tests and tests/test_decay.py. The
- * factorWeights()-level walk-forward GATING tests live in weighting.test.ts alongside the
+/** The factorWeights()-level walk-forward GATING tests live in weighting.test.ts alongside the
  * regime-conditional IC tests, since both exercise factorWeights() rather than walkForward()
  * itself. */
 

@@ -86,7 +86,7 @@ describe('openDatabase / ensureSchema', () => {
 
   it('adds missing legacy columns (regime_json, factor_weights_json) to an old-schema runs table', () => {
     // Simulate a database created before regime_json/factor_weights_json existed on `runs`,
-    // mirroring the exact legacy DDL storage.py's _ensure_column migration guards against.
+    // exercising the legacy-column migration in ensureSchema.
     mkdirSync(join(dir, 'nested'), { recursive: true });
     const db = new Database(dbPath);
     db.exec(`

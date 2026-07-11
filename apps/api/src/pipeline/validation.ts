@@ -4,7 +4,7 @@ import { pyRound, toFloat } from './scoring.js';
 import type { PipelineConfig } from './types.js';
 import { asRecord } from './types.js';
 
-/** Port of crypto_screener/factors.py's walk-forward and decay validation functions. */
+/** Walk-forward robustness testing and multi-horizon factor-decay curves. */
 
 function signValue(value: number): -1 | 0 | 1 {
   return value > 0 ? 1 : value < 0 ? -1 : 0;
@@ -27,7 +27,6 @@ export interface WalkForwardResult {
   factors: Record<string, WalkForwardFactorResult>;
 }
 
-/** Port of factors.py::walk_forward. */
 export function walkForward(
   historyRecords: FactorRecord[],
   config: PipelineConfig,
@@ -128,7 +127,6 @@ export interface FactorDecaySummary {
   sufficient: boolean;
 }
 
-/** Port of factors.py::factor_decay. */
 export function factorDecay(
   recordsByHorizon: Map<number, FactorRecord[]>,
   config: PipelineConfig,
@@ -232,7 +230,6 @@ export interface DirectionalValidationResult {
   short_hit_rate?: number | null;
 }
 
-/** Port of factors.py::_directional_validation. */
 export function directionalValidation(
   pairs: ReadonlyArray<readonly [number | null, number | null]>,
 ): DirectionalValidationResult {
@@ -257,7 +254,6 @@ export function directionalValidation(
   };
 }
 
-/** Port of factors.py::_hit_rate. */
 export function hitRate(
   pairs: ReadonlyArray<readonly [number, number]>,
   expectedDirection: number,
@@ -277,7 +273,6 @@ export interface ValidationMetrics {
   factors: Record<string, DirectionalValidationResult>;
 }
 
-/** Port of factors.py::validation_metrics. */
 export function validationMetrics(
   historyRecords: FactorRecord[],
   config: PipelineConfig,

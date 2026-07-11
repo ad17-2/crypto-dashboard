@@ -1,5 +1,3 @@
-/** Port of crypto_screener/dashboard_taxonomy.py. */
-
 const FACTOR_LABELS: Record<string, string> = {
   momentum_24h: 'Momentum',
   reversal_3d: 'Reversal 3d',
@@ -16,12 +14,12 @@ const FACTOR_LABELS: Record<string, string> = {
 };
 
 /**
- * Mirrors Python's `str.title()`: a "word" starts wherever the previous character was not a
- * cased letter, so digits and punctuation also reset capitalization (e.g. "reversal_1d" ->
- * "reversal 1d" -> "Reversal 1D", with the D capitalized because it follows the digit "1"). A
- * naive "capitalize first letter of each space-split word" port would miss that digit case.
+ * A "word" starts wherever the previous character was not a cased letter, so digits and
+ * punctuation also reset capitalization (e.g. "reversal_1d" -> "reversal 1d" -> "Reversal 1D",
+ * with the D capitalized because it follows the digit "1"). A naive "capitalize first letter of
+ * each space-split word" implementation would miss that digit case.
  */
-function pythonTitle(text: string): string {
+function titleCase(text: string): string {
   let result = '';
   let previousWasCased = false;
   for (const char of text) {
@@ -36,7 +34,6 @@ function pythonTitle(text: string): string {
   return result;
 }
 
-/** Port of dashboard_taxonomy.py::factor_label. */
 export function factorLabel(name: string): string {
-  return FACTOR_LABELS[name] ?? pythonTitle(name.replace(/_/g, ' '));
+  return FACTOR_LABELS[name] ?? titleCase(name.replace(/_/g, ' '));
 }

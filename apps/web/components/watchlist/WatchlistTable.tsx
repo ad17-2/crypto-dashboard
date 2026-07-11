@@ -7,7 +7,16 @@ import {
   sourceParts,
   tradingViewUrl,
 } from '@/lib/dashboard-row';
-import { arrowPct, clsFor, fmtNum, fmtPct, fmtUsd, numeric, qualityTone } from '@/lib/format';
+import {
+  arrowPct,
+  clsFor,
+  confluenceToneClass,
+  fmtNum,
+  fmtPct,
+  fmtUsd,
+  numeric,
+  qualityTone,
+} from '@/lib/format';
 import type { SortColumnKey, SortDirection } from '@/lib/watchlist-sort';
 
 export interface WatchlistTableProps {
@@ -35,11 +44,10 @@ const COLUMNS: Array<{ key: SortColumnKey; label: string }> = [
 ];
 
 /**
- * The watchlist grid itself: sortable headers + row rendering. Ports `watchHead()` /
- * `renderWatchTable()` from the legacy dashboard.js. Uses a real `<table>` for correct data-table
- * semantics (screen readers keep table navigation even though the legacy `.watch-head`/`.watch-row`
- * CSS classes override row/cell `display` to `grid` for the exact ported column layout — the
- * implicit table/row/cell roles survive a `display` override, so no explicit `role` is needed).
+ * The watchlist grid itself: sortable headers + row rendering. Uses a real `<table>` for correct
+ * data-table semantics, even though `.watch-head`/`.watch-row` override row/cell `display` to
+ * `grid` for the column layout — implicit table/row/cell roles survive a `display` override, so
+ * screen readers keep table navigation without any explicit `role` attributes.
  */
 export function WatchlistTable({
   rows,
@@ -293,10 +301,4 @@ function PositioningCell({ row }: { row: DashboardRow }) {
       ) : null}
     </td>
   );
-}
-
-function confluenceToneClass(tone: string): string {
-  if (tone === 'pos') return 'conf-pos';
-  if (tone === 'neg') return 'conf-neg';
-  return 'conf-neutral';
 }

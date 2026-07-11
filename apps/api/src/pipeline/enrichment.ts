@@ -8,15 +8,14 @@ import { technicalSnapshot } from './technicals.js';
 import type { Row } from './types.js';
 
 /**
- * Port of crypto_screener/coinglass_enrichment.py -- the three CoinGlass enrichment passes that
- * add technical/derivatives/long-short-ratio fields onto rows already produced by the collector.
- * Every pass is capped by its own `max_symbols` and throttled by `sleep()` between requests, and
- * every provider failure is captured into `status[...]` rather than aborting the run.
+ * Three CoinGlass enrichment passes that add technical/derivatives/long-short-ratio fields onto
+ * rows already produced by the collector. Each pass is capped by its own `max_symbols` and
+ * throttled by `sleep()` between requests; a provider failure for one row is captured into
+ * `status[...]` rather than aborting the whole run.
  */
 
 export type ProviderStatus = Record<string, unknown>;
 
-/** Port of coinglass_enrichment.py::append_coinglass_technicals. */
 export async function appendCoinglassTechnicals(
   rows: Row[],
   client: CoinGlassClient,
@@ -74,7 +73,6 @@ export async function appendCoinglassTechnicals(
   }
 }
 
-/** Port of coinglass_enrichment.py::append_coinglass_derivatives_history. */
 export async function appendCoinglassDerivativesHistory(
   rows: Row[],
   client: CoinGlassClient,
@@ -155,7 +153,6 @@ export async function appendCoinglassDerivativesHistory(
   }
 }
 
-/** Port of coinglass_enrichment.py::append_coinglass_long_short_ratio. */
 export async function appendCoinglassLongShortRatio(
   rows: Row[],
   client: CoinGlassClient,

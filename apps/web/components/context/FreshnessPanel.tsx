@@ -1,13 +1,14 @@
 import type { Freshness, RunSummary } from '@crypto-screener/contracts';
 import { Panel } from '@/components/layout/Panel';
 import { fmtNum } from '@/lib/format';
+import { Row } from './Row';
 
 export interface FreshnessPanelProps {
   freshness: Freshness;
   runs: RunSummary[];
 }
 
-/** Ports freshnessBlock() + runsBlock() from dashboard.js (shown together as one panel). */
+/** Freshness of the selected run, then a list of recent runs, shown together as one panel. */
 export function FreshnessPanel({ freshness, runs }: FreshnessPanelProps) {
   const meta = freshness.label || `${runs.length} loaded`;
 
@@ -51,15 +52,6 @@ function RunsBlock({ runs }: { runs: RunSummary[] }) {
           value={`${run.bias} / ${run.coinglass_status} / ${run.row_count} rows`}
         />
       ))}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="list-row flex justify-between gap-3 text-[13px]">
-      <strong>{label}</strong>
-      <span>{value}</span>
     </div>
   );
 }

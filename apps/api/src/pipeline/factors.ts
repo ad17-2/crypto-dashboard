@@ -10,8 +10,8 @@ import type { MarketContext, PipelineConfig, Row } from './types.js';
 import { asRecord } from './types.js';
 import { type FactorWeights, factorWeights } from './weighting.js';
 
-/** Port of crypto_screener/factors.py's row/orchestration functions (everything except the IC
- * weighting and validation/decay math, which live in weighting.ts and validation.ts). */
+/** Row/orchestration functions for the factor-ranking stage (IC weighting and validation/decay
+ * math live in weighting.ts and validation.ts). */
 
 export interface ScoreSnapshotResult {
   rows: Row[];
@@ -21,7 +21,7 @@ export interface ScoreSnapshotResult {
   regime: InferredRegime;
 }
 
-/** Port of factors.py::score_snapshot. Mutates every row in `rows` in place, mirroring Python. */
+/** Mutates every row in `rows` in place. */
 export function scoreSnapshot(
   rows: Row[],
   marketContext: MarketContext,
@@ -79,8 +79,7 @@ export function scoreSnapshot(
   };
 }
 
-/** Port of factors.py::_raw_factors. `rows` is accepted but unused, mirroring the Python
- * signature (kept so call sites -- and the ported test_reversal_is_volatility_normalized -- match). */
+/** `rows` is accepted but currently unused; kept in the signature for call-site stability. */
 export function rawFactors(
   row: Row,
   _rows: Row[],
@@ -159,7 +158,6 @@ export function rawFactors(
   };
 }
 
-/** Port of factors.py::_normalize_factors. */
 export function normalizeFactors(
   rawRows: Array<Record<string, number | null>>,
 ): Array<Record<string, number>> {

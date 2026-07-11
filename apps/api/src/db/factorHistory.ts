@@ -14,12 +14,9 @@ import type {
 } from './types.js';
 
 /**
- * The allowlist of flat metric fields copied from a market row into
- * factor_history.metrics_json. Mirrors storage.py's `_history_metrics` keys
- * exactly, in the same order -- this list is load-bearing for every
- * downstream IC / decay / walk-forward computation that reads
- * factor_history.metrics_json, so do not add, remove, or rename keys here
- * without updating storage.py first.
+ * The allowlist of flat metric fields copied from a market row into factor_history.metrics_json.
+ * Every downstream IC / decay / walk-forward computation reads this column, so changing which
+ * keys are copied changes what those computations see for all future runs.
  */
 const HISTORY_METRIC_KEYS = [
   'price_change_24h_pct',
@@ -64,7 +61,6 @@ const HISTORY_METRIC_KEYS = [
   'breadth_alignment_score',
 ] as const;
 
-/** Mirrors storage.py's `_history_metrics`: `{key: row.get(key) ...}` filtered to non-null values. */
 export function historyMetrics(row: Record<string, unknown>): Record<string, unknown> {
   const metrics: Record<string, unknown> = {};
   for (const key of HISTORY_METRIC_KEYS) {
@@ -76,7 +72,7 @@ export function historyMetrics(row: Record<string, unknown>): Record<string, unk
   return metrics;
 }
 
-/** Compiles the shared factor_history upsert used by both saveSnapshot() and saveFactorHistoryRecords(). */
+/** Shared factor_history upsert, used by both `saveSnapshot` and `saveFactorHistoryRecords`. */
 export function prepareFactorHistoryInsert(db: Database.Database): Database.Statement {
   return db.prepare(`
     INSERT OR REPLACE INTO factor_history
@@ -85,7 +81,7 @@ export function prepareFactorHistoryInsert(db: Database.Database): Database.Stat
   `);
 }
 
-/** Mirrors storage.py's `save_factor_history_records`: a direct backfill write path (no `runs`/`market_rows` touch). */
+/** A direct backfill write path: writes only to factor_history, never `runs` or `market_rows`. */
 export function saveFactorHistoryRecords(
   db: Database.Database,
   records: FactorHistoryRecordInput[],
@@ -119,7 +115,6 @@ interface FactorHistoryDbRow {
   scores_json: string;
 }
 
-/** Mirrors storage.py's `_load_factor_history_rows`. */
 function loadFactorHistoryRows(db: Database.Database, cutoff: string): FactorHistoryDbRow[] {
   return db
     .prepare(`
@@ -141,9 +136,8 @@ interface LabelingItem {
 }
 
 /**
- * Mirrors storage.py's `_labeling_rows_by_symbol`: recent factor_history
- * rows grouped by symbol (falling back to market_rows if factor_history has
- * no rows in the window yet), keeping only rows with a positive price.
+ * Recent factor_history rows grouped by symbol, keeping only rows with a positive price. Falls
+ * back to market_rows if factor_history has no rows in the window yet.
  */
 function labelingRowsBySymbol(
   db: Database.Database,
@@ -186,11 +180,10 @@ function labelingRowsBySymbol(
 }
 
 /**
- * Mirrors storage.py's `_find_forward_row`: scans candidates in ascending
- * time order, stopping as soon as one falls past the tolerance window, and
- * matches on the MIDPOINT of [minTargetHours, maxTargetHours] -- this is the
- * forward-return labeling path, distinct from loadPriceLookback() below,
- * which matches on the requested horizon itself.
+ * Scans candidates in ascending time order, stopping as soon as one falls past the tolerance
+ * window, and matches on the MIDPOINT of [minTargetHours, maxTargetHours] — this is the
+ * forward-return labeling path, distinct from `loadPriceLookback` below, which matches on the
+ * requested horizon itself, not the tolerance-band midpoint.
  */
 function findForwardRow(
   candidates: LabelingItem[],
@@ -213,7 +206,6 @@ function findForwardRow(
   return selectHorizonMatch(items, minTargetHours, maxTargetHours, forwardTargetHours);
 }
 
-/** Mirrors storage.py's `_labeled_records_for_horizon`. */
 function labeledRecordsForHorizon(
   bySymbol: Map<string, LabelingItem[]>,
   horizonHours: number,
@@ -243,7 +235,6 @@ function labeledRecordsForHorizon(
   return records;
 }
 
-/** Mirrors storage.py's `load_labeled_factor_records`. */
 export function loadLabeledFactorRecords(
   db: Database.Database,
   options: { forwardReturnHours?: number; icWindowDays?: number } = {},
@@ -258,7 +249,6 @@ export function loadLabeledFactorRecords(
   }));
 }
 
-/** Mirrors storage.py's `load_labeled_records_by_horizon`. */
 export function loadLabeledRecordsByHorizon(
   db: Database.Database,
   horizons: number[],
@@ -279,11 +269,8 @@ interface PriceLookbackDbRow {
 }
 
 /**
- * Mirrors storage.py's `load_price_lookback`. Unlike findForwardRow() above,
- * the match target is `hours` itself (the requested lookback horizon), NOT
- * the midpoint of the tolerance band -- read storage.py's
- * `_select_horizon_match(items, min_target_hours, max_target_hours, hours)`
- * call before changing this.
+ * Unlike `findForwardRow` above, the match target is `hours` itself (the requested lookback
+ * horizon), NOT the midpoint of the tolerance band.
  */
 export function loadPriceLookback(db: Database.Database, hours: number): Record<string, number> {
   const referenceAt = new Date();

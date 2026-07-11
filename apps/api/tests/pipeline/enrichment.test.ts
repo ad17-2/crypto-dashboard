@@ -14,13 +14,7 @@ import type {
 } from '../../src/providers/coinglass';
 import { ProviderError } from '../../src/providers/errors';
 
-/**
- * Ports the CoinGlass enrichment-pass tests from tests/test_collector.py
- * (test_append_coinglass_technicals_enriches_rows, test_append_coinglass_derivatives_history_enriches_rows)
- * and tests/test_coinglass_enrichment.py (test_append_long_short_account_ratio) to vitest.
- */
-
-/** Records every call it receives; mirrors Python's FakeCoinGlassClient. Throws only where configured. */
+/** Records every call it receives. Throws only where configured. */
 class FakeCoinGlassClient implements CoinGlassClient {
   priceHistoryCalls: Array<[string, string, string, number]> = [];
   globalCalls: Array<[string, string]> = [];

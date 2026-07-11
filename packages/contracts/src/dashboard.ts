@@ -1,27 +1,24 @@
 import { z } from 'zod';
 
 /**
- * Zod port of the `GET /api/dashboard` wire contract built by
- * crypto_screener/dashboard_payload.py + crypto_screener/dashboard_rows.py.
+ * Zod schema for the `GET /api/dashboard` wire contract.
  *
  * Keys stay snake_case — this is a preserved wire contract consumed by an existing client, not a
  * TS-idiomatic API.
  *
- * Scope note: unlike the config schema, these schemas are intentionally NOT `.strict()`. The
- * Python source has no pydantic model for this payload either — `regime`, `market_context`,
- * `provider_status`, `factor_weights`, `factor_decay`, `walk_forward`, and `validation` are all
- * built as plain `dict[str, Any]` blobs that the factor pipeline (factors.py, regime.py) has
- * grown incrementally across phases (see Phase 3-5 commits). Modeling them as
- * `z.record(z.string(), z.unknown())` reflects that they carry no fixed schema on the producing
- * side; the well-defined, stable pieces (the row shape, run summaries, quality, watchlists) are
- * fully typed below per dashboard_rows.py.
+ * Scope note: unlike the config schema, these schemas are intentionally NOT `.strict()`.
+ * `regime`, `market_context`, `provider_status`, `factor_weights`, `factor_decay`, `walk_forward`,
+ * and `validation` carry no fixed schema on the producing side — they're free-form blobs the
+ * factor pipeline assembles incrementally. Modeling them as `z.record(z.string(), z.unknown())`
+ * reflects that; the well-defined, stable pieces (the row shape, run summaries, quality,
+ * watchlists) are fully typed below.
  */
 
-/** Opaque JSON blob: dict[str, Any] on the Python side, no fixed schema. */
+/** Opaque JSON blob with no fixed schema. */
 const jsonRecord = z.record(z.string(), z.unknown());
 
 // ---------------------------------------------------------------------------
-// Dashboard row (crypto_screener/dashboard_rows.py::dashboard_row)
+// Dashboard row
 // ---------------------------------------------------------------------------
 
 const FactorPartSchema = z.object({
@@ -36,11 +33,9 @@ const ConfluenceFamilySchema = z.object({
   label: z.string(),
   tone: z.string(),
   /**
-   * Nullable: confluence.py::_family_entry emits `None` (`round(contribution, 3)` is only called
-   * when a contribution was computed) whenever none of that family's factors are present on the
-   * row. In practice this happens for an excluded/untrusted row that still reaches
-   * dashboard_row() -- e.g. dashboard_payload.py's "core" section is built from BTC/ETH/SOL
-   * unconditionally, with no `is_trusted` filter, unlike every other watchlist section.
+   * Null (not zero) when none of this family's factors are present on the row — e.g. an
+   * excluded/untrusted row that still reaches this shape, such as the "core" section's
+   * BTC/ETH/SOL rows, which are included unconditionally with no `is_trusted` filter.
    */
   value: z.number().nullable(),
 });
@@ -88,7 +83,7 @@ const RowScoresSchema = z.object({
   breadth_alignment_score: z.number().nullable(),
 });
 
-/** Known technical fields (crypto_screener/dashboard_rows.py::technical_state); all optional. */
+/** Technical indicator fields; each is optional since not every row has technical data. */
 const TechnicalStateSchema = z.object({
   technical_interval: z.string().optional(),
   technical_candle_count: z.number().optional(),
@@ -106,7 +101,7 @@ const TechnicalStateSchema = z.object({
   technical_momentum_score: z.number().optional(),
 });
 
-/** One point of factor_history (crypto_screener/dashboard_payload.py::_history_by_symbol). */
+/** One point of a dashboard row's `history` time series. */
 const HistoryPointSchema = z.object({
   generated_at: z.string(),
   price_usd: z.number().nullable(),
@@ -184,7 +179,7 @@ export const DashboardRowSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Runs (crypto_screener/dashboard_payload.py::_recent_runs / _selected_run)
+// Runs
 // ---------------------------------------------------------------------------
 
 export const RunSummarySchema = z.object({
@@ -204,7 +199,7 @@ export const SelectedRunSchema = RunSummarySchema.pick({
 });
 
 // ---------------------------------------------------------------------------
-// Freshness (crypto_screener/dashboard_freshness.py::freshness_summary)
+// Freshness
 // ---------------------------------------------------------------------------
 
 export const FreshnessSchema = z.object({
@@ -217,7 +212,7 @@ export const FreshnessSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Quality (crypto_screener/dashboard_payload.py::_quality_summary)
+// Quality
 // ---------------------------------------------------------------------------
 
 const FlaggedRowSchema = z.object({
@@ -236,7 +231,7 @@ export const QualitySchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Factor correlations (crypto_screener/independence.py::factor_correlations)
+// Factor correlations
 // ---------------------------------------------------------------------------
 
 export const FactorCorrelationSchema = z.object({
@@ -247,7 +242,7 @@ export const FactorCorrelationSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Model weights (crypto_screener/dashboard_payload.py::_model_weights_summary)
+// Model weights
 // ---------------------------------------------------------------------------
 
 const ModelWeightFactorSchema = z.object({
@@ -306,14 +301,14 @@ export const WatchlistSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Top-level payload (crypto_screener/dashboard_payload.py::build_dashboard_payload)
+// Top-level payload
 // ---------------------------------------------------------------------------
 
 const DashboardPayloadEmptySchema = z.object({
   status: z.literal('empty'),
   database: z.string(),
   runs: z.array(RunSummarySchema),
-  /** Injected by the HTTP handler (dashboard.py::do_GET); null while no refresh has run yet. */
+  /** Injected by the HTTP route handler, not the payload builder; null until a refresh has run. */
   refresh_status: z.unknown().nullable(),
 });
 
@@ -336,8 +331,8 @@ const DashboardPayloadOkSchema = z.object({
   sections: SectionsSchema,
   watchlists: z.array(WatchlistSchema),
   /**
-   * Injected by the HTTP handler (dashboard.py::do_GET), not by build_dashboard_payload itself —
-   * optional here so this schema also validates the payload-builder's raw return value.
+   * Injected by the HTTP route handler, not the payload builder itself — optional here so this
+   * schema also validates the payload builder's raw return value.
    */
   refresh_status: z.unknown().nullable().optional(),
 });
@@ -350,7 +345,6 @@ export const DashboardPayloadSchema = z.discriminatedUnion('status', [
 export type DashboardRow = z.infer<typeof DashboardRowSchema>;
 export type DashboardRowSide = z.infer<typeof DashboardRowSideSchema>;
 export type RunSummary = z.infer<typeof RunSummarySchema>;
-export type SelectedRun = z.infer<typeof SelectedRunSchema>;
 export type Freshness = z.infer<typeof FreshnessSchema>;
 export type Quality = z.infer<typeof QualitySchema>;
 export type FactorCorrelation = z.infer<typeof FactorCorrelationSchema>;

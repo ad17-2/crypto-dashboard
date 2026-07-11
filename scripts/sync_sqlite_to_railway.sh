@@ -27,7 +27,7 @@ done
 
 railway ssh "\
   base64 -d $(quote "$remote_b64") | gzip -dc > $(quote "$remote_tmp_db") && \
-  python -c \"import sqlite3, sys; conn = sqlite3.connect(sys.argv[1]); result = conn.execute('pragma quick_check').fetchone()[0]; conn.close(); raise SystemExit(0 if result == 'ok' else 1)\" $(quote "$remote_tmp_db") && \
+  node -e \"const Database = require('/app/node_modules/better-sqlite3'); const db = new Database(process.argv[1]); const result = db.pragma('quick_check', { simple: true }); db.close(); process.exit(result === 'ok' ? 0 : 1);\" $(quote "$remote_tmp_db") && \
   mv $(quote "$remote_tmp_db") $(quote "$REMOTE_DB_PATH") && \
   rm -f $(quote "$remote_b64")"
 

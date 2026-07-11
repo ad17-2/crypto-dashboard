@@ -1,8 +1,18 @@
 import type { DashboardRow } from '@crypto-screener/contracts';
 import type { ReactNode } from 'react';
 import { Panel } from '@/components/layout/Panel';
+import { QualityFlagChip } from '@/components/QualityFlagChip';
 import { positioningDivergence, tradingViewUrl } from '@/lib/dashboard-row';
-import { clsFor, conflictTone, fmtNum, fmtPct, fmtUsd, numeric, qualityTone } from '@/lib/format';
+import {
+  clsFor,
+  conflictTone,
+  confluenceToneClass,
+  fmtNum,
+  fmtPct,
+  fmtUsd,
+  numeric,
+  qualityTone,
+} from '@/lib/format';
 
 export interface SelectedCoinRailProps {
   row: DashboardRow | null;
@@ -11,25 +21,10 @@ export interface SelectedCoinRailProps {
 const REASON_TOOLTIP =
   'Read left to right: 24h price move, OI positioning change, funding, L/S crowding, weighted factor score, confidence, 4h technical context, then the strongest normalized factor drivers. Green is positive, red is negative. Crowding and excluded notes are context flags, not automatic trade instructions.';
 
-const QUALITY_FLAG_LABELS: Record<string, string> = {
-  extreme_24h_price_change: 'Price 24h',
-  extreme_24h_oi_change: 'OI 24h',
-  extreme_24h_volume_change: 'Volume 24h',
-  extreme_funding_rate: 'Funding',
-  thin_coinglass_exchange_coverage: 'Thin coverage',
-  price_deviates_from_index: 'Price vs Index',
-  price_deviates_from_binance: 'Price vs Binance',
-  stale_low_quote_volume: 'Low volume',
-  invalid_price: 'Invalid price',
-  invalid_open_interest: 'Invalid OI',
-  weird_symbol: 'Symbol',
-  weird_contract_symbol: 'Contract',
-};
-
 /**
- * The right-hand detail rail for the currently selected watchlist row. Ports `renderDetail()` from
- * the legacy dashboard.js: the metric grid, the reason chip stack, and the collapsible sections
- * (How To Read This Coin, Signal Conflict, Technical Context, Factor Breakdown, History).
+ * The right-hand detail rail for the currently selected watchlist row: the metric grid, the
+ * reason chip stack, and the collapsible sections (How To Read This Coin, Signal Conflict,
+ * Technical Context, Factor Breakdown, History).
  */
 export function SelectedCoinRail({ row }: SelectedCoinRailProps) {
   if (!row) {
@@ -263,12 +258,6 @@ function ConfluenceStrip({ row }: { row: DashboardRow }) {
       </div>
     </div>
   );
-}
-
-function confluenceToneClass(tone: string): string {
-  if (tone === 'pos') return 'conf-pos';
-  if (tone === 'neg') return 'conf-neg';
-  return 'conf-neutral';
 }
 
 function ReasonStack({ row }: { row: DashboardRow }) {
@@ -553,22 +542,5 @@ function Sparkline({ points, field }: { points: DashboardRow['history']; field: 
       <line className="axis" x1={0} y1={height - 2} x2={width} y2={height - 2} />
       <polyline className={tone} points={coords} />
     </svg>
-  );
-}
-
-function QualityFlagChip({ flag }: { flag: string }) {
-  const [rawLabel, rawValue = ''] = flag.split(':');
-  const label = (rawLabel && QUALITY_FLAG_LABELS[rawLabel]) || (rawLabel ?? '').replace(/_/g, ' ');
-  const tone =
-    (rawLabel ?? '').includes('extreme') ||
-    (rawLabel ?? '').includes('invalid') ||
-    (rawLabel ?? '').includes('deviates')
-      ? 'bad'
-      : 'warn';
-  return (
-    <span className={`quality-flag-chip ${tone}`} title={flag}>
-      {label}
-      {rawValue ? <strong> {rawValue}</strong> : null}
-    </span>
   );
 }

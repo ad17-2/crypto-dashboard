@@ -13,10 +13,8 @@ import {
 } from '../../src/refresh/scheduler.js';
 
 /**
- * Port of tests/test_dashboard.py::test_daily_refresh_due_after_scheduled_time_only_once_per_day
- * and ::test_daily_refresh_supports_multiple_times_per_day. Every instant below is constructed as
- * "Asia/Jakarta wall-clock HH:MM" -> UTC (Jakarta is a fixed +07:00, no DST), matching the
- * Python tests' `datetime(..., tzinfo=ZoneInfo("Asia/Jakarta"))` fixtures exactly.
+ * Every instant below is constructed as "Asia/Jakarta wall-clock HH:MM" -> UTC (Jakarta is a
+ * fixed +07:00, no DST).
  */
 
 const ZONE = 'Asia/Jakarta';
@@ -72,9 +70,9 @@ describe('dailyRefreshDue', () => {
 
 describe('scheduledRefreshDue / secondsUntilNextDailyCheck', () => {
   it('supports multiple times per day, deduped/sorted upstream by parseDailyRefreshTimes', () => {
-    // parseDailyRefreshTimes("15:10,07:10,11:10,07:10") from env.ts dedupes + sorts ascending,
-    // matching Python's _parse_daily_refresh_times -- reproduced here directly rather than
-    // re-parsing, since env.ts already owns and tests that parsing.
+    // parseDailyRefreshTimes("15:10,07:10,11:10,07:10") from env.ts dedupes + sorts ascending;
+    // reproduced here directly rather than re-parsing, since env.ts already owns and tests that
+    // parsing.
     const refreshTimes = [
       { hour: 7, minute: 10 },
       { hour: 11, minute: 10 },

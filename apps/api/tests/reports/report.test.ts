@@ -10,10 +10,8 @@ import { renderMarkdown } from '../../src/reports/markdown.js';
 import { REPORT_FIELDS } from '../../src/reports/reportFields.js';
 import { writeReports } from '../../src/reports/writeReports.js';
 
-/** Ports report.py's fixed CSV column allowlist and write_reports() file-naming/content
- * contracts to vitest (crypto_screener has no tests/test_report.py to port 1:1). */
-
-// Verified against crypto_screener/report.py:13-63 (`REPORT_FIELDS`) by direct extraction.
+/** Tests REPORT_FIELDS' fixed CSV column allowlist and writeReports()'s file-naming/content
+ * contracts. */
 const EXPECTED_REPORT_FIELDS = [
   'symbol',
   'contract_symbol',
@@ -67,7 +65,7 @@ const EXPECTED_REPORT_FIELDS = [
 ];
 
 describe('REPORT_FIELDS', () => {
-  it('is the exact 49-column allowlist from report.py, in order', () => {
+  it('is the exact 49-column allowlist, in order', () => {
     expect(REPORT_FIELDS).toEqual(EXPECTED_REPORT_FIELDS);
   });
 });

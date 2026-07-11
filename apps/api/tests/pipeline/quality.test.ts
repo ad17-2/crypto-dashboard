@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { applyDataQuality, dataQualityFlags } from '../../src/pipeline/quality';
 import type { Row } from '../../src/pipeline/types';
 
-/** Ports tests/test_quality.py's behavior to vitest. */
-
 const BASE_QUALITY_CONFIG = {
   max_abs_price_change_24h_pct: 300,
   max_abs_oi_change_24h_pct: 300,

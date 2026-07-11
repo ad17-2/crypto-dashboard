@@ -1,22 +1,12 @@
 import { z } from 'zod';
 
 /**
- * Zod port of crypto_screener/config.py (pydantic v2, `extra="forbid"` on every model).
+ * Every object is `.strict()`: unknown keys throw instead of being silently dropped.
  *
- * Every nested object uses `.strict()` so unknown keys are rejected, mirroring pydantic's
- * `StrictModel` base class. Every field carries the same default as the Python model so that
- * `config/default.json` parses byte-for-byte identically and partial overrides fill the same
- * defaults pydantic would.
- */
-
-/**
- * NOTE on nested defaults: `schema.default({})` only substitutes the literal `{}` when a key is
- * missing — it does NOT run that value through `schema`, so the schema's own field defaults never
- * get filled (unlike pydantic's `Field(default_factory=Model)`, which instantiates the model and
- * recursively fills its defaults). Every nested config object below instead defaults via
- * `Schema.default(() => Schema.parse({}))`, which gets the same recursive-fill behavior. A
- * generic `nested(schema)` wrapper was tried here, but TS cannot resolve zod's `output<T>` for a
- * generic `T`, so this is written out per-field instead of hidden behind an abstraction.
+ * `schema.default({})` only substitutes the literal `{}` when a key is missing — it does NOT run
+ * that value through `schema`, so the schema's own field defaults never get filled. Every nested
+ * config object below instead defaults via `Schema.default(() => Schema.parse({}))`, which forces
+ * the missing-key case through the schema so its field defaults populate too.
  */
 
 const TechnicalIndicatorsConfigSchema = z

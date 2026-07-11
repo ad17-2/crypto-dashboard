@@ -13,7 +13,6 @@ describe('loadConfig', () => {
     const config = loadConfig(DEFAULT_CONFIG_PATH);
     const runtime = loadConfigDict(DEFAULT_CONFIG_PATH);
 
-    // Mirrors tests/test_config.py::test_default_config_validates_and_round_trips_to_runtime_dict
     expect(runtime.version).toBe(2);
     expect(runtime.providers.coinglass.api_key_env).toBe('COINGLASS_API_KEY');
     expect(runtime.report.limit).toBe(12);
@@ -38,7 +37,6 @@ describe('loadConfig', () => {
     const configPath = join(tmpDir, 'bad.json');
     writeFileSync(configPath, JSON.stringify({ version: 2, unknown: true }), 'utf-8');
 
-    // Mirrors tests/test_config.py::test_config_rejects_unknown_keys
     expect(() => loadConfig(configPath)).toThrow();
   });
 

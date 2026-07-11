@@ -11,8 +11,6 @@ import {
   walkForward,
 } from './validation.js';
 
-/** Port of crypto_screener/factors.py::factor_weights. */
-
 export interface FactorStat {
   ic: number | null;
   observations: number;
@@ -57,7 +55,6 @@ export interface FactorWeights {
   factor_correlations?: FactorCorrelationFlag[];
 }
 
-/** Port of factors.py::factor_weights. */
 export function factorWeights(
   historyRecords: FactorRecord[],
   config: PipelineConfig,

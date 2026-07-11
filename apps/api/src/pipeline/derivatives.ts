@@ -1,7 +1,5 @@
 import { clamp, mean, pctChange, stdev, toFloat } from './scoring.js';
 
-/** Port of crypto_screener/derivatives.py. */
-
 export type RawHistoryRow = Record<string, unknown>;
 
 const INTERVAL_HOURS: Record<string, number> = {
@@ -19,12 +17,10 @@ const INTERVAL_HOURS: Record<string, number> = {
   '1w': 24.0 * 7.0,
 };
 
-/** Port of derivatives.py::interval_hours. */
 export function intervalHours(interval: string): number {
   return INTERVAL_HOURS[interval] ?? 24.0;
 }
 
-/** Port of derivatives.py::candles_per_window. */
 export function candlesPerWindow(interval: string, hours: number): number {
   return Math.max(1, Math.round(hours / intervalHours(interval)));
 }
@@ -46,11 +42,8 @@ interface TakerRow {
   sell: number;
 }
 
-/**
- * Port of derivatives.py::derivatives_snapshot. Keys whose computed value is `null` are dropped
- * from the returned object entirely, mirroring Python's
- * `{key: value for key, value in result.items() if value is not None}`.
- */
+/** Keys whose computed value is `null` are dropped from the returned object entirely, rather than
+ * included as `null`. */
 export function derivativesSnapshot(
   oiHistory: RawHistoryRow[],
   fundingHistory: RawHistoryRow[],

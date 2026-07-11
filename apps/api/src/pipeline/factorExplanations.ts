@@ -3,13 +3,9 @@ import { toFloat } from './scoring.js';
 import type { Row } from './types.js';
 import { asRecord } from './types.js';
 
-/** Port of crypto_screener/factor_explanations.py. */
-
-/** Mirrors Python's `f"{value:+.Nf}"`: fixed-point with an explicit sign, sign taken from the
- * original (pre-rounding) value so a value that rounds to zero still shows its original sign,
- * matching CPython's float formatting. Exported for reuse by dashboard/rows.ts, which ports
- * dashboard_rows.py's own `f"{value:+.Nf}"` call sites (a distinct Python module, same format
- * spec). */
+/** Fixed-point with an explicit sign; the sign is taken from the pre-rounding value so a value
+ * that rounds to zero still shows its original sign (handles -0 correctly). Exported for reuse by
+ * dashboard/rows.ts. */
 export function formatSigned(value: number, decimals: number): string {
   const sign = value < 0 || Object.is(value, -0) ? '-' : '+';
   return `${sign}${Math.abs(value).toFixed(decimals)}`;
@@ -28,7 +24,6 @@ function appendMetric(
   }
 }
 
-/** Port of factor_explanations.py::reason_for. */
 export function reasonFor(row: Row, side: string): string {
   const parts: string[] = [];
   const factors = asRecord(row.factors);

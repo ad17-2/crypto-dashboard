@@ -17,11 +17,8 @@ import type {
 import { ProviderError } from '../../src/providers/errors';
 import fixture from '../fixtures/parity-run.json';
 
-/**
- * Ports tests/test_collector.py's behavior to vitest. No network: every CoinGlass client is a
- * hand-written stub implementing the `CoinGlassClient` interface, mirroring the Python tests'
- * `FakeCoinGlassClient`.
- */
+/** No network: every CoinGlass client is a hand-written stub implementing the `CoinGlassClient`
+ * interface. */
 
 function buildConfig(overrides: Record<string, unknown> = {}): AppConfig {
   return AppConfigSchema.parse(overrides);
@@ -182,7 +179,7 @@ describe('aggregateCoinglassPairs', () => {
   });
 });
 
-/** A hand-written CoinGlassClient stub -- mirrors Python's FakeCoinGlassClient. No network. */
+/** A hand-written CoinGlassClient stub. No network. */
 class StubCoinGlassClient implements CoinGlassClient {
   calls: string[] = [];
 
@@ -357,15 +354,15 @@ describe('collectCoinglassFutures (full pass, stubbed client)', () => {
     const rows = await collectCoinglassFutures(config, {}, client);
     expect(rows).toHaveLength(1);
 
-    // apply_data_quality is a separate collector.py step invoked from collect_market(), not
-    // collect_coinglass_futures() directly -- call it here the same way collectMarket() does.
+    // applyDataQuality is a separate step invoked from collectMarket(), not
+    // collectCoinglassFutures() directly -- call it here the same way collectMarket() does.
     const { applyDataQuality } = await import('../../src/pipeline/quality');
     applyDataQuality(rows, config);
 
     const fixtureRow = (fixture as { input_rows: Array<Record<string, unknown>> })
       .input_rows[0] as Record<string, unknown>;
-    // price_change_72h_pct is added by pipeline.py's historical-lookback stage, outside the
-    // collector/enrichment/quality boundary this task ports.
+    // price_change_72h_pct is added by a later historical-lookback pipeline stage, outside the
+    // collector/enrichment/quality boundary this test covers.
     const expectedKeys = Object.keys(fixtureRow).filter((key) => key !== 'price_change_72h_pct');
 
     for (const key of expectedKeys) {
@@ -410,7 +407,7 @@ class StubCoinGeckoClient implements CoinGeckoClient {
 
 describe('collectMarket', () => {
   // Exercises the full orchestrator: CoinGlass futures -> CoinGecko context -> data quality,
-  // wired together the same way collector.py::collect_market() does.
+  // wired together the same way collectMarket() does.
   it('assembles rows, market_context, and provider_status from both providers, and quality-flags rows', async () => {
     const config = buildConfig({
       providers: {

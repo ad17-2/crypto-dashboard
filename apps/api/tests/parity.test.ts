@@ -8,26 +8,21 @@ import type { FactorRecord } from '../src/pipeline/ic.js';
 import type { Row } from '../src/pipeline/types.js';
 
 /**
- * THE PARITY GATE: feeds the golden fixture (apps/api/tests/fixtures/parity-run.json, produced by
- * running crypto_screener's CURRENT Python implementation via tools/parity/gen_fixture.py -- see
- * that script's docstring for the exact crypto_screener/pipeline.py:30-52 call mapping) through the
- * ported TypeScript scoring/factor/weighting stage and asserts the output equals fixture.expected
- * to a 1e-9 float tolerance (exact for Python-rounded values, since exact equality is a special
- * case of a 1e-9-tolerant comparison).
+ * THE PARITY GATE: feeds the golden fixture (apps/api/tests/fixtures/parity-run.json; see
+ * apps/api/tests/fixtures/README.md for provenance) through the ported scoring/factor/weighting
+ * stage and asserts the output equals fixture.expected to a 1e-9 float tolerance (exact for
+ * rounded values, since exact equality is a special case of a 1e-9-tolerant comparison).
  *
- * `prior_market_state` is not part of the fixture because gen_fixture.py's frozen-"now" replay of
- * storage.load_latest_regime_state() against the golden run's own timestamp returns None (verified
- * by re-running that exact lookup against data/crypto_screener.sqlite3 -- see the session notes);
- * score_snapshot is therefore called with `undefined`, matching what actually produced this fixture.
+ * `prior_market_state` is not part of the fixture because the regime-state lookup against the
+ * golden run's own timestamp returns nothing; `scoreSnapshot` is therefore called with
+ * `undefined` below, matching what actually produced this fixture.
  *
  * `expected.factor_weights.factor_decay` is EXCLUDED from the comparison below. It is not a
- * discrepancy being hidden: factor_decay() takes `records_by_horizon`, a per-horizon (4h/8h/12h/
- * 24h/48h/72h) relabeling of raw price/factor snapshots that storage.load_labeled_records_by_horizon
- * builds from data the fixture does not ship (fixture.factor_history is only the single
- * 24h-horizon-labeled, already-collapsed output of load_labeled_factor_records -- it has no
- * price_usd field and cannot be relabeled at other horizons). factor_decay's algorithm itself is
- * fully ported (validation.ts::factorDecay) and independently covered by
- * apps/api/tests/pipeline/validation.test.ts, ported line-for-line from tests/test_decay.py.
+ * discrepancy being hidden: `factorDecay()` takes `records_by_horizon`, a per-horizon (4h/8h/12h/
+ * 24h/48h/72h) relabeling of raw price/factor snapshots that the fixture does not ship
+ * (fixture.factor_history is only the single 24h-horizon-labeled, already-collapsed output -- it
+ * has no price_usd field and cannot be relabeled at other horizons). `factorDecay`'s algorithm
+ * itself is fully covered independently by apps/api/tests/pipeline/validation.test.ts.
  */
 
 const FIXTURE_PATH = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/parity-run.json');

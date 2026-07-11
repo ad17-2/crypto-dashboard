@@ -1,20 +1,11 @@
 /**
- * The screener stores `generated_at` as ISO-8601 text with a fixed +07:00
- * (Asia/Jakarta) offset (see crypto_screener/storage.py's `_STORAGE_TZ`), and
- * every "recent history" query in storage.py compares that TEXT column with
- * plain `>=`/`<=`, relying on ISO-string lexical order matching chronological
- * order. That only holds if every string being compared uses the SAME
- * offset. Asia/Jakarta has no DST, so it is a fixed UTC+7 offset -- no
- * IANA tz database is needed to reproduce it.
- *
- * storage.py derives some of its "now" cutoffs from the Python process's
- * *ambient* local timezone (`datetime.now().astimezone()`), which only
- * matches +07:00 because the reference deployment's system clock happens to
- * be set to Asia/Jakarta. A Node/Railway process is not guaranteed to run
- * with that same ambient offset (containers typically default to UTC), so
- * this port always formats "now" cutoffs with the explicit +07:00 offset
- * below instead of trusting the host's local timezone -- otherwise lexical
- * comparisons against existing +07:00-stamped rows would silently break.
+ * `generated_at` is stored as ISO-8601 text with a fixed +07:00 (Asia/Jakarta, no DST) offset,
+ * and every "recent history" query compares that TEXT column with plain `>=`/`<=`, relying on
+ * ISO-string lexical order matching chronological order. That only holds if every string being
+ * compared uses the SAME offset, so "now" cutoffs must always be formatted with the explicit
+ * +07:00 offset below rather than the host's ambient local timezone (containers typically default
+ * to UTC) — otherwise lexical comparisons against existing +07:00-stamped rows would silently
+ * break.
  */
 const STORAGE_OFFSET_MINUTES = 7 * 60;
 const STORAGE_OFFSET_SUFFIX = '+07:00';
@@ -27,31 +18,26 @@ export function formatJakartaIso(date: Date): string {
 }
 
 /**
- * Parses a stored `generated_at` value into the real instant it represents.
- * Mirrors storage.py's `datetime.fromisoformat(...)` plus its legacy-row
- * fallback: strings with no offset/Z suffix are assumed to be Asia/Jakarta
- * local time (`parsed_at.replace(tzinfo=_STORAGE_TZ)`).
+ * Parses a stored `generated_at` value into the real instant it represents. Legacy rows with no
+ * offset/Z suffix are assumed to be Asia/Jakarta (+07:00) local time.
  */
 export function parseGeneratedAt(text: string): Date {
   const withOffset = EXPLICIT_OFFSET_PATTERN.test(text) ? text : `${text}${STORAGE_OFFSET_SUFFIX}`;
   return new Date(withOffset);
 }
 
-/** Mirrors storage.py's `_horizon_tolerance`: an asymmetric 0.75x-1.5x band. */
+/** An asymmetric 0.75x-1.5x tolerance band around the requested horizon. */
 export function horizonTolerance(hours: number): [min: number, max: number] {
   return [hours * 0.75, hours * 1.5];
 }
 
 /**
- * Mirrors storage.py's `_select_horizon_match`: among candidates whose delta
- * (in hours) falls within [minTargetHours, maxTargetHours], returns the one
- * closest to `targetHours`. Ties keep the first candidate encountered
- * (strict `<`, matching Python's `distance < best_distance`).
+ * Among candidates whose delta (in hours) falls within [minTargetHours, maxTargetHours], returns
+ * the one closest to `targetHours`. Ties keep the first candidate encountered (strict `<`).
  *
- * `targetHours` is NOT always the midpoint of the tolerance band -- callers
- * decide. `_find_forward_row` (factor-label matching) passes the midpoint;
- * `load_price_lookback` passes the raw requested horizon itself. Read both
- * call sites in factorHistory.ts before changing this.
+ * `targetHours` is NOT always the midpoint of the tolerance band — callers decide. See both call
+ * sites in factorHistory.ts: `findForwardRow` (factor-label matching) passes the midpoint,
+ * `loadPriceLookback` passes the raw requested horizon itself.
  */
 export function selectHorizonMatch<T>(
   items: Array<{ value: T; deltaHours: number }>,

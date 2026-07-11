@@ -11,10 +11,8 @@ import { createApp } from '../../src/http/app.js';
 import { RefreshRuntime } from '../../src/refresh/runtime.js';
 
 /**
- * Port of the HTTP-handler half of tests/test_dashboard.py
- * (test_dashboard_serves_index_assets_and_empty_api, minus the now-removed static routes) plus
- * the refresh-token gating dashboard.py:254-262 documents in prose (no direct Python unit test --
- * covered end-to-end via _refresh_allowed).
+ * Covers the refresh-token gating (default-deny, timing-safe compare) end-to-end via HTTP,
+ * alongside the dashboard/health/refresh route wiring.
  */
 
 let dir: string;
@@ -239,7 +237,7 @@ describe('POST /api/refresh', () => {
 
     expect(first.status).toBe(202);
     expect(first.body).toEqual({ state: 'queued', reason: 'manual' });
-    // Always 202, even for the already-running response (dashboard.py:249).
+    // Always 202, even for the already-running response.
     expect(second.status).toBe(202);
     expect(second.body).toMatchObject({ state: 'running', reason: 'manual' });
     expect(runPipeline).toHaveBeenCalledOnce();

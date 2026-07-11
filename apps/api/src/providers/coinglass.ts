@@ -2,11 +2,9 @@ import { ProviderError } from './errors.js';
 import { buildUrl, fetchWithTimeout } from './http.js';
 
 /**
- * Port of crypto_screener/coinglass.py::CoinGlassClient.
- *
- * Every payload coming back from CoinGlass is treated as a loosely-typed JSON object (mirrors
- * Python's `dict[str, Any]`) -- the pipeline reads individual fields defensively via `toFloat`,
- * so these are intentionally left as open index signatures rather than exhaustively modeled.
+ * Every payload coming back from CoinGlass is treated as a loosely-typed JSON object -- the
+ * pipeline reads individual fields defensively via `toFloat`, so these are intentionally left as
+ * open index signatures rather than exhaustively modeled.
  */
 export type CoinGlassPair = Record<string, unknown>;
 export type CoinGlassHistoryRow = Record<string, unknown>;
@@ -81,7 +79,7 @@ export interface CoinGlassClientOptions {
 
 type QueryParams = Record<string, string | number | boolean | undefined>;
 
-/** Real HTTP implementation of {@link CoinGlassClient}, ported field-for-field from coinglass.py. */
+/** Real HTTP implementation of {@link CoinGlassClient}. */
 export class CoinGlassHttpClient implements CoinGlassClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
