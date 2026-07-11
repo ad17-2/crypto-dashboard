@@ -1,8 +1,4 @@
-__pycache__/
-*.pyc
-*.egg-info/
 .env
-.venv/
 data/*.sqlite3
 data/*.sqlite3-*
 data/*.db
@@ -11,3 +7,8 @@ reports/*.csv
 reports/*.md
 !reports/.gitkeep
 node_modules/
+
+# TypeScript / Node build artifacts
+.next/
+dist/
+*.tsbuildinfo

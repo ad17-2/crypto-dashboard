@@ -1,0 +1,224 @@
+import { clamp, mean, pyRound, stdev, toFloat, weightedAverage } from './scoring.js';
+import { asArray, asRecord, type MarketContext, type Row } from './types.js';
+
+function trustedRows(rows: Row[]): Row[] {
+  return rows.filter((row) => row.is_trusted !== false);
+}
+
+export function marketSensingSummary(
+  rows: Row[],
+  marketContext: MarketContext,
+  priorMarketState: Record<string, unknown> | null | undefined,
+): {
+  btc_dominance_delta_pct: number | null;
+  eth_btc_performance_pct: number | null;
+  return_dispersion_pct: number | null;
+} {
+  const trusted = trustedRows(rows);
+  const currentBtcDom = toFloat(marketContext.btc_dominance_pct);
+  const priorBtcDom = toFloat(priorMarketState?.btc_dominance_pct);
+  const btcDominanceDeltaPct =
+    currentBtcDom !== null && priorBtcDom !== null ? currentBtcDom - priorBtcDom : null;
+
+  const priceChanges = trusted
+    .map((row) => toFloat(row.price_change_24h_pct))
+    .filter((value): value is number => value !== null);
+  const returnDispersionPct = priceChanges.length >= 2 ? stdev(priceChanges) : null;
+
+  return {
+    btc_dominance_delta_pct: btcDominanceDeltaPct,
+    eth_btc_performance_pct: ethBtcPerformancePct(trusted),
+    return_dispersion_pct: returnDispersionPct,
+  };
+}
+
+function ethBtcPerformancePct(rows: Row[]): number | null {
+  let btcChange: number | null = null;
+  let ethChange: number | null = null;
+  for (const row of rows) {
+    if (row.symbol === 'BTC') {
+      btcChange = toFloat(row.price_change_24h_pct);
+    } else if (row.symbol === 'ETH') {
+      ethChange = toFloat(row.price_change_24h_pct);
+    }
+  }
+  if (btcChange === null || ethChange === null) {
+    return null;
+  }
+  return ((1.0 + ethChange / 100.0) / (1.0 + btcChange / 100.0) - 1.0) * 100.0;
+}
+
+export function marketStructureSummary(
+  rows: Row[],
+  marketContext: MarketContext,
+): { breadth: Record<string, unknown>; sector_rotation: Record<string, unknown> } {
+  const trusted = trustedRows(rows);
+  return {
+    breadth: breadthSummary(trusted, marketContext),
+    sector_rotation: sectorRotationSummary(marketContext),
+  };
+}
+
+export function breadthSummary(rows: Row[], marketContext: MarketContext): Record<string, unknown> {
+  const priceChanges = rows
+    .map((row) => toFloat(row.price_change_24h_pct))
+    .filter((value): value is number => value !== null);
+  const oiChanges = rows
+    .map((row) => toFloat(row.oi_change_24h_pct))
+    .filter((value): value is number => value !== null);
+  const fundingValues = rows
+    .map((row) => toFloat(row.funding_rate_pct))
+    .filter((value): value is number => value !== null);
+  const weightedReturn = volumeWeightedReturn(rows);
+  const categoryScore = categoryMomentumScore(marketContext);
+
+  if (priceChanges.length === 0) {
+    return {
+      status: 'empty',
+      label: 'unknown',
+      score: 0.0,
+      advancers: 0,
+      decliners: 0,
+      sample_size: 0,
+    };
+  }
+
+  const advancers = priceChanges.filter((value) => value > 0).length;
+  const decliners = priceChanges.filter((value) => value < 0).length;
+  const unchanged = priceChanges.length - advancers - decliners;
+  const advancerPct = (advancers / priceChanges.length) * 100.0;
+  const declinerPct = (decliners / priceChanges.length) * 100.0;
+  const priceBreadthScore = (advancerPct - declinerPct) / 100.0;
+  const avgReturn = mean(priceChanges);
+  const avgReturnScore = clamp(avgReturn / 4.0, -1.0, 1.0);
+  const weightedReturnScore = clamp((weightedReturn ?? avgReturn) / 4.0, -1.0, 1.0);
+
+  const oiExpanders = oiChanges.filter((value) => value > 0).length;
+  const oiExpanderPct = oiChanges.length > 0 ? (oiExpanders / oiChanges.length) * 100.0 : null;
+  const oiConfirmationScore =
+    oiExpanderPct !== null
+      ? priceBreadthScore * clamp((oiExpanderPct - 50.0) / 50.0, -1.0, 1.0)
+      : 0.0;
+
+  const scoreParts = [
+    priceBreadthScore * 0.4,
+    avgReturnScore * 0.18,
+    weightedReturnScore * 0.18,
+    oiConfirmationScore * 0.1,
+  ];
+  if (categoryScore !== null) {
+    scoreParts.push(categoryScore * 0.14);
+  }
+  const score = clamp(
+    scoreParts.reduce((sum, value) => sum + value, 0),
+    -1.0,
+    1.0,
+  );
+
+  return {
+    status: 'ok',
+    label: breadthLabel(score, advancerPct),
+    score: pyRound(score, 3),
+    advancers,
+    decliners,
+    unchanged,
+    sample_size: priceChanges.length,
+    advancer_pct: pyRound(advancerPct, 2),
+    decliner_pct: pyRound(declinerPct, 2),
+    avg_return_24h_pct: pyRound(avgReturn, 3),
+    volume_weighted_return_24h_pct: weightedReturn !== null ? pyRound(weightedReturn, 3) : null,
+    oi_expander_pct: oiExpanderPct !== null ? pyRound(oiExpanderPct, 2) : null,
+    avg_funding_rate_pct: fundingValues.length > 0 ? pyRound(mean(fundingValues), 5) : null,
+    category_momentum_score: categoryScore !== null ? pyRound(categoryScore, 3) : null,
+  };
+}
+
+export function sectorRotationSummary(marketContext: MarketContext): Record<string, unknown> {
+  const categories = asRecord(marketContext.categories);
+  const leaders = asArray(categories.leaders);
+  const laggards = asArray(categories.laggards);
+  const leaderValues = categoryChanges(leaders.slice(0, 5));
+  const laggardValues = categoryChanges(laggards.slice(0, 5));
+  if (leaderValues.length === 0 && laggardValues.length === 0) {
+    return { status: 'empty', label: 'unknown' };
+  }
+
+  const leaderAvg = leaderValues.length > 0 ? mean(leaderValues) : null;
+  const laggardAvg = laggardValues.length > 0 ? mean(laggardValues) : null;
+  const spread = leaderAvg !== null && laggardAvg !== null ? leaderAvg - laggardAvg : null;
+  const combined = [...leaderValues, ...laggardValues];
+  const positivePct =
+    combined.length > 0
+      ? (combined.filter((value) => value > 0).length / combined.length) * 100.0
+      : null;
+
+  return {
+    status: 'ok',
+    label: sectorLabel(leaderAvg, laggardAvg, positivePct),
+    leader_avg_24h_pct: leaderAvg !== null ? pyRound(leaderAvg, 3) : null,
+    laggard_avg_24h_pct: laggardAvg !== null ? pyRound(laggardAvg, 3) : null,
+    leader_laggard_spread_pct: spread !== null ? pyRound(spread, 3) : null,
+    positive_category_pct: positivePct !== null ? pyRound(positivePct, 2) : null,
+  };
+}
+
+function volumeWeightedReturn(rows: Row[]): number | null {
+  return weightedAverage(rows, 'price_change_24h_pct', 'quote_volume_usd');
+}
+
+function categoryMomentumScore(marketContext: MarketContext): number | null {
+  const categories = asRecord(marketContext.categories);
+  const values = [
+    ...categoryChanges(asArray(categories.leaders).slice(0, 5)),
+    ...categoryChanges(asArray(categories.laggards).slice(0, 5)),
+  ];
+  if (values.length === 0) {
+    return null;
+  }
+  return clamp(mean(values) / 4.0, -1.0, 1.0);
+}
+
+function categoryChanges(categories: unknown[]): number[] {
+  return categories
+    .map((item) => toFloat(asRecord(item).market_cap_change_24h_pct))
+    .filter((value): value is number => value !== null);
+}
+
+function breadthLabel(score: number, advancerPct: number): string {
+  if (score >= 0.35 && advancerPct >= 60.0) {
+    return 'broad-risk-on';
+  }
+  if (score >= 0.15) {
+    return 'selective-risk-on';
+  }
+  if (score <= -0.35 && advancerPct <= 40.0) {
+    return 'broad-risk-off';
+  }
+  if (score <= -0.15) {
+    return 'selective-risk-off';
+  }
+  return 'mixed';
+}
+
+function sectorLabel(
+  leaderAvg: number | null,
+  laggardAvg: number | null,
+  positivePct: number | null,
+): string {
+  if (positivePct !== null && positivePct >= 70.0) {
+    return 'broad-sector-bid';
+  }
+  if (positivePct !== null && positivePct <= 30.0) {
+    return 'broad-sector-offer';
+  }
+  if (leaderAvg !== null && leaderAvg > 1.0 && laggardAvg !== null && laggardAvg < -1.0) {
+    return 'rotation-dispersed';
+  }
+  if (leaderAvg !== null && leaderAvg > 0) {
+    return 'selective-sector-bid';
+  }
+  if (laggardAvg !== null && laggardAvg < 0) {
+    return 'selective-sector-offer';
+  }
+  return 'mixed';
+}
