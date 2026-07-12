@@ -18,7 +18,6 @@ function get(record: Record<string, unknown>, key: string, fallback: unknown): u
   return key in record ? record[key] : fallback;
 }
 
-/** Renders null as 'None', booleans as 'True'/'False' -- not JS's default `String()` output. */
 function pyStr(value: unknown): string {
   if (value === null) {
     return 'None';

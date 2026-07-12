@@ -29,8 +29,7 @@ function BareHeader() {
 
 /**
  * Top-down: the market first, then where money is moving, then the majors, and only then the
- * names the screen surfaced. Reading order IS the analysis — which is why there is no longer a
- * subtitle telling the user which section to start with.
+ * names the screen surfaced. Reading order IS the analysis.
  */
 export default async function Page({ searchParams }: PageProps) {
   const { run } = await searchParams;

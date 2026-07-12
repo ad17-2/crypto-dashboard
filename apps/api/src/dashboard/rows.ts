@@ -126,8 +126,7 @@ export function setupTone(side: string): string {
 /**
  * Purely observable ranking key (score magnitude x data quality) used to pick and order the
  * cross-section "chart_next" watchlist, and persisted as `recommendations.priority` for the
- * scoreboard. No longer confidence-weighted -- confidence_score was a blend output, not an
- * observation.
+ * scoreboard.
  */
 export function chartPriority(row: Row, scoreField: string, score: unknown): number {
   const numericScore =

@@ -102,10 +102,9 @@ export function applyScores(
     clamp(Math.max(priceChange, 0.0) / 8.0) * 13.0 +
     liquidityQuality * 0.25;
 
-  // long_score/short_score are THE SCREEN's pure crowding/momentum read -- no longer scaled by
-  // regime-alignment or signal-conflict (that blended a prediction into an observation). Those two
-  // fields are still computed below solely to keep the frozen 49-column CSV (reportFields.ts)
-  // populated; they are no longer consumed for ranking or sizing.
+  // long_score/short_score are THE SCREEN's pure crowding/momentum read. The alignment and
+  // conflict scores below are still computed solely to keep the frozen 49-column CSV
+  // (reportFields.ts) populated; they are no longer consumed for ranking or sizing.
   const alignment = conflicts.regime_alignment_score;
   const conflictScore = conflicts.signal_conflict_score;
 

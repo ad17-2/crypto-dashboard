@@ -294,12 +294,10 @@ describe('copy fallbacks never leak a raw machine key', () => {
   });
 });
 
-// ---------------------------------------------------------------------------------------------
 // Fixture walk -- the real leak-proof test. Every setup/quality-flag key that actually appears in
 // a real (frozen) payload must resolve to a mapped, non-jargon label. This does NOT replace the
 // source-derived assertions above (the fixture is known to be missing several real values -- see
 // the file header comment).
-// ---------------------------------------------------------------------------------------------
 
 const FIXTURE_PATH = join(
   dirname(fileURLToPath(import.meta.url)),

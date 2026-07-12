@@ -5,7 +5,6 @@ data/*.db
 reports/*.json
 reports/*.csv
 reports/*.md
-!reports/.gitkeep
 node_modules/
 
 # TypeScript / Node build artifacts

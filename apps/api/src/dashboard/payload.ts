@@ -28,8 +28,6 @@ import {
   WATCHLIST_LABELS,
 } from './watchlists.js';
 
-/** `config` is passed alongside `db` so `database` reports the CONFIGURED storage_path, not whatever file `db` is physically backed by (e.g. a test's temp copy). */
-
 const CORE_SYMBOLS = ['BTC', 'ETH', 'SOL'] as const;
 const HISTORY_POINTS_LIMIT = 16;
 
@@ -319,7 +317,7 @@ function regimeFitRows(
       continue;
     }
     // fitScore ranks purely on the side's own observable crowding/momentum score plus a
-    // data-quality tiebreaker -- no blend-derived alignment/confidence/conflict weighting.
+    // data-quality tiebreaker.
     const quality = toFloat(row.data_quality_score, 100.0) ?? 100.0;
     const fitScore = baseScore + quality * 0.05;
     ranked.push({ fitScore, row, side });
@@ -592,6 +590,7 @@ function validationSummary(
   return summary;
 }
 
+/** `config` is passed alongside `db` so `database` reports the CONFIGURED storage_path, not whatever file `db` is physically backed by (e.g. a test's temp copy). */
 export function buildDashboardPayload(
   db: Database.Database,
   config: AppConfig,

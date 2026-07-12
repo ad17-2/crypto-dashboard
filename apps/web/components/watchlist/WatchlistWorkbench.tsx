@@ -32,8 +32,8 @@ function defaultTab(watchlists: Watchlist[]): WatchlistId {
 }
 
 export function WatchlistWorkbench({ watchlists: allWatchlists }: WatchlistWorkbenchProps) {
-  // The core (BTC/ETH/SOL) watchlist is promoted into the market section elsewhere in the
-  // redesign — it never belongs in this tab strip.
+  // The core (BTC/ETH/SOL) watchlist is rendered by <CoreReadStage> in the market section
+  // instead — it never belongs in this tab strip.
   const watchlists = useMemo(
     () => allWatchlists.filter((list) => list.id !== 'core'),
     [allWatchlists],

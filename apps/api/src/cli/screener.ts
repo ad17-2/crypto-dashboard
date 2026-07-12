@@ -77,7 +77,6 @@ export function applyOverrides(config: AppConfig, args: ScreenerCliArgs): AppCon
   return config;
 }
 
-/** null/undefined -> 'None', booleans -> 'True'/'False', everything else -> its plain string form. */
 function pyStr(value: unknown): string {
   if (value === null || value === undefined) {
     return 'None';
