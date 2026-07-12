@@ -1,5 +1,5 @@
 import { InfoTip, Term } from '@/components/ui/Tooltip';
-import { lookupFactor, lookupMetric, lookupRobustnessVerdict } from '@/lib/copy';
+import { lookupEdgeVerdict, lookupFactor, lookupMetric, lookupRobustnessVerdict } from '@/lib/copy';
 import { fmtNum, fmtPct } from '@/lib/format';
 import {
   type FactorDecayInfo,
@@ -89,16 +89,24 @@ function FactorRow({ row, maxAbsWeight }: { row: FactorHealthRow; maxAbsWeight: 
   // Bar length already carries the magnitude, and a positive weight is the unremarkable case -- 11 of
   // 12 are. Only an INVERTED weight (the model betting against a factor) is worth a colour.
   const tone = row.weight !== null && row.weight < 0 ? 'neg' : '';
-  const isMeasured = row.mode === 'measured';
-  const badgeDefinition = lookupMetric(isMeasured ? 'measured_weight' : 'prior_weight').definition;
+  const badgeMetricKey =
+    row.mode === 'measured'
+      ? 'measured_weight'
+      : row.mode === 'unvalidated'
+        ? 'unvalidated_weight'
+        : 'prior_weight';
+  const badgeTone = row.mode === 'measured' ? 'pos' : row.mode === 'unvalidated' ? 'neg' : 'warn';
+  const badgeLabel =
+    row.mode === 'measured' ? 'Measured' : row.mode === 'unvalidated' ? 'Zeroed' : 'Prior';
+  const badgeDefinition = lookupMetric(badgeMetricKey).definition;
 
   return (
     <div className="py-3 border-b border-line last:border-b-0">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Term label={factor.label} definition={factor.definition} />
         <span className="flex items-center gap-2 shrink-0">
-          <span className={`status-pill ${isMeasured ? 'pos' : 'warn'}`} title={badgeDefinition}>
-            {isMeasured ? 'Measured' : 'Prior'}
+          <span className={`status-pill ${badgeTone}`} title={badgeDefinition}>
+            {badgeLabel}
           </span>
           <strong className="font-mono tabular-nums text-[13px]">{fmtNum(row.weight, 3)}</strong>
         </span>
@@ -140,8 +148,21 @@ function FactorRow({ row, maxAbsWeight }: { row: FactorHealthRow; maxAbsWeight: 
             metricKey="factor_edge_t_stat"
             value={fmtNum(row.edgeTStat, 2)}
           />
+          <DetailStat
+            label="Train net spread"
+            metricKey="factor_edge_train_spread"
+            value={fmtPct(row.edgeTrainNetSpreadPct, 2)}
+          />
+          <DetailStat
+            label="Validation net spread"
+            metricKey="factor_edge_validation_spread"
+            value={fmtPct(row.edgeValidationNetSpreadPct, 2)}
+          />
         </div>
-        <RobustnessLine robustness={row.robustness} />
+        <div className="px-2.5 pb-2.5 -mt-1 flex flex-wrap gap-1.5">
+          <RobustnessBadge robustness={row.robustness} />
+          <EdgeVerdictBadge edgeVerdict={row.edgeVerdict} />
+        </div>
       </details>
     </div>
   );
@@ -188,15 +209,27 @@ function DecayDetailStat({ decay }: { decay: FactorDecayInfo }) {
   );
 }
 
-function RobustnessLine({ robustness }: { robustness: string | null }) {
+/** Rank-IC train/test check -- see edgeVerdictBadge below for the separate MONEY train/test check. */
+function RobustnessBadge({ robustness }: { robustness: string | null }) {
   if (!robustness) return null;
   const tone = robustness === 'robust' ? 'pos' : robustness === 'overfit' ? 'neg' : 'neutral';
   const verdict = lookupRobustnessVerdict(robustness);
   return (
-    <div className="px-2.5 pb-2.5 -mt-1">
-      <span className={`status-pill ${tone}`} title={verdict.definition}>
-        {verdict.label}
-      </span>
-    </div>
+    <span className={`status-pill ${tone}`} title={verdict.definition}>
+      {verdict.label}
+    </span>
+  );
+}
+
+/** Money train/test check (edgeWalkForward.ts) -- what the evidence ladder's "make money" rung now gates on. */
+function EdgeVerdictBadge({ edgeVerdict }: { edgeVerdict: string | null }) {
+  if (!edgeVerdict) return null;
+  const tone =
+    edgeVerdict === 'validated' ? 'pos' : edgeVerdict === 'insufficient-data' ? 'neutral' : 'neg';
+  const verdict = lookupEdgeVerdict(edgeVerdict);
+  return (
+    <span className={`status-pill ${tone}`} title={verdict.definition}>
+      {verdict.label}
+    </span>
   );
 }

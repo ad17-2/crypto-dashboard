@@ -32,6 +32,7 @@ export interface RowScores {
   regime_alignment_score: number;
   breadth_alignment_score: number;
   round_trip_cost_pct: number;
+  size_multiplier: number;
 }
 
 export interface DirectionalWeightsLike {
@@ -113,6 +114,18 @@ export function applyScores(
     directionalScore,
   );
 
+  // Inverse-vol position sizing (measured, not just backtest theory -- see the MEASURED note):
+  // a coin at 2x the cross-section's typical ATR gets sized to ~0.5x. Clamped both ways so a
+  // near-zero-ATR outlier can't blow past 2x, and a very high-ATR name still gets a floor of 0.25x
+  // rather than being sized to zero. Falls back to neutral (1.0) when there's no cross-sectional
+  // ATR read to size against.
+  const medianAtrPct = toFloat(marketContext.median_atr_pct);
+  const rowAtrPct = toFloat(row.atr_14_pct);
+  const sizeMultiplier =
+    medianAtrPct === null
+      ? 1.0
+      : clamp(medianAtrPct / Math.max(rowAtrPct ?? medianAtrPct, 1.0), 0.25, 2.0);
+
   const scores: RowScores = {
     factor_score: pyRound(directionalScore, 4),
     liquidity_quality: pyRound(liquidityQuality, 2),
@@ -128,6 +141,7 @@ export function applyScores(
     regime_alignment_score: pyRound(alignment, 3),
     breadth_alignment_score: pyRound(conflicts.breadth_alignment_score, 3),
     round_trip_cost_pct: pyRound(roundTripCost, 4),
+    size_multiplier: pyRound(sizeMultiplier, 3),
   };
   row.scores = scores;
   Object.assign(row, conflicts);
@@ -148,6 +162,7 @@ export function applyExcludedScores(row: Row): void {
     regime_alignment_score: 0.0,
     breadth_alignment_score: 0.0,
     round_trip_cost_pct: 0.0,
+    size_multiplier: 0.0,
   };
   row.scores = scores;
   row.signal_conflict_label = 'excluded';

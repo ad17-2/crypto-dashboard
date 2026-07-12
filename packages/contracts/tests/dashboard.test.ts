@@ -57,6 +57,7 @@ const sampleRow = {
     regime_alignment_score: 0.3,
     breadth_alignment_score: 0.2,
     round_trip_cost_pct: 0.16,
+    size_multiplier: 1.1,
   },
   factor_parts: [{ name: 'momentum_24h', label: 'Momentum', value: 0.42, tone: 'pos' }],
   primary_driver: { name: 'momentum_24h', label: 'Momentum', value: 0.42, tone: 'pos' },
@@ -170,6 +171,9 @@ describe('DashboardPayloadSchema', () => {
             edge_t_stat: 2.3,
             edge_n_effective: 12.0,
             edge_overlap_factor: 6.0,
+            edge_verdict: 'validated',
+            edge_train_net_spread_pct: 0.4,
+            edge_validation_net_spread_pct: 0.6,
           },
         ],
         factor_correlations: [
@@ -177,6 +181,7 @@ describe('DashboardPayloadSchema', () => {
         ],
         factor_decay: {},
         walk_forward: {},
+        validated_factor_count: 1,
       },
       factor_correlations: [
         { a: 'momentum_24h', b: 'reversal_3d', rho: -0.82, verdict: 'redundant' },

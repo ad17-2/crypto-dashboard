@@ -18674,11 +18674,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.6666666666666665,
           "overlap_factor": 6,
-          "net_spread_pct": 0.18463263882339304,
-          "net_edge_per_30d_pct": 5.538979164701791,
-          "edge_t_stat": -0.2519897289271664,
-          "edge_n_effective": 2.6666666666666665,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "reversal_3d": {
           "ic": null,
@@ -18704,7 +18707,10 @@
           "net_edge_per_30d_pct": null,
           "edge_t_stat": null,
           "edge_n_effective": null,
-          "edge_overlap_factor": null
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "oi_price_signal": {
           "ic": 0.007563608526946269,
@@ -18726,11 +18732,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.6666666666666665,
           "overlap_factor": 6,
-          "net_spread_pct": 0.6700139026092478,
-          "net_edge_per_30d_pct": 20.10041707827743,
-          "edge_t_stat": 0.4895418601545182,
-          "edge_n_effective": 2.6666666666666665,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "funding_rate_contrarian": {
           "ic": -0.03210209514043357,
@@ -18752,11 +18761,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.6666666666666665,
           "overlap_factor": 6,
-          "net_spread_pct": 1.5152985368800276,
-          "net_edge_per_30d_pct": 45.45895610640083,
-          "edge_t_stat": -0.7077171855618936,
-          "edge_n_effective": 2.6666666666666665,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "ls_ratio_contrarian": {
           "ic": -0.010347184302158379,
@@ -18778,11 +18790,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.6666666666666665,
           "overlap_factor": 6,
-          "net_spread_pct": -0.27119487492471706,
-          "net_edge_per_30d_pct": -8.135846247741512,
-          "edge_t_stat": 0.03527054387777731,
-          "edge_n_effective": 2.6666666666666665,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "liquidation_imbalance": {
           "ic": 0.07527616258806075,
@@ -18804,11 +18819,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.6666666666666665,
           "overlap_factor": 6,
-          "net_spread_pct": 0.569327228024967,
-          "net_edge_per_30d_pct": 17.07981684074901,
-          "edge_t_stat": -0.7565273971191173,
-          "edge_n_effective": 2.6666666666666665,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "technical_trend_4h": {
           "ic": -0.10701387195709414,
@@ -18830,11 +18848,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.6666666666666665,
           "overlap_factor": 6,
-          "net_spread_pct": 1.5520757609792724,
-          "net_edge_per_30d_pct": 46.56227282937817,
-          "edge_t_stat": -0.7649906197735009,
-          "edge_n_effective": 2.6666666666666665,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "technical_momentum_4h": {
           "ic": -0.044537653983482035,
@@ -18856,11 +18877,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.6666666666666665,
           "overlap_factor": 6,
-          "net_spread_pct": 0.020340657951978702,
-          "net_edge_per_30d_pct": 0.6102197385593611,
-          "edge_t_stat": 0.24990566777519216,
-          "edge_n_effective": 2.6666666666666665,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "oi_acceleration_signal": {
           "ic": 0.004133739403559049,
@@ -18882,11 +18906,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.3333333333333335,
           "overlap_factor": 6,
-          "net_spread_pct": -0.10608158204349472,
-          "net_edge_per_30d_pct": -3.1824474613048412,
-          "edge_t_stat": -0.12154544302920443,
-          "edge_n_effective": 2.3333333333333335,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "funding_persistence_contrarian": {
           "ic": 0.032225955317196076,
@@ -18908,11 +18935,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.3333333333333335,
           "overlap_factor": 6,
-          "net_spread_pct": 0.8892169670518326,
-          "net_edge_per_30d_pct": 26.676509011554977,
-          "edge_t_stat": 0.7332928299703246,
-          "edge_n_effective": 2.3333333333333335,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "taker_flow_24h": {
           "ic": 0.05008305363210365,
@@ -18934,11 +18964,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.3333333333333335,
           "overlap_factor": 6,
-          "net_spread_pct": -0.16008112488214332,
-          "net_edge_per_30d_pct": -4.8024337464643,
-          "edge_t_stat": -0.09090761519905725,
-          "edge_n_effective": 2.3333333333333335,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         },
         "liquidation_pressure_24h": {
           "ic": 0.018697566787418678,
@@ -18960,11 +18993,14 @@
           "regime_multiplier": 1.0,
           "n_effective": 2.3333333333333335,
           "overlap_factor": 6,
-          "net_spread_pct": 0.5984384880330145,
-          "net_edge_per_30d_pct": 17.953154640990434,
-          "edge_t_stat": 0.8244386562216907,
-          "edge_n_effective": 2.3333333333333335,
-          "edge_overlap_factor": 6
+          "net_spread_pct": null,
+          "net_edge_per_30d_pct": null,
+          "edge_t_stat": null,
+          "edge_n_effective": null,
+          "edge_overlap_factor": null,
+          "edge_verdict": "insufficient-data",
+          "edge_train_net_spread_pct": null,
+          "edge_validation_net_spread_pct": null
         }
       },
       "history_records": 641,
@@ -19124,117 +19160,18 @@
           }
         },
         "economic_edge": {
-          "momentum_24h": {
-            "n_periods": 16,
-            "n_effective": 2.6666666666666665,
-            "overlap_factor": 6,
-            "gross_spread_pct": -0.504632638823393,
-            "net_spread_pct": 0.18463263882339304,
-            "t_stat": -0.2519897289271664,
-            "net_edge_per_30d_pct": 5.538979164701791,
-            "direction": -1
-          },
+          "momentum_24h": null,
           "reversal_3d": null,
-          "oi_price_signal": {
-            "n_periods": 16,
-            "n_effective": 2.6666666666666665,
-            "overlap_factor": 6,
-            "gross_spread_pct": 0.9900139026092478,
-            "net_spread_pct": 0.6700139026092478,
-            "t_stat": 0.4895418601545182,
-            "net_edge_per_30d_pct": 20.10041707827743,
-            "direction": 1
-          },
-          "funding_rate_contrarian": {
-            "n_periods": 16,
-            "n_effective": 2.6666666666666665,
-            "overlap_factor": 6,
-            "gross_spread_pct": -1.8352985368800276,
-            "net_spread_pct": 1.5152985368800276,
-            "t_stat": -0.7077171855618936,
-            "net_edge_per_30d_pct": 45.45895610640083,
-            "direction": -1
-          },
-          "ls_ratio_contrarian": {
-            "n_periods": 16,
-            "n_effective": 2.6666666666666665,
-            "overlap_factor": 6,
-            "gross_spread_pct": 0.04880512507528298,
-            "net_spread_pct": -0.27119487492471706,
-            "t_stat": 0.03527054387777731,
-            "net_edge_per_30d_pct": -8.135846247741512,
-            "direction": 1
-          },
-          "liquidation_imbalance": {
-            "n_periods": 16,
-            "n_effective": 2.6666666666666665,
-            "overlap_factor": 6,
-            "gross_spread_pct": -0.8893272280249671,
-            "net_spread_pct": 0.569327228024967,
-            "t_stat": -0.7565273971191173,
-            "net_edge_per_30d_pct": 17.07981684074901,
-            "direction": -1
-          },
-          "technical_trend_4h": {
-            "n_periods": 16,
-            "n_effective": 2.6666666666666665,
-            "overlap_factor": 6,
-            "gross_spread_pct": -1.8720757609792724,
-            "net_spread_pct": 1.5520757609792724,
-            "t_stat": -0.7649906197735009,
-            "net_edge_per_30d_pct": 46.56227282937817,
-            "direction": -1
-          },
-          "technical_momentum_4h": {
-            "n_periods": 16,
-            "n_effective": 2.6666666666666665,
-            "overlap_factor": 6,
-            "gross_spread_pct": 0.3403406579519787,
-            "net_spread_pct": 0.020340657951978702,
-            "t_stat": 0.24990566777519216,
-            "net_edge_per_30d_pct": 0.6102197385593611,
-            "direction": 1
-          },
-          "oi_acceleration_signal": {
-            "n_periods": 14,
-            "n_effective": 2.3333333333333335,
-            "overlap_factor": 6,
-            "gross_spread_pct": -0.2139184179565053,
-            "net_spread_pct": -0.10608158204349472,
-            "t_stat": -0.12154544302920443,
-            "net_edge_per_30d_pct": -3.1824474613048412,
-            "direction": -1
-          },
-          "funding_persistence_contrarian": {
-            "n_periods": 14,
-            "n_effective": 2.3333333333333335,
-            "overlap_factor": 6,
-            "gross_spread_pct": 1.2092169670518327,
-            "net_spread_pct": 0.8892169670518326,
-            "t_stat": 0.7332928299703246,
-            "net_edge_per_30d_pct": 26.676509011554977,
-            "direction": 1
-          },
-          "taker_flow_24h": {
-            "n_periods": 14,
-            "n_effective": 2.3333333333333335,
-            "overlap_factor": 6,
-            "gross_spread_pct": -0.15991887511785668,
-            "net_spread_pct": -0.16008112488214332,
-            "t_stat": -0.09090761519905725,
-            "net_edge_per_30d_pct": -4.8024337464643,
-            "direction": -1
-          },
-          "liquidation_pressure_24h": {
-            "n_periods": 14,
-            "n_effective": 2.3333333333333335,
-            "overlap_factor": 6,
-            "gross_spread_pct": 0.9184384880330144,
-            "net_spread_pct": 0.5984384880330145,
-            "t_stat": 0.8244386562216907,
-            "net_edge_per_30d_pct": 17.953154640990434,
-            "direction": 1
-          }
+          "oi_price_signal": null,
+          "funding_rate_contrarian": null,
+          "ls_ratio_contrarian": null,
+          "liquidation_imbalance": null,
+          "technical_trend_4h": null,
+          "technical_momentum_4h": null,
+          "oi_acceleration_signal": null,
+          "funding_persistence_contrarian": null,
+          "taker_flow_24h": null,
+          "liquidation_pressure_24h": null
         }
       },
       "walk_forward": {
@@ -20005,7 +19942,8 @@
         }
       },
       "ic_target_effective": "raw",
-      "selection_objective": "net_edge"
+      "selection_objective": "net_edge",
+      "validated_factor_count": 0
     },
     "regime": {
       "label": "btc-led",
@@ -20076,7 +20014,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1521
+          "round_trip_cost_pct": 0.1521,
+          "size_multiplier": 1.822
         }
       },
       {
@@ -20126,7 +20065,8 @@
           "signal_conflict_score": 66.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.0856
+          "round_trip_cost_pct": 0.0856,
+          "size_multiplier": 1.872
         }
       },
       {
@@ -20176,7 +20116,8 @@
           "signal_conflict_score": 66.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1563
+          "round_trip_cost_pct": 0.1563,
+          "size_multiplier": 1.788
         }
       },
       {
@@ -20226,7 +20167,8 @@
           "signal_conflict_score": 31.0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1631
+          "round_trip_cost_pct": 0.1631,
+          "size_multiplier": 1.256
         }
       },
       {
@@ -20276,7 +20218,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1448
+          "round_trip_cost_pct": 0.1448,
+          "size_multiplier": 1.443
         }
       },
       {
@@ -20326,7 +20269,8 @@
           "signal_conflict_score": 66.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1084
+          "round_trip_cost_pct": 0.1084,
+          "size_multiplier": 1
         }
       },
       {
@@ -20376,7 +20320,8 @@
           "signal_conflict_score": 40,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1564
+          "round_trip_cost_pct": 0.1564,
+          "size_multiplier": 0.263
         }
       },
       {
@@ -20426,7 +20371,8 @@
           "signal_conflict_score": 100.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1698
+          "round_trip_cost_pct": 0.1698,
+          "size_multiplier": 1.269
         }
       },
       {
@@ -20476,7 +20422,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1461
+          "round_trip_cost_pct": 0.1461,
+          "size_multiplier": 1.058
         }
       },
       {
@@ -20526,7 +20473,8 @@
           "signal_conflict_score": 100,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1436
+          "round_trip_cost_pct": 0.1436,
+          "size_multiplier": 1.039
         }
       },
       {
@@ -20576,7 +20524,8 @@
           "signal_conflict_score": 100.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.0877
+          "round_trip_cost_pct": 0.0877,
+          "size_multiplier": 0.834
         }
       },
       {
@@ -20626,7 +20575,8 @@
           "signal_conflict_score": 99,
           "regime_alignment_score": -1,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.0401
+          "round_trip_cost_pct": 0.0401,
+          "size_multiplier": 0.418
         }
       },
       {
@@ -20676,7 +20626,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 0,
           "breadth_alignment_score": 0,
-          "round_trip_cost_pct": 0.145
+          "round_trip_cost_pct": 0.145,
+          "size_multiplier": 0.759
         }
       },
       {
@@ -20726,7 +20677,8 @@
           "signal_conflict_score": 66.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1689
+          "round_trip_cost_pct": 0.1689,
+          "size_multiplier": 0.439
         }
       },
       {
@@ -20776,7 +20728,8 @@
           "signal_conflict_score": 100.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1869
+          "round_trip_cost_pct": 0.1869,
+          "size_multiplier": 0.71
         }
       },
       {
@@ -20826,7 +20779,8 @@
           "signal_conflict_score": 40.0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1692
+          "round_trip_cost_pct": 0.1692,
+          "size_multiplier": 1.293
         }
       },
       {
@@ -20876,7 +20830,8 @@
           "signal_conflict_score": 40,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1535
+          "round_trip_cost_pct": 0.1535,
+          "size_multiplier": 0.437
         }
       },
       {
@@ -20926,7 +20881,8 @@
           "signal_conflict_score": 26.0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1527
+          "round_trip_cost_pct": 0.1527,
+          "size_multiplier": 1.473
         }
       },
       {
@@ -20976,7 +20932,8 @@
           "signal_conflict_score": 25.0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1571
+          "round_trip_cost_pct": 0.1571,
+          "size_multiplier": 0.596
         }
       },
       {
@@ -21026,7 +20983,8 @@
           "signal_conflict_score": 96,
           "regime_alignment_score": -1,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1736
+          "round_trip_cost_pct": 0.1736,
+          "size_multiplier": 1
         }
       },
       {
@@ -21076,7 +21034,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1588
+          "round_trip_cost_pct": 0.1588,
+          "size_multiplier": 1
         }
       },
       {
@@ -21126,7 +21085,8 @@
           "signal_conflict_score": 75,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1746
+          "round_trip_cost_pct": 0.1746,
+          "size_multiplier": 0.756
         }
       },
       {
@@ -21176,7 +21136,8 @@
           "signal_conflict_score": 95.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.0995
+          "round_trip_cost_pct": 0.0995,
+          "size_multiplier": 0.997
         }
       },
       {
@@ -21226,7 +21187,8 @@
           "signal_conflict_score": 98,
           "regime_alignment_score": -1,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1583
+          "round_trip_cost_pct": 0.1583,
+          "size_multiplier": 0.96
         }
       },
       {
@@ -21276,7 +21238,8 @@
           "signal_conflict_score": 100,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1351
+          "round_trip_cost_pct": 0.1351,
+          "size_multiplier": 1
         }
       },
       {
@@ -21326,7 +21289,8 @@
           "signal_conflict_score": 100,
           "regime_alignment_score": -1,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1434
+          "round_trip_cost_pct": 0.1434,
+          "size_multiplier": 0.874
         }
       },
       {
@@ -21376,7 +21340,8 @@
           "signal_conflict_score": 99,
           "regime_alignment_score": -1,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.175
+          "round_trip_cost_pct": 0.175,
+          "size_multiplier": 1
         }
       },
       {
@@ -21426,7 +21391,8 @@
           "signal_conflict_score": 74,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.165
+          "round_trip_cost_pct": 0.165,
+          "size_multiplier": 1
         }
       },
       {
@@ -21476,7 +21442,8 @@
           "signal_conflict_score": 0.0,
           "regime_alignment_score": 0.0,
           "breadth_alignment_score": 0.0,
-          "round_trip_cost_pct": 0.1697
+          "round_trip_cost_pct": 0.1697,
+          "size_multiplier": 1
         }
       },
       {
@@ -21526,7 +21493,8 @@
           "signal_conflict_score": 66.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.0805
+          "round_trip_cost_pct": 0.0805,
+          "size_multiplier": 1
         }
       },
       {
@@ -21576,7 +21544,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1507
+          "round_trip_cost_pct": 0.1507,
+          "size_multiplier": 1.295
         }
       },
       {
@@ -21626,7 +21595,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.104
+          "round_trip_cost_pct": 0.104,
+          "size_multiplier": 1.146
         }
       },
       {
@@ -21676,7 +21646,8 @@
           "signal_conflict_score": 32.0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1633
+          "round_trip_cost_pct": 0.1633,
+          "size_multiplier": 1.102
         }
       },
       {
@@ -21726,7 +21697,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1552
+          "round_trip_cost_pct": 0.1552,
+          "size_multiplier": 1.046
         }
       },
       {
@@ -21776,7 +21748,8 @@
           "signal_conflict_score": 100,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1692
+          "round_trip_cost_pct": 0.1692,
+          "size_multiplier": 0.751
         }
       },
       {
@@ -21826,7 +21799,8 @@
           "signal_conflict_score": 0.0,
           "regime_alignment_score": 1,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1545
+          "round_trip_cost_pct": 0.1545,
+          "size_multiplier": 0.92
         }
       },
       {
@@ -21876,7 +21850,8 @@
           "signal_conflict_score": 100,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.096
+          "round_trip_cost_pct": 0.096,
+          "size_multiplier": 2
         }
       },
       {
@@ -21926,7 +21901,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1534
+          "round_trip_cost_pct": 0.1534,
+          "size_multiplier": 1
         }
       },
       {
@@ -21976,7 +21952,8 @@
           "signal_conflict_score": 100.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1805
+          "round_trip_cost_pct": 0.1805,
+          "size_multiplier": 0.837
         }
       },
       {
@@ -22026,7 +22003,8 @@
           "signal_conflict_score": 100.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.137
+          "round_trip_cost_pct": 0.137,
+          "size_multiplier": 1.003
         }
       },
       {
@@ -22076,7 +22054,8 @@
           "signal_conflict_score": 98,
           "regime_alignment_score": -1,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1539
+          "round_trip_cost_pct": 0.1539,
+          "size_multiplier": 0.796
         }
       },
       {
@@ -22126,7 +22105,8 @@
           "signal_conflict_score": 0.0,
           "regime_alignment_score": 1,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1545
+          "round_trip_cost_pct": 0.1545,
+          "size_multiplier": 0.66
         }
       },
       {
@@ -22176,7 +22156,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 0,
           "breadth_alignment_score": 0,
-          "round_trip_cost_pct": 0.1462
+          "round_trip_cost_pct": 0.1462,
+          "size_multiplier": 1.145
         }
       },
       {
@@ -22226,7 +22207,8 @@
           "signal_conflict_score": 34.0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1427
+          "round_trip_cost_pct": 0.1427,
+          "size_multiplier": 1.55
         }
       },
       {
@@ -22276,7 +22258,8 @@
           "signal_conflict_score": 39.0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1473
+          "round_trip_cost_pct": 0.1473,
+          "size_multiplier": 2
         }
       },
       {
@@ -22326,7 +22309,8 @@
           "signal_conflict_score": 26,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1325
+          "round_trip_cost_pct": 0.1325,
+          "size_multiplier": 0.974
         }
       },
       {
@@ -22376,7 +22360,8 @@
           "signal_conflict_score": 100,
           "regime_alignment_score": -1,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1384
+          "round_trip_cost_pct": 0.1384,
+          "size_multiplier": 0.478
         }
       },
       {
@@ -22426,7 +22411,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1387
+          "round_trip_cost_pct": 0.1387,
+          "size_multiplier": 1.427
         }
       },
       {
@@ -22476,7 +22462,8 @@
           "signal_conflict_score": 100.0,
           "regime_alignment_score": -1.0,
           "breadth_alignment_score": -0.357,
-          "round_trip_cost_pct": 0.1879
+          "round_trip_cost_pct": 0.1879,
+          "size_multiplier": 0.796
         }
       },
       {
@@ -22526,7 +22513,8 @@
           "signal_conflict_score": 0,
           "regime_alignment_score": 1.0,
           "breadth_alignment_score": 0.357,
-          "round_trip_cost_pct": 0.1451
+          "round_trip_cost_pct": 0.1451,
+          "size_multiplier": 1
         }
       }
     ]

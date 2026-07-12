@@ -247,6 +247,7 @@ function labeledRecordsForHorizon(
         generated_at: current.generatedAt,
         forward_return_pct: forwardReturnPct,
         forward_return_vol_adj: forwardReturnVolAdj,
+        atr_pct: current.atr_pct,
         factors: current.factors,
         scores: current.scores,
       });

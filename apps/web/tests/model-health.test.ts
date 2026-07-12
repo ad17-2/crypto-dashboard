@@ -108,6 +108,7 @@ function realisticPayload(): RealisticPayload {
           regime_mode: 'pooled',
           net_spread_pct: -0.3,
           edge_t_stat: -1.1,
+          edge_verdict: 'failed-train',
         },
         {
           name: 'oi_price_signal',
@@ -126,6 +127,7 @@ function realisticPayload(): RealisticPayload {
           regime_mode: 'pooled',
           net_spread_pct: -0.1,
           edge_t_stat: -0.4,
+          edge_verdict: 'insufficient-data',
         },
         {
           name: 'technical_trend_4h',
@@ -142,9 +144,10 @@ function realisticPayload(): RealisticPayload {
           oos_ic: -0.1026,
           regime_ic: -0.05,
           regime_mode: 'pooled',
-          // The one factor that's both statistically significant AND still makes money after costs.
+          // The one factor that's forward-validated: earned money on train AND held on validation.
           net_spread_pct: 0.8,
           edge_t_stat: -3.45,
+          edge_verdict: 'validated',
         },
         {
           name: 'taker_flow_24h',
@@ -163,8 +166,10 @@ function realisticPayload(): RealisticPayload {
           regime_mode: 'pooled',
           net_spread_pct: 0.2,
           edge_t_stat: 1.6,
+          edge_verdict: 'failed-forward',
         },
       ],
+      validated_factor_count: 1,
     },
   };
 }
@@ -185,7 +190,7 @@ describe('evidenceLadder', () => {
     const byKey = Object.fromEntries(rungs.map((r) => [r.key, r]));
     expect(byKey.clean_data?.status).toBe('pass');
     expect(byKey.signals_measured?.status).toBe('pass');
-    // Only 1 of 4 sample factors clears |edge t| >= 2 AND has a positive net spread -> partial, not pass.
+    // Only 1 of 4 sample factors (technical_trend_4h) is forward-validated -> partial, not pass.
     expect(byKey.measurements_strong?.status).toBe('partial');
     expect(byKey.measurements_strong?.detail).toContain('1 of 4');
     expect(byKey.scored_end_to_end?.status).toBe('fail');
@@ -208,13 +213,13 @@ describe('evidenceLadder', () => {
     assertClean(strong.detail);
   });
 
-  it('measurements_strong rung ignores factors with a null/missing edge t-stat rather than crashing', () => {
+  it('measurements_strong rung ignores factors with a null/missing/malformed edge_verdict rather than crashing', () => {
     const rungs = evidenceLadder({
       model_weights: {
         factors: [
-          { name: 'a', edge_t_stat: null, net_spread_pct: 5 },
-          { name: 'b', net_spread_pct: 5 },
-          { name: 'c', edge_t_stat: 'not-a-number', net_spread_pct: 5 },
+          { name: 'a', edge_verdict: null },
+          { name: 'b' },
+          { name: 'c', edge_verdict: 42 },
         ],
       },
     });
@@ -223,12 +228,12 @@ describe('evidenceLadder', () => {
     expect(strong.detail).toContain('0 of 3');
   });
 
-  it('measurements_strong rung passes when every factor clears the edge t-stat bar with a positive net spread', () => {
+  it('measurements_strong rung passes when every factor is forward-validated', () => {
     const rungs = evidenceLadder({
       model_weights: {
         factors: [
-          { name: 'a', edge_t_stat: 3.1, net_spread_pct: 1.2 },
-          { name: 'b', edge_t_stat: -2.5, net_spread_pct: 0.4 },
+          { name: 'a', edge_verdict: 'validated' },
+          { name: 'b', edge_verdict: 'validated' },
         ],
       },
     });
@@ -236,12 +241,13 @@ describe('evidenceLadder', () => {
     expect(strong.status).toBe('pass');
   });
 
-  it('measurements_strong rung does not count a factor as passing when its net spread is not positive, even with a significant edge t-stat (a significant IC must not read as "working")', () => {
+  it('measurements_strong rung does not count a factor as passing when it failed forward-validation, even though it once looked significant and profitable in-sample (a train-only pass must not read as "working")', () => {
     const rungs = evidenceLadder({
       model_weights: {
         factors: [
-          { name: 'a', edge_t_stat: 5, net_spread_pct: -0.5 },
-          { name: 'b', edge_t_stat: 4, net_spread_pct: 0 },
+          // Looked significant and profitable on train, but reversed on validation.
+          { name: 'a', edge_t_stat: 5, net_spread_pct: 0.8, edge_verdict: 'failed-forward' },
+          { name: 'b', edge_t_stat: 4, net_spread_pct: 0, edge_verdict: 'failed-train' },
         ],
       },
     });
@@ -367,6 +373,34 @@ describe('modelHealthVerdict', () => {
     assertClean(verdict.summary);
   });
 
+  it('states plainly that no factor has a validated edge when validated_factor_count is 0', () => {
+    const verdict = modelHealthVerdict({
+      model_weights: {
+        validated_factor_count: 0,
+        factors: [{ mode: 'ic' }, { mode: 'prior' }],
+      },
+    });
+    expect(verdict.headline).toBe('No factor has a validated edge.');
+    expect(verdict.summary).toContain('None of the 2 signals');
+    assertClean(verdict.summary);
+  });
+
+  it('the zero-validated-edge headline takes priority over a passing scored_end_to_end rung -- a good blended hit rate does not mean any single factor has proven itself forward', () => {
+    const verdict = modelHealthVerdict({
+      validation: { model: { observations: 500, hit_rate: 55 } },
+      model_weights: { validated_factor_count: 0, factors: [{ mode: 'ic' }] },
+    });
+    expect(verdict.headline).toBe('No factor has a validated edge.');
+  });
+
+  it('does not fire the zero-validated-edge branch when validated_factor_count is simply absent from the payload (older/partial fixtures)', () => {
+    const verdict = modelHealthVerdict({
+      validation: { model: { observations: 500, hit_rate: 55 } },
+      model_weights: { factors: [{ mode: 'ic' }] },
+    });
+    expect(verdict.headline).toBe('The model has a real track record.');
+  });
+
   it('never renders null/NaN/undefined for a fully empty payload', () => {
     const verdict = modelHealthVerdict({});
     assertClean(verdict.headline);
@@ -385,6 +419,21 @@ describe('factorHealthRows', () => {
     ]);
     expect(rows.find((r) => r.name === 'technical_trend_4h')?.mode).toBe('measured');
     expect(rows.find((r) => r.name === 'momentum_24h')?.mode).toBe('prior');
+  });
+
+  it('maps mode "unvalidated" through distinctly from "prior" -- a zeroed factor is not a starting belief', () => {
+    const rows = factorHealthRows({
+      factors: [{ name: 'a', mode: 'unvalidated', weight: 0 }],
+    });
+    expect(rows[0]?.mode).toBe('unvalidated');
+  });
+
+  it('carries edge_verdict and the train/validation net spreads through per factor', () => {
+    const rows = factorHealthRows(realisticPayload().model_weights);
+    const trend = rows.find((r) => r.name === 'technical_trend_4h');
+    const taker = rows.find((r) => r.name === 'taker_flow_24h');
+    expect(trend?.edgeVerdict).toBe('validated');
+    expect(taker?.edgeVerdict).toBe('failed-forward');
   });
 
   it('joins each factor to its own factor_decay entry by name', () => {

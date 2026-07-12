@@ -726,6 +726,11 @@ export const METRIC: Record<string, CopyEntry> = {
     definition:
       "This weight reflects the factor's own measured track record, not just a starting assumption — it cleared the reliability bar needed to earn that.",
   },
+  unvalidated_weight: {
+    label: 'Zeroed',
+    definition:
+      "This factor was actively tested train-then-forward and failed — it earned nothing (or reversed) on unseen data, so its weight was set to zero instead of falling back to a starting assumption. Trading a factor's prior after it's been shown to lose money would mean the model keeps trading noise.",
+  },
   robustness: {
     label: 'Robustness',
     definition:
@@ -818,6 +823,30 @@ export const METRIC: Record<string, CopyEntry> = {
     definition:
       "How consistent this factor's decile long-short spread has been across snapshots, not the consistency of its rank correlation (that's the separate 't-stat' above). As a rough rule of thumb, 2 or higher is normally treated as \"probably not noise.\"",
   },
+  // -- Forward-validation (apps/api/src/pipeline/edgeWalkForward.ts) -- whether the net spread
+  // above was earned on an earlier slice of history AND still held on a later slice the factor
+  // wasn't measured from. Distinct from the OTHER walk-forward check (rank-IC, see `walk_forward`
+  // above): this one is about money, not rank order.
+  factor_edge_verdict: {
+    label: 'Forward-validated',
+    definition:
+      "Whether this factor's money edge was tested train-then-forward: measured on an earlier slice of history, then checked again on a later slice it wasn't measured from. Only a factor that made money on BOTH slices counts as forward-validated — one that looked profitable on the training slice but reversed or vanished on the later slice does not.",
+  },
+  factor_edge_train_spread: {
+    label: 'Train net spread',
+    definition:
+      "This factor's net spread (see Net spread above), measured only on the earlier training slice of history used for forward-validation.",
+  },
+  factor_edge_validation_spread: {
+    label: 'Validation net spread',
+    definition:
+      "This factor's net spread, measured only on the later slice of history it was never trained on — the more trustworthy of the two numbers.",
+  },
+  size_multiplier: {
+    label: 'Position size',
+    definition:
+      "A suggested position size relative to a typical coin, based on this coin's own volatility (14-period ATR) versus the median across trusted coins this run. A calmer-than-typical coin sizes up (up to 2x); a choppier one sizes down (as low as 0.25x) — so a fixed amount of risk buys a similarly-sized bet across very different coins.",
+  },
 };
 
 export const lookupMetric = makeLookup(METRIC, NOT_REPORTED);
@@ -848,6 +877,41 @@ export const ROBUSTNESS_VERDICT: Record<string, CopyEntry> = {
 };
 
 export const lookupRobustnessVerdict = makeLookup(ROBUSTNESS_VERDICT, {
+  label: 'Unknown',
+  definition: 'Not reported.',
+});
+
+// ---------------------------------------------------------------------------------------------
+// 9b. EDGE_VERDICT -- apps/api/src/pipeline/edgeWalkForward.ts `EdgeWalkForwardResult['verdict']`
+// (4 values). Distinct from ROBUSTNESS_VERDICT above: that one is a rank-IC train/test check;
+// this one is a MONEY train/test check (net-of-cost decile spread), and is what the evidence
+// ladder's "the signals that pass actually make money" rung is now based on.
+// ---------------------------------------------------------------------------------------------
+
+export const EDGE_VERDICT: Record<string, CopyEntry> = {
+  validated: {
+    label: 'Forward-validated',
+    definition:
+      "This factor's decile spread earned money on an earlier slice of history, then still made money when re-checked on a later slice it wasn't measured from.",
+  },
+  'failed-forward': {
+    label: 'Failed forward',
+    definition:
+      'This factor made money on the earlier training slice, but reversed or lost money once re-checked on the later slice it was never measured on.',
+  },
+  'failed-train': {
+    label: 'Never profitable',
+    definition:
+      'This factor never cleared the money bar (a t-stat of 2 or more and a positive net spread) even on the earlier training slice, so it was never tested on the later slice at all.',
+  },
+  'insufficient-data': {
+    label: 'Not enough data',
+    definition:
+      "There isn't enough history yet to split into a training slice and a later slice large enough to test.",
+  },
+};
+
+export const lookupEdgeVerdict = makeLookup(EDGE_VERDICT, {
   label: 'Unknown',
   definition: 'Not reported.',
 });

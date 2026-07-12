@@ -1,6 +1,7 @@
 import type { LabeledFactorRecord } from '../db/types.js';
 import { roundTripCostPct } from './costs.js';
 import { economicEdge } from './economicEdge.js';
+import { type EdgeWalkForwardResult, edgeWalkForward } from './edgeWalkForward.js';
 import { DEFAULT_PRIORS, DIRECTIONAL_FACTORS } from './factorDefinitions.js';
 import { crossSectionalIc, type FactorRecord } from './ic.js';
 import type { FactorCorrelationFlag } from './independence.js';
@@ -22,7 +23,8 @@ export interface FactorStat {
   n_effective: number | null;
   overlap_factor: number | null;
   credibility_k: number;
-  mode: 'ic' | 'prior';
+  /** 'unvalidated': net_edge + edge_walk_forward_gating + zero_unvalidated_weights zeroed this factor instead of falling back to its prior. */
+  mode: 'ic' | 'prior' | 'unvalidated';
   raw_weight: number;
   robustness: WalkForwardFactorResult['verdict'];
   oos_ic: number | null;
@@ -34,6 +36,10 @@ export interface FactorStat {
   /** economicEdge()'s own overlap-adjusted n_effective/overlap_factor -- distinct from `n_effective`/`overlap_factor` above, which are the rank-IC's. */
   edge_n_effective: number | null;
   edge_overlap_factor: number | null;
+  /** Always computed (edgeWalkForward.ts), regardless of selection_objective or gating -- a train-then-forward split of the same money measurement above. */
+  edge_verdict: EdgeWalkForwardResult['verdict'];
+  edge_train_net_spread_pct: number | null;
+  edge_validation_net_spread_pct: number | null;
   regime_ic: number | null;
   regime_t_stat: number | null;
   regime_n_periods: number;
@@ -53,6 +59,8 @@ export interface FactorWeights {
   /** 'raw' when ic_target was 'vol_adjusted' but no row carried an ATR -- a silent downgrade otherwise. */
   ic_target_effective: 'vol_adjusted' | 'raw';
   selection_objective: 'net_edge' | 'rank_ic';
+  /** Count of DIRECTIONAL_FACTORS with edge_verdict === 'validated' -- independent of selection_objective/mode, so the UI can say "no validated edge" even if mode-based weights look otherwise busy. */
+  validated_factor_count: number;
   regime_adjusted: boolean;
   regime_adjustment: {
     label: string;
@@ -93,6 +101,10 @@ export function factorWeights(
   const overfitPenalty = factorCfg.walk_forward_overfit_penalty ?? 0.0;
   const selectionObjective = factorCfg.selection_objective ?? 'net_edge';
   const icTarget = factorCfg.ic_target ?? 'vol_adjusted';
+  const edgeWalkForwardGating = factorCfg.edge_walk_forward_gating ?? true;
+  const edgeValidationFraction = factorCfg.edge_validation_fraction ?? 0.3;
+  const positionSizing = factorCfg.position_sizing ?? 'inverse_vol';
+  const zeroUnvalidatedWeights = factorCfg.zero_unvalidated_weights ?? true;
   // Row-agnostic: no live spread/funding for a specific coin at this layer, so this is fees +
   // slippage + the assumed spread only (see costs.ts) -- the same baseline for every factor.
   const costPctPerLeg = roundTripCostPct({}, config.costs ?? {}, forwardReturnHours, 0);
@@ -135,24 +147,45 @@ export function factorWeights(
     const edge = economicEdge(historyRecords as unknown as LabeledFactorRecord[], factor, {
       forwardReturnHours,
       costPctPerLeg,
+      sizing: positionSizing,
+    });
+    // Also always computed: the chronological train/validation split of the same money
+    // measurement. An in-sample money gate alone still overfits -- technical_trend_4h passed
+    // in-sample (train t=+2.20) but died forward (validate net -0.030); reversal_3d is the one
+    // factor that actually holds forward. See edgeWalkForward.ts.
+    const edgeWf = edgeWalkForward(historyRecords as unknown as LabeledFactorRecord[], factor, {
+      forwardReturnHours,
+      costPctPerLeg,
+      validationFraction: edgeValidationFraction,
+      minAbsT,
+      sizing: positionSizing,
     });
 
     let useObserved: boolean;
     let observedValue: number | null;
+    // null when there's no walk-forward-validated concept for this factor's selection path (i.e.
+    // rank_ic objective, or edge_walk_forward_gating off) -- distinct from an explicit `false`.
+    let isValidated: boolean | null = null;
     if (selectionObjective === 'net_edge') {
-      // The gate is money: a spread still positive after paying both legs, on a t-stat that isn't
-      // noise. minAbsIc does not apply -- net_spread_pct > 0 is the bar, not IC magnitude.
-      // The period count MUST come from edge.n_periods, not the IC's: the two are filtered
-      // differently (the edge needs 20 names per cross-section, the IC 5, and under
-      // ic_target='vol_adjusted' the IC's sample is ATR-filtered on top). Gating the edge on the
-      // IC's period count would discard a profitable factor because an unrelated sample was thin.
-      // meanIc is still required because the weight's MAGNITUDE is drawn from it below.
-      useObserved =
-        edge !== null &&
-        meanIc !== null &&
-        edge.n_periods >= icMinPeriods &&
-        Math.abs(edge.t_stat) >= minAbsT &&
-        edge.net_spread_pct > 0;
+      if (edgeWalkForwardGating) {
+        // Replaces the in-sample-only gate: a factor must have earned money on the earlier training
+        // slice AND still held on the later slice it wasn't measured from, not merely on the full
+        // (in-sample) history. meanIc is still required because the weight's MAGNITUDE is drawn
+        // from it below.
+        isValidated = edgeWf.validated;
+        useObserved = isValidated && meanIc !== null;
+      } else {
+        // Legacy in-sample-only gate, kept for operators who explicitly turn gating off. The period
+        // count MUST come from edge.n_periods, not the IC's: the two are filtered differently (the
+        // edge needs 20 names per cross-section, the IC 5, and under ic_target='vol_adjusted' the
+        // IC's sample is ATR-filtered on top).
+        useObserved =
+          edge !== null &&
+          meanIc !== null &&
+          edge.n_periods >= icMinPeriods &&
+          Math.abs(edge.t_stat) >= minAbsT &&
+          edge.net_spread_pct > 0;
+      }
       // Magnitude from the measured IC (the blend's existing scale); sign from which side of the
       // decile spread actually made money, which can differ from the IC's sign.
       observedValue =
@@ -175,10 +208,25 @@ export function factorWeights(
     if (walkForwardGating && wfFactor.verdict === 'overfit') {
       kEffective *= overfitPenalty;
     }
-    let mode: 'ic' | 'prior';
+
+    // A factor gated on walk-forward-validated money but that was ACTIVELY TESTED AND FAILED must
+    // not fall back to its prior -- the priors are a blend of noise, net-negative after costs
+    // (MEASURED note). 'insufficient-data' is deliberately excluded: that's a cold-start/thin-
+    // history state, not a failure, and must keep falling back to prior (see
+    // "falls back to prior weights without history" -- a factor the model simply hasn't had a
+    // chance to test yet is not the same as one it tested and found to lose money).
+    const isUnvalidated =
+      selectionObjective === 'net_edge' &&
+      edgeWalkForwardGating &&
+      (edgeWf.verdict === 'failed-train' || edgeWf.verdict === 'failed-forward');
+
+    let mode: 'ic' | 'prior' | 'unvalidated';
     if (useObserved && observedValue !== null && kEffective > 0) {
       pooledRaw[factor] = (1.0 - kEffective) * priorSigned + kEffective * observedValue;
       mode = 'ic';
+    } else if (zeroUnvalidatedWeights && isUnvalidated) {
+      pooledRaw[factor] = 0.0;
+      mode = 'unvalidated';
     } else {
       pooledRaw[factor] = priorSigned;
       mode = 'prior';
@@ -200,6 +248,9 @@ export function factorWeights(
       edge_t_stat: edge?.t_stat ?? null,
       edge_n_effective: edge?.n_effective ?? null,
       edge_overlap_factor: edge?.overlap_factor ?? null,
+      edge_verdict: edgeWf.verdict,
+      edge_train_net_spread_pct: edgeWf.train?.net_spread_pct ?? null,
+      edge_validation_net_spread_pct: edgeWf.validation?.net_spread_pct ?? null,
       regime_ic: null,
       regime_t_stat: null,
       regime_n_periods: 0,
@@ -279,6 +330,10 @@ export function factorWeights(
     stat.regime_multiplier = baseWeight !== 0 ? pyRound(weight / baseWeight, 3) : 1.0;
   }
 
+  const validatedFactorCount = Object.values(factorStats).filter(
+    (stat) => stat.edge_verdict === 'validated',
+  ).length;
+
   return {
     directional,
     base_directional: baseDirectional,
@@ -287,6 +342,7 @@ export function factorWeights(
     mode: Object.values(factorStats).some((stat) => stat.mode === 'ic') ? 'ic' : 'prior',
     ic_target_effective: icTargetEffective,
     selection_objective: selectionObjective,
+    validated_factor_count: validatedFactorCount,
     regime_adjusted: currentRegime !== null && currentRegime !== undefined,
     regime_adjustment: {
       label: currentRegime ?? 'pooled',

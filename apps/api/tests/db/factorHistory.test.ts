@@ -292,6 +292,7 @@ describe('forward_return_vol_adj', () => {
     const baseRecord = records.find((record) => record.generated_at === hoursAgo(40));
     expect(baseRecord?.forward_return_pct).toBeCloseTo(10.0); // (110-100)/100*100
     expect(baseRecord?.forward_return_vol_adj).toBeCloseTo(5.0); // 10 / max(2.0, 1.0)
+    expect(baseRecord?.atr_pct).toBeCloseTo(2.0); // current row's own ATR, not the target's 99
   });
 
   it('floors the ATR divisor at 1.0 when ATR is below that (matches reversal_3d precedent)', () => {
@@ -315,6 +316,9 @@ describe('forward_return_vol_adj', () => {
     expect(baseRecord?.forward_return_pct).toBeCloseTo(6.0);
     // Without the floor this would be 6 / 0.3 = 20; the floor caps the divisor at 1.0.
     expect(baseRecord?.forward_return_vol_adj).toBeCloseTo(6.0);
+    // atr_pct itself is carried raw, unfloored -- the 1.0 floor is a forward_return_vol_adj/
+    // economicEdge sizing concern, not a property of the stored ATR.
+    expect(baseRecord?.atr_pct).toBeCloseTo(0.3);
   });
 
   it('is null when the current row has no ATR, while forward_return_pct is still computed', () => {
@@ -331,5 +335,6 @@ describe('forward_return_vol_adj', () => {
     const baseRecord = records.find((record) => record.generated_at === hoursAgo(40));
     expect(baseRecord?.forward_return_pct).toBeCloseTo(20.0);
     expect(baseRecord?.forward_return_vol_adj).toBeNull();
+    expect(baseRecord?.atr_pct).toBeNull();
   });
 });
