@@ -67,6 +67,10 @@ export interface FactorsConfigInput {
   priors?: Record<string, number>;
   ic_target?: 'vol_adjusted' | 'raw';
   selection_objective?: 'net_edge' | 'rank_ic';
+  edge_walk_forward_gating?: boolean;
+  edge_validation_fraction?: number;
+  position_sizing?: 'inverse_vol' | 'equal_weight';
+  zero_unvalidated_weights?: boolean;
 }
 
 export interface CostsConfigInput {

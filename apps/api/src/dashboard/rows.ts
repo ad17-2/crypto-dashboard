@@ -456,6 +456,7 @@ const SCORE_KEYS = [
   'regime_alignment_score',
   'breadth_alignment_score',
   'round_trip_cost_pct',
+  'size_multiplier',
 ] as const satisfies ReadonlyArray<keyof DashboardRow['scores']>;
 
 function rowScores(scores: Record<string, unknown>): DashboardRow['scores'] {

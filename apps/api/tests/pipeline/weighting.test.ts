@@ -234,6 +234,12 @@ describe('factorWeights net_edge selection objective', () => {
     ic_prior_strength: 10,
     priors: DEFAULT_PRIORS,
     ic_target: 'raw' as const,
+    // These records carry no atr_pct; economicEdge's default 'inverse_vol' sizing would drop
+    // every one, masking the selection-objective/cost behaviour this suite actually tests.
+    position_sizing: 'equal_weight' as const,
+    // A 50/50 split so both the train and validation halves clear economicEdge's MIN_PERIODS (10)
+    // with these tests' period counts.
+    edge_validation_fraction: 0.5,
   };
 
   it('rejects a factor on cost even though its rank IC stays significant (money, not rank, decides selection)', () => {
@@ -262,8 +268,14 @@ describe('factorWeights net_edge selection objective', () => {
     expect(cheapStat?.net_spread_pct ?? 0).toBeGreaterThan(0);
 
     // Same records, same measured rank IC/t-stat -- costs alone flip the selection under net_edge.
+    // The cost is punishing enough that the factor fails even the TRAIN half of the walk-forward
+    // gate, so it gets zeroed outright (mode 'unvalidated'), not its prior -- see
+    // zero_unvalidated_weights: a factor actively tested and found to lose money must not fall
+    // back to a starting guess.
     expect(expensiveStat?.net_spread_pct ?? 0).toBeLessThanOrEqual(0);
-    expect(expensiveStat?.mode).toBe('prior');
+    expect(expensiveStat?.edge_verdict).toBe('failed-train');
+    expect(expensiveStat?.mode).toBe('unvalidated');
+    expect(expensiveStat?.raw_weight).toBe(0);
     expect(expensiveStat?.ic).toBeCloseTo(cheapStat?.ic as number, 9);
     expect(Math.abs(expensiveStat?.t_stat as number)).toBeGreaterThanOrEqual(2.0);
 
@@ -272,7 +284,11 @@ describe('factorWeights net_edge selection objective', () => {
   });
 
   it("takes the weight's sign from the economic edge direction, not the rank IC sign, when they disagree", () => {
-    const nPeriods = 12;
+    // 20 periods (not 12): with edge_validation_fraction 0.5 that's a 10/10 train/validation split,
+    // and economicEdge needs >=10 periods on EACH side of the walk-forward gate. The outlier
+    // pattern alternates every period, so both halves keep the same 50/50 outlier/clean mix as the
+    // original 12-period design.
+    const nPeriods = 20;
     const outlierMagnitude = 4000;
     const slope = 3;
     // A strict, strongly negative rank relationship (forward = -slope * rank) across the whole
@@ -314,6 +330,45 @@ describe('factorWeights net_edge selection objective', () => {
     expect(rankIcStat?.ic as number).toBeLessThan(0);
     expect(netEdgeStat?.raw_weight as number).toBeGreaterThan(0);
     expect(rankIcStat?.raw_weight as number).toBeLessThan(0);
+  });
+
+  it('edge_walk_forward_gating replaces the in-sample-only gate: a factor that pays on the training slice but reverses on the validation slice gets zero weight, not its prior', () => {
+    // Same shape the MEASURED note pins for technical_trend_4h: profitable and significant on an
+    // earlier slice, reversed on the later slice it wasn't measured from. An in-sample-only gate
+    // (looking at all 20 periods together) would still see a real, if diluted, positive spread and
+    // wrongly select it.
+    const trainPeriods = 10;
+    const validationPeriods = 10;
+    const records: FactorRecord[] = [];
+    for (let periodIdx = 0; periodIdx < trainPeriods + validationPeriods; periodIdx += 1) {
+      const generatedAt = `2024-06-${String(periodIdx + 1).padStart(2, '0')}T00:00:00+07:00`;
+      const inValidation = periodIdx >= trainPeriods;
+      // Magnitude alternates 1.0/1.2 so the train slice has non-zero variance (a dead-flat spread
+      // has zero variance -> t_stat 0 -> fails on triviality rather than the reversal this test
+      // means to exercise); the sign flips wholesale once validation starts.
+      const magnitude = periodIdx % 2 === 0 ? 1.0 : 1.2;
+      const slope = inValidation ? -magnitude : magnitude;
+      for (let rank = 0; rank < N_SYMBOLS; rank += 1) {
+        const forward = slope * rank;
+        records.push({
+          symbol: `S${rank}`,
+          generated_at: generatedAt,
+          forward_return_pct: forward,
+          factors: { [FACTOR]: rank },
+        });
+      }
+    }
+
+    const weights = factorWeights(records, {
+      factors: { ...baseFactorsCfg, selection_objective: 'net_edge' },
+    });
+    const stat = weights.stats[FACTOR];
+
+    expect(stat?.edge_verdict).toBe('failed-forward');
+    expect(stat?.mode).toBe('unvalidated');
+    expect(stat?.raw_weight).toBe(0);
+    expect(weights.directional[FACTOR]).toBe(0);
+    expect(weights.validated_factor_count).toBe(0);
   });
 });
 

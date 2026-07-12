@@ -65,6 +65,7 @@ const RowScoresSchema = z.object({
   regime_alignment_score: z.number().nullable(),
   breadth_alignment_score: z.number().nullable(),
   round_trip_cost_pct: z.number().nullable(),
+  size_multiplier: z.number().nullable(),
 });
 
 const TechnicalStateSchema = z.object({
@@ -227,6 +228,10 @@ const ModelWeightFactorSchema = z.object({
   edge_t_stat: z.number().nullable(),
   edge_n_effective: z.number().nullable(),
   edge_overlap_factor: z.number().nullable(),
+  /** apps/api/src/pipeline/edgeWalkForward.ts's verdict -- 'validated' | 'failed-forward' | 'failed-train' | 'insufficient-data'. */
+  edge_verdict: z.string().nullable(),
+  edge_train_net_spread_pct: z.number().nullable(),
+  edge_validation_net_spread_pct: z.number().nullable(),
 });
 
 export const ModelWeightsSchema = z.object({
@@ -236,6 +241,8 @@ export const ModelWeightsSchema = z.object({
   factor_correlations: z.array(FactorCorrelationSchema),
   factor_decay: jsonRecord,
   walk_forward: jsonRecord,
+  /** Count of factors with edge_verdict === 'validated' -- 0 means no factor has a validated money edge; see model-health.ts. */
+  validated_factor_count: z.number(),
 });
 
 export const SectionsSchema = z.object({

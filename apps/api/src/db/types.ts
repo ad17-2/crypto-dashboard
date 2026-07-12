@@ -33,6 +33,8 @@ export interface LabeledFactorRecord {
   forward_return_pct: number;
   /** null when the row's ATR was unavailable at prediction time -- consumers on ic_target 'vol_adjusted' must DROP the record rather than fall back to forward_return_pct. */
   forward_return_vol_adj: number | null;
+  /** The row's own atr_14_pct at the point of prediction (never the forward row's -- that would be lookahead bias). null when unavailable. */
+  atr_pct: number | null;
   factors: Record<string, unknown>;
   /** Blended score output (`factor_score` et al.) this row was scored with, so validationMetrics() can test the ensemble, not just individual factors; empty when the row has no persisted scores. */
   scores: Record<string, unknown>;

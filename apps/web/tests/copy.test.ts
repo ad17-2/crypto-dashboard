@@ -9,12 +9,14 @@ import {
   CONFLICT_CODE,
   CONFLUENCE_FAMILY,
   DATA_QUALITY_FLAG,
+  EDGE_VERDICT,
   FACTOR,
   FIXED_SETUP,
   FRESHNESS,
   lookupCalibration,
   lookupConflictCode,
   lookupConfluenceFamily,
+  lookupEdgeVerdict,
   lookupFactor,
   lookupFreshness,
   lookupProvider,
@@ -164,6 +166,9 @@ const CALIBRATION_LABELS = ['learning', 'useful', 'neutral', 'weak'];
 // apps/api/src/pipeline/validation.ts `WalkForwardFactorResult['verdict']`.
 const ROBUSTNESS_VERDICTS = ['robust', 'overfit', 'insufficient-data'];
 
+// apps/api/src/pipeline/edgeWalkForward.ts `EdgeWalkForwardResult['verdict']`.
+const EDGE_VERDICTS = ['validated', 'failed-forward', 'failed-train', 'insufficient-data'];
+
 // apps/api/src/pipeline/collector.ts and enrichment.ts `status.<key> = ...` assignment sites.
 const PROVIDER_KEYS = [
   'coingecko',
@@ -299,6 +304,13 @@ describe('copy dictionaries cover every source-derived key', () => {
     for (const verdict of ROBUSTNESS_VERDICTS) {
       expect(ROBUSTNESS_VERDICT[verdict], `ROBUSTNESS_VERDICT missing "${verdict}"`).toBeDefined();
       assertHuman(lookupRobustnessVerdict(verdict).label);
+    }
+  });
+
+  it('covers every edge (money) walk-forward verdict', () => {
+    for (const verdict of EDGE_VERDICTS) {
+      expect(EDGE_VERDICT[verdict], `EDGE_VERDICT missing "${verdict}"`).toBeDefined();
+      assertHuman(lookupEdgeVerdict(verdict).label);
     }
   });
 

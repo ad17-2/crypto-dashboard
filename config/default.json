@@ -135,7 +135,11 @@
     "regime_conditional_prior_strength": 12.0,
     "regime_min_periods": 8,
     "ic_target": "vol_adjusted",
-    "selection_objective": "net_edge"
+    "selection_objective": "net_edge",
+    "edge_walk_forward_gating": true,
+    "edge_validation_fraction": 0.3,
+    "position_sizing": "inverse_vol",
+    "zero_unvalidated_weights": true
   },
   "report": {
     "limit": 12,

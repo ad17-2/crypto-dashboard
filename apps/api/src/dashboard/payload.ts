@@ -474,6 +474,9 @@ interface ModelWeightFactor {
   edge_t_stat: number | null;
   edge_n_effective: number | null;
   edge_overlap_factor: number | null;
+  edge_verdict: string | null;
+  edge_train_net_spread_pct: number | null;
+  edge_validation_net_spread_pct: number | null;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -508,6 +511,9 @@ function modelWeightsSummary(factorWeights: Record<string, unknown>): ModelWeigh
       edge_t_stat: toFloat(details.edge_t_stat),
       edge_n_effective: toFloat(details.edge_n_effective),
       edge_overlap_factor: toFloat(details.edge_overlap_factor),
+      edge_verdict: stringOrNull(details.edge_verdict),
+      edge_train_net_spread_pct: toFloat(details.edge_train_net_spread_pct),
+      edge_validation_net_spread_pct: toFloat(details.edge_validation_net_spread_pct),
     });
   }
   factors.sort((a, b) => Math.abs(b.weight ?? 0) - Math.abs(a.weight ?? 0));
@@ -518,6 +524,7 @@ function modelWeightsSummary(factorWeights: Record<string, unknown>): ModelWeigh
     factor_correlations: asArray(factorWeights.factor_correlations) as FactorCorrelation[],
     factor_decay: asRecord(factorWeights.factor_decay),
     walk_forward: asRecord(factorWeights.walk_forward),
+    validated_factor_count: Math.trunc(toFloat(factorWeights.validated_factor_count, 0) ?? 0),
   };
 }
 

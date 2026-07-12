@@ -91,14 +91,14 @@ function signalsMeasuredRung(validation: unknown, factors: unknown[]): EvidenceR
   return { key: 'signals_measured', claim, status, detail };
 }
 
-/** apps/api/src/pipeline/weighting.ts min_abs_t = 2.0 -- the significance bar, now applied to the economic-edge t-stat rather than the rank-IC t-stat. */
-const MIN_ABS_T_STAT = 2;
-
 /**
- * "Working" means money, not rank order: a factor only counts here if its decile long-short
- * spread clears a t-stat of 2 AND is still positive after both legs' round-trip costs
- * (net_spread_pct > 0) -- see apps/api/src/pipeline/weighting.ts's net_edge selection gate. A
- * factor with a significant rank IC but a negative net spread does NOT count as passing.
+ * "Working" means FORWARD-VALIDATED, not merely in-sample profitable: a factor only counts here
+ * if it earned money on an earlier slice of history AND still made money when re-checked on a
+ * later slice it was never measured from (apps/api/src/pipeline/edgeWalkForward.ts, surfaced per
+ * factor as `edge_verdict`). A factor that looked significant and profitable on the training
+ * slice but reversed or vanished on the later slice (`failed-forward`) does NOT count as passing
+ * -- an in-sample-only bar would have wrongly shipped exactly that factor (see the MEASURED note
+ * on technical_trend_4h: train t=+2.20 passes, but validate net -0.030 dies).
  */
 function measurementsStrongRung(factors: unknown[]): EvidenceRung {
   const claim = 'The signals that pass actually make money';
@@ -111,12 +111,10 @@ function measurementsStrongRung(factors: unknown[]): EvidenceRung {
       detail: 'No factor weights are available to check yet.',
     };
   }
-  const strongCount = factors.filter((factor) => {
-    const t = num(factor, 'edge_t_stat');
-    const netSpread = num(factor, 'net_spread_pct');
-    return t !== null && Math.abs(t) >= MIN_ABS_T_STAT && netSpread !== null && netSpread > 0;
-  }).length;
-  const detail = `${strongCount} of ${total} signals are still profitable after both legs' trading costs, with a t-stat of ${MIN_ABS_T_STAT} or more (the usual bar for "probably not noise").`;
+  const strongCount = factors.filter(
+    (factor) => str(factor, 'edge_verdict') === 'validated',
+  ).length;
+  const detail = `${strongCount} of ${total} signals earned money on an earlier slice of history AND held up when re-checked on a later slice they were never measured from.`;
   const status: RungStatus =
     strongCount === 0 ? 'fail' : strongCount / total >= 0.5 ? 'pass' : 'partial';
   return { key: 'measurements_strong', claim, status, detail };
@@ -208,6 +206,19 @@ export function modelHealthVerdict(payload: unknown): ModelHealthVerdict {
     };
   }
 
+  // Checked before the "scored end to end" branch below on purpose: a good historical hit rate on
+  // the model's BLENDED score doesn't change the fact that not one individual factor has earned
+  // money on an earlier slice of history AND held up on a later slice it wasn't measured from --
+  // that's the more fundamental, more honest thing to say first (see the MEASURED note: the
+  // prior-weighted ensemble makes no money out of sample even when it "looks" scored).
+  const validatedFactorCount = num(modelWeights, 'validated_factor_count');
+  if (validatedFactorCount === 0) {
+    return {
+      headline: 'No factor has a validated edge.',
+      summary: `None of the ${mix.total} signals have earned money on an earlier slice of history AND held up on a later slice they were never measured from. Today's ranking is descriptive, not predictive -- treat it as a shortlist to research, not a signal to trade.`,
+    };
+  }
+
   if (scored?.status === 'pass') {
     return {
       headline: 'The model has a real track record.',
@@ -265,7 +276,8 @@ export interface FactorDecayInfo {
 export interface FactorHealthRow {
   name: string;
   weight: number | null;
-  mode: 'measured' | 'prior';
+  /** 'unvalidated': the factor was actively tested (edge_walk_forward_gating) and failed, so it was zeroed instead of falling back to a prior -- distinct from 'prior', which IS a starting belief. */
+  mode: 'measured' | 'prior' | 'unvalidated';
   ic: number | null;
   tStat: number | null;
   nPeriods: number;
@@ -277,6 +289,10 @@ export interface FactorHealthRow {
   netSpreadPct: number | null;
   netEdgePer30dPct: number | null;
   edgeTStat: number | null;
+  /** apps/api/src/pipeline/edgeWalkForward.ts's verdict -- 'validated' | 'failed-forward' | 'failed-train' | 'insufficient-data'. */
+  edgeVerdict: string | null;
+  edgeTrainNetSpreadPct: number | null;
+  edgeValidationNetSpreadPct: number | null;
 }
 
 function factorDecayInfo(entry: Record<string, unknown> | null): FactorDecayInfo {
@@ -299,10 +315,11 @@ export function factorHealthRows(modelWeights: unknown): FactorHealthRow[] {
   const decayTable = rec(modelWeights, 'factor_decay') ?? {};
   const rows: FactorHealthRow[] = factors.map((factor) => {
     const name = str(factor, 'name') ?? '';
+    const rawMode = str(factor, 'mode');
     return {
       name,
       weight: num(factor, 'weight'),
-      mode: str(factor, 'mode') === 'ic' ? 'measured' : 'prior',
+      mode: rawMode === 'ic' ? 'measured' : rawMode === 'unvalidated' ? 'unvalidated' : 'prior',
       ic: num(factor, 'ic'),
       tStat: num(factor, 't_stat'),
       nPeriods: num(factor, 'n_periods') ?? 0,
@@ -313,6 +330,9 @@ export function factorHealthRows(modelWeights: unknown): FactorHealthRow[] {
       netSpreadPct: num(factor, 'net_spread_pct'),
       netEdgePer30dPct: num(factor, 'net_edge_per_30d_pct'),
       edgeTStat: num(factor, 'edge_t_stat'),
+      edgeVerdict: str(factor, 'edge_verdict'),
+      edgeTrainNetSpreadPct: num(factor, 'edge_train_net_spread_pct'),
+      edgeValidationNetSpreadPct: num(factor, 'edge_validation_net_spread_pct'),
     };
   });
   return rows.sort((a, b) => Math.abs(b.weight ?? 0) - Math.abs(a.weight ?? 0));

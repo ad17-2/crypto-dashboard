@@ -9,6 +9,14 @@ export interface EconomicEdgeOptions {
   costPctPerLeg: number;
   decileFraction?: number;
   minNamesPerPeriod?: number;
+  /**
+   * Within-leg weighting. 'inverse_vol' (default): weight name i by 1 / max(atr_i, 1.0),
+   * renormalised so each leg sums to 1 -- the same gross exposure as 'equal_weight' (1/k each),
+   * so the 2 * costPctPerLeg charge below stays correct under either mode. A name with no ATR
+   * can't be sized and is dropped from the cross-section under 'inverse_vol' rather than falling
+   * back to equal weight, which would silently mix two portfolios.
+   */
+  sizing?: 'inverse_vol' | 'equal_weight';
 }
 
 export interface EconomicEdgeSummary {
@@ -26,8 +34,38 @@ export interface EconomicEdgeSummary {
 
 const DEFAULT_DECILE_FRACTION = 0.1;
 const DEFAULT_MIN_NAMES_PER_PERIOD = 20;
+const DEFAULT_SIZING: NonNullable<EconomicEdgeOptions['sizing']> = 'inverse_vol';
 const MIN_PERIODS = 10;
 const HOURS_PER_30D = 720;
+
+interface FactorForwardPair {
+  factorValue: number;
+  forwardReturn: number;
+  /** Row's own ATR at the point of prediction; only read under 'inverse_vol' sizing. */
+  atrPct: number | null;
+}
+
+/**
+ * Mean forward return of one leg (top or bottom decile), weighted per `sizing`. Under
+ * 'inverse_vol', every pair here is guaranteed to carry a non-null atrPct -- pairs with no ATR
+ * are dropped before grouping in economicEdge below, never silently equal-weighted.
+ */
+function legMean(
+  leg: FactorForwardPair[],
+  sizing: NonNullable<EconomicEdgeOptions['sizing']>,
+): number {
+  if (sizing === 'equal_weight') {
+    return mean(leg.map((pair) => pair.forwardReturn));
+  }
+  let totalWeight = 0;
+  let weightedSum = 0;
+  for (const pair of leg) {
+    const weight = 1 / Math.max(pair.atrPct as number, 1.0);
+    totalWeight += weight;
+    weightedSum += pair.forwardReturn * weight;
+  }
+  return weightedSum / totalWeight;
+}
 
 /**
  * Realised-money edge, net of costs: per period, spread the RAW forward_return_pct between the
@@ -42,20 +80,26 @@ export function economicEdge(
 ): EconomicEdgeSummary | null {
   const decileFraction = options.decileFraction ?? DEFAULT_DECILE_FRACTION;
   const minNamesPerPeriod = options.minNamesPerPeriod ?? DEFAULT_MIN_NAMES_PER_PERIOD;
+  const sizing = options.sizing ?? DEFAULT_SIZING;
 
-  const grouped = new Map<string, Array<[number, number]>>();
+  const grouped = new Map<string, FactorForwardPair[]>();
   for (const record of records) {
     const factorValue = toFloat(asRecord(record.factors)[factorKey]);
     const forwardReturn = toFloat(record.forward_return_pct);
     if (factorValue === null || forwardReturn === null) {
       continue;
     }
+    const atrPct = toFloat(record.atr_pct);
+    if (sizing === 'inverse_vol' && atrPct === null) {
+      continue;
+    }
+    const pair: FactorForwardPair = { factorValue, forwardReturn, atrPct };
     const key = record.generated_at;
     const existing = grouped.get(key);
     if (existing) {
-      existing.push([factorValue, forwardReturn]);
+      existing.push(pair);
     } else {
-      grouped.set(key, [[factorValue, forwardReturn]]);
+      grouped.set(key, [pair]);
     }
   }
 
@@ -65,10 +109,10 @@ export function economicEdge(
     if (pairs.length < minNamesPerPeriod) {
       continue;
     }
-    const sorted = [...pairs].sort((a, b) => a[0] - b[0]);
+    const sorted = [...pairs].sort((a, b) => a.factorValue - b.factorValue);
     const k = Math.max(3, Math.floor(sorted.length * decileFraction));
-    const bottomMean = mean(sorted.slice(0, k).map((pair) => pair[1]));
-    const topMean = mean(sorted.slice(sorted.length - k).map((pair) => pair[1]));
+    const bottomMean = legMean(sorted.slice(0, k), sizing);
+    const topMean = legMean(sorted.slice(sorted.length - k), sizing);
     spreads.push(topMean - bottomMean);
 
     const parsedMs = Date.parse(key);

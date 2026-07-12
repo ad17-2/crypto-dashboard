@@ -182,6 +182,16 @@ const FactorsConfigSchema = z
     ic_target: z.enum(['vol_adjusted', 'raw']).default('vol_adjusted'),
     // See pipeline/weighting.ts: 'net_edge' gates factor selection on money after costs, not rank IC.
     selection_objective: z.enum(['net_edge', 'rank_ic']).default('net_edge'),
+    // See pipeline/edgeWalkForward.ts: an in-sample-only net_edge gate still overfits (technical_trend_4h
+    // passed train t=+2.20, died forward net -0.030). Requires money earned on train to hold on validation.
+    edge_walk_forward_gating: z.boolean().default(true),
+    edge_validation_fraction: z.number().default(0.3),
+    // See pipeline/economicEdge.ts: 'inverse_vol' weights each decile leg by 1/ATR so a high-ATR
+    // name's occasional huge move can't dominate the leg's mean; 'equal_weight' is 1/k per name.
+    position_sizing: z.enum(['inverse_vol', 'equal_weight']).default('inverse_vol'),
+    // See pipeline/weighting.ts: a factor that fails edge_walk_forward_gating falls to weight 0,
+    // not its prior -- the priors are a blend of noise, net-negative after costs (MEASURED note).
+    zero_unvalidated_weights: z.boolean().default(true),
   })
   .strict();
 

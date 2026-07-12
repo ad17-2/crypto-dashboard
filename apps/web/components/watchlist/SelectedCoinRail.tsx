@@ -477,6 +477,13 @@ function MetricTiles({ row }: { row: DashboardRow }) {
         definition={lookupMetric('round_trip_cost').definition}
         value={fmtPct(row.scores.round_trip_cost_pct, 3)}
       />
+      <StatTile
+        label={lookupMetric('size_multiplier').label}
+        definition={lookupMetric('size_multiplier').definition}
+        value={
+          row.scores.size_multiplier == null ? '-' : `${fmtNum(row.scores.size_multiplier, 2)}x`
+        }
+      />
       <PositioningTile row={row} />
     </div>
   );

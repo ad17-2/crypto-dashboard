@@ -338,6 +338,7 @@ export function validationMetrics(
       {
         forwardReturnHours: horizonHours,
         costPctPerLeg,
+        sizing: factorCfg.position_sizing ?? 'inverse_vol',
       },
     );
   }
