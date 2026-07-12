@@ -57,7 +57,7 @@ export function marketStructureSummary(
   };
 }
 
-export function breadthSummary(rows: Row[], marketContext: MarketContext): Record<string, unknown> {
+function breadthSummary(rows: Row[], marketContext: MarketContext): Record<string, unknown> {
   const priceChanges = numericValues(rows.map((row) => row.price_change_24h_pct));
   const oiChanges = numericValues(rows.map((row) => row.oi_change_24h_pct));
   const fundingValues = numericValues(rows.map((row) => row.funding_rate_pct));
@@ -125,7 +125,7 @@ export function breadthSummary(rows: Row[], marketContext: MarketContext): Recor
   };
 }
 
-export function sectorRotationSummary(marketContext: MarketContext): Record<string, unknown> {
+function sectorRotationSummary(marketContext: MarketContext): Record<string, unknown> {
   const categories = asRecord(marketContext.categories);
   const leaders = asArray(categories.leaders);
   const laggards = asArray(categories.laggards);

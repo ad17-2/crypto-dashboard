@@ -203,7 +203,7 @@ export function robustZscoreByKey(
 }
 
 /** Ranks are 1-indexed; ties get the average rank of the tied span (tied-rank Spearman). */
-export function averageRanks(values: number[]): number[] {
+function averageRanks(values: number[]): number[] {
   const indexed = values
     .map((value, index) => ({ index, value }))
     .sort((a, b) => a.value - b.value);
@@ -224,7 +224,7 @@ export function averageRanks(values: number[]): number[] {
   return ranks;
 }
 
-export function pearsonCorr(xValues: number[], yValues: number[]): number | null {
+function pearsonCorr(xValues: number[], yValues: number[]): number | null {
   if (xValues.length !== yValues.length || xValues.length < 2) {
     return null;
   }
