@@ -144,7 +144,12 @@ const FactorsConfigSchema = z
     forward_return_hours: z.number().default(24),
     decay_horizons: z.array(z.number()).default([4, 8, 12, 24, 48, 72]),
     reversal_lookback_hours: z.number().default(72),
-    ic_window_days: z.number().int().default(30),
+    /**
+     * How far back IC/validation reads factor_history. At 30 this capped n_periods near 186
+     * (30 days x 6 snapshots), and since 24h returns sampled every 4h overlap 6:1, that left only
+     * ~31 independent observations -- too few to resolve an IC of ~0.04 from zero.
+     */
+    ic_window_days: z.number().int().default(180),
     min_observations: z.number().int().default(30),
     min_abs_ic: z.number().default(0.02),
     max_abs_weight: z.number().default(0.35),

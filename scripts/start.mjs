@@ -30,15 +30,31 @@ const web = runChild('web', 'npx', ['--no-install', 'next', 'start', '-p', webPo
   env: process.env,
 });
 
+// A child exiting because we asked it to is a shutdown, not a crash. Without this flag the exit
+// below maps a graceful child (code 0, or null when it dies of the signal) onto exit(1), so every
+// deploy teardown and every idle-sleep reaches Railway as "Deployment crashed" and emails about it.
+let shuttingDown = false;
+let running = 2;
+
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
+    shuttingDown = true;
     api.kill(signal);
     web.kill(signal);
+    // Don't hang the container if a child ignores the signal.
+    setTimeout(() => process.exit(0), 10_000).unref();
   });
 }
 
 function onExit(label, other) {
   return (code, signal) => {
+    running -= 1;
+    if (shuttingDown) {
+      if (running === 0) {
+        process.exit(0);
+      }
+      return;
+    }
     console.error(
       `[supervisor] ${label} exited (code=${code} signal=${signal}); stopping the other process`,
     );
