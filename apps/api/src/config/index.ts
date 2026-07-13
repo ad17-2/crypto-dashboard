@@ -11,7 +11,6 @@ export type {
   FactorsConfig,
   ProvidersConfig,
   RegimeConfig,
-  RegimeWeightingConfig,
   ReportConfig,
   SoSoValueConfig,
   UniverseConfig,

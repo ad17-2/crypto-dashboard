@@ -4,13 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AppConfigSchema } from '../src/config/schema.js';
 import { scoreSnapshot } from '../src/pipeline/factors.js';
-import type { FactorRecord } from '../src/pipeline/ic.js';
-import type { Row } from '../src/pipeline/types.js';
+import type { FactorRecord, Row } from '../src/pipeline/types.js';
 import { assertMatches } from './support/goldenDiff.js';
 
 /**
  * GOLDEN REGRESSION GATE: replays fixtures/parity-run.json (see fixtures/README.md) through the
- * scoring/factor/weighting stage; output must match fixture.expected to a 1e-9 tolerance.
+ * scoring/factor stage; output must match fixture.expected to a 1e-9 tolerance.
  *
  * This used to be a parity gate against the deleted Python original -- that job is done (Python
  * parity was last proven green at commit db7f68f, CI run 29171479923, 263 tests; see
@@ -23,9 +22,9 @@ import { assertMatches } from './support/goldenDiff.js';
  * scoreSnapshot is called with prior_market_state=undefined: the regime lookup against the
  * fixture's own timestamp returns nothing, matching what produced this fixture.
  *
- * expected.factor_weights.factor_decay is excluded: factorDecay() needs per-horizon
- * (4h/8h/12h/24h/48h/72h) relabeled records the fixture doesn't ship (factor_history is only the
- * collapsed 24h output, with no price_usd). factorDecay itself is covered by validation.test.ts.
+ * There is no more factor-weighting engine (see CLAUDE.md's purge/simplify-screener notes) --
+ * `factor_history` is still shipped in the fixture (and passed through) only because
+ * scoreSnapshot's historyRecords parameter is kept for call-site parity; it is otherwise unused.
  */
 
 const FIXTURE_PATH = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/parity-run.json');
@@ -36,7 +35,6 @@ interface Fixture {
   input_rows: Row[];
   factor_history: FactorRecord[];
   expected: {
-    factor_weights: Record<string, unknown>;
     regime: Record<string, unknown>;
     rows: Array<{ symbol: string; factors: unknown; raw_factors: unknown; scores: unknown }>;
   };
@@ -62,14 +60,6 @@ describe('factor engine vs. golden regression fixture', () => {
 
   it('classifies the same regime as the golden baseline', () => {
     assertMatches(result.regime, fixture.expected.regime, 'regime');
-  });
-
-  it('computes the same factor_weights as the golden baseline (factor_decay excluded, see file header)', () => {
-    const { factor_decay: _omitted, ...expectedWithoutDecay } = fixture.expected
-      .factor_weights as Record<string, unknown> & { factor_decay?: unknown };
-    const { factor_decay: _actualOmitted, ...actualWithoutDecay } =
-      result.factor_weights as unknown as Record<string, unknown> & { factor_decay?: unknown };
-    assertMatches(actualWithoutDecay, expectedWithoutDecay, 'factor_weights');
   });
 
   it('computes the same factors/raw_factors/scores for all 50 rows as the golden baseline', () => {

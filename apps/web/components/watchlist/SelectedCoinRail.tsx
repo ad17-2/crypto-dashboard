@@ -128,35 +128,21 @@ function VerdictBlock({ row }: { row: DashboardRow }) {
 // or for RSI, so those two entries below are authored locally rather than sourced from copy.ts.
 
 const SCORE_FIELD_META: Record<string, { label: string; definition: string }> = {
-  factor_score: {
-    label: 'Score (factor)',
-    definition:
-      'The weighted directional factor score behind this row, roughly -1 to 1. Not on the same scale as the long/short/crowding scores below.',
-  },
   long_score: {
     label: 'Score (long)',
-    definition:
-      "This row's long-side composite score, roughly 0-100+. Not on the same scale as the factor score.",
+    definition: "This row's long-side composite score, roughly 0-100+.",
   },
   short_score: {
     label: 'Score (short)',
-    definition:
-      "This row's short-side composite score, roughly 0-100+. Not on the same scale as the factor score.",
+    definition: "This row's short-side composite score, roughly 0-100+.",
   },
   crowded_long_score: {
     label: 'Score (crowded-long)',
-    definition:
-      "This row's crowded-long composite score, roughly 0-100+. Not on the same scale as the factor score.",
+    definition: "This row's crowded-long composite score, roughly 0-100+.",
   },
   squeeze_risk_score: {
     label: 'Score (squeeze-risk)',
-    definition:
-      "This row's squeeze-risk composite score, roughly 0-100+. Not on the same scale as the factor score.",
-  },
-  regime_fit_score: {
-    label: 'Score (regime-fit)',
-    definition:
-      "This row's regime-fit composite score -- a base score adjusted for how well it matches today's regime and breadth. Not on the same scale as the factor score.",
+    definition: "This row's squeeze-risk composite score, roughly 0-100+.",
   },
 };
 
@@ -346,15 +332,16 @@ function StatTile({
 }
 
 function MetricTiles({ row }: { row: DashboardRow }) {
-  const scoreMeta = scoreFieldMeta(row.score_field);
   const qTone = qualityTone(row.quality);
   return (
     <div className="grid grid-cols-3 max-[900px]:grid-cols-2 max-[480px]:grid-cols-1 gap-2">
-      <StatTile
-        label={scoreMeta.label}
-        definition={scoreMeta.definition}
-        value={fmtNum(row.score)}
-      />
+      {row.score_field === null ? null : (
+        <StatTile
+          label={scoreFieldMeta(row.score_field).label}
+          definition={scoreFieldMeta(row.score_field).definition}
+          value={fmtNum(row.score)}
+        />
+      )}
       <StatTile
         label={lookupMetric('data_quality').label}
         definition={lookupMetric('data_quality').definition}
@@ -481,9 +468,12 @@ function HistoryBlock({ row }: { row: DashboardRow }) {
   if (row.history.length < 2) {
     return <div className="driver-line">More saved runs needed for multi-point trend lines.</div>;
   }
+  const scoreField = scoreFieldOf(row);
   return (
     <div className="history-block">
-      <HistoryLine label="Score" points={row.history} field={scoreFieldOf(row)} />
+      {scoreField === null ? null : (
+        <HistoryLine label="Score" points={row.history} field={scoreField} />
+      )}
       <HistoryLine label="OI 24h" points={row.history} field="oi_change_24h_pct" />
       <HistoryLine label="Funding" points={row.history} field="funding_rate_pct" />
       <HistoryLine label="RSI" points={row.history} field="rsi_14" />
@@ -492,7 +482,6 @@ function HistoryBlock({ row }: { row: DashboardRow }) {
 }
 
 type HistoryField =
-  | 'factor_score'
   | 'long_score'
   | 'short_score'
   | 'crowded_long_score'
@@ -501,10 +490,10 @@ type HistoryField =
   | 'funding_rate_pct'
   | 'rsi_14';
 
-function scoreFieldOf(row: DashboardRow): HistoryField {
+/** null for 'core' rows, which have no score_field -- HistoryBlock omits the Score line entirely then. */
+function scoreFieldOf(row: DashboardRow): HistoryField | null {
   const field = row.score_field;
   if (
-    field === 'factor_score' ||
     field === 'long_score' ||
     field === 'short_score' ||
     field === 'crowded_long_score' ||
@@ -512,7 +501,7 @@ function scoreFieldOf(row: DashboardRow): HistoryField {
   ) {
     return field;
   }
-  return 'factor_score';
+  return null;
 }
 
 function HistoryLine({

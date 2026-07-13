@@ -19,6 +19,9 @@ export interface MarketVerdictInput {
   quality: unknown;
 }
 
+/** There is no model any more (see CLAUDE.md's purge/simplify-screener notes) -- the summary line is a fixed, honest disclaimer, not a calibration-dependent verdict. */
+const SUMMARY = 'These are names to review, not signals.';
+
 export interface MarketVerdict {
   headline: string;
   summary: string;
@@ -46,21 +49,6 @@ function headlineFor(regime: unknown, marketContext: unknown): string {
   }
   if (bias === 'mixed') return 'No clear direction.';
   return 'Mixed conditions.';
-}
-
-function summaryForCalibration(calibrationLabel: string | null): string {
-  switch (calibrationLabel) {
-    case 'learning':
-      return 'The model is still calibrating, so treat the shortlist as names to review, not as signals.';
-    case 'useful':
-      return "The model's calls have been right more often than not recently, so the shortlist carries real signal — still confirm on the chart before acting.";
-    case 'neutral':
-      return "The model's recent calls have been close to a coin flip, so treat the shortlist as a starting point, not a strong signal.";
-    case 'weak':
-      return "The model's recent calls have missed more than they've hit recently, so weight the shortlist lightly and lean on your own chart read.";
-    default:
-      return "The model's track record isn't available yet, so treat the shortlist as names to review, not as signals.";
-  }
 }
 
 function sectorFact(marketContext: unknown): string | null {
@@ -113,7 +101,7 @@ function factsFor(marketContext: unknown, regime: unknown, validation: unknown):
 export function marketVerdict(input: MarketVerdictInput): MarketVerdict {
   return {
     headline: headlineFor(input.regime, input.market_context),
-    summary: summaryForCalibration(str(input.validation, 'calibration_label')),
+    summary: SUMMARY,
     facts: factsFor(input.market_context, input.regime, input.validation),
   };
 }

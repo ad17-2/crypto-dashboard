@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 /**
  * snake_case keys: preserved wire contract for an existing client, not idiomatic TS.
- * regime/market_context/provider_status/factor_weights/factor_decay/walk_forward/validation are
- * intentionally non-strict + jsonRecord — the pipeline assembles them as free-form blobs.
+ * regime/market_context/provider_status/validation are intentionally non-strict + jsonRecord —
+ * the pipeline assembles them as free-form blobs.
  */
 
 const jsonRecord = z.record(z.string(), z.unknown());
@@ -17,7 +17,6 @@ const ReasonPartSchema = z.object({
 });
 
 const RowScoresSchema = z.object({
-  factor_score: z.number().nullable(),
   long_score: z.number().nullable(),
   short_score: z.number().nullable(),
   crowded_long_score: z.number().nullable(),
@@ -56,7 +55,6 @@ const HistoryPointSchema = z.object({
   technical_trend_4h: z.number().nullable(),
   technical_momentum_4h: z.number().nullable(),
   rsi_14: z.number().nullable(),
-  factor_score: z.number().nullable(),
   long_score: z.number().nullable(),
   short_score: z.number().nullable(),
   crowded_long_score: z.number().nullable(),
@@ -76,7 +74,8 @@ export const DashboardRowSchema = z.object({
   side: DashboardRowSideSchema,
   setup: z.string(),
   setup_tone: z.string(),
-  score_field: z.string(),
+  // null for 'core' rows: majors are shown for context, not ranked -- there is no observable score.
+  score_field: z.string().nullable(),
   score: z.number().nullable(),
   priority: z.number(),
   quality: z.number(),
@@ -143,54 +142,9 @@ export const QualitySchema = z.object({
   flagged_rows: z.array(FlaggedRowSchema),
 });
 
-export const FactorCorrelationSchema = z.object({
-  a: z.string(),
-  b: z.string(),
-  rho: z.number(),
-  verdict: z.string(),
-});
-
-const ModelWeightFactorSchema = z.object({
-  name: z.string(),
-  label: z.string(),
-  weight: z.number().nullable(),
-  base_weight: z.number().nullable(),
-  mode: z.string().nullable(),
-  ic: z.number().nullable(),
-  t_stat: z.number().nullable(),
-  n_periods: z.number(),
-  credibility_k: z.number().nullable(),
-  regime_multiplier: z.number().nullable(),
-  robustness: z.unknown(),
-  oos_ic: z.number().nullable(),
-  regime_ic: z.number().nullable(),
-  regime_mode: z.unknown(),
-  net_spread_pct: z.number().nullable(),
-  net_edge_per_30d_pct: z.number().nullable(),
-  edge_t_stat: z.number().nullable(),
-  edge_n_effective: z.number().nullable(),
-  edge_overlap_factor: z.number().nullable(),
-  /** apps/api/src/pipeline/edgeWalkForward.ts's verdict -- 'validated' | 'failed-forward' | 'failed-train' | 'insufficient-data'. */
-  edge_verdict: z.string().nullable(),
-  edge_train_net_spread_pct: z.number().nullable(),
-  edge_validation_net_spread_pct: z.number().nullable(),
-});
-
-export const ModelWeightsSchema = z.object({
-  mode: z.string().nullable(),
-  regime: jsonRecord,
-  factors: z.array(ModelWeightFactorSchema),
-  factor_correlations: z.array(FactorCorrelationSchema),
-  factor_decay: jsonRecord,
-  walk_forward: jsonRecord,
-  /** Count of factors with edge_verdict === 'validated' -- 0 means no factor has a validated money edge; see model-health.ts. */
-  validated_factor_count: z.number(),
-});
-
 export const SectionsSchema = z.object({
   core: z.array(DashboardRowSchema),
   long: z.array(DashboardRowSchema),
-  regime_fit: z.array(DashboardRowSchema),
   short: z.array(DashboardRowSchema),
   crowded_longs: z.array(DashboardRowSchema),
   squeeze_risks: z.array(DashboardRowSchema),
@@ -198,7 +152,6 @@ export const SectionsSchema = z.object({
 
 export const WatchlistIdSchema = z.enum([
   'chart_next',
-  'regime_fit',
   'long',
   'short',
   'squeeze_risks',
@@ -210,23 +163,6 @@ export const WatchlistSchema = z.object({
   id: WatchlistIdSchema,
   label: z.string(),
   rows: z.array(DashboardRowSchema),
-});
-
-/**
- * Layer 4: the accountability read on `recommendations`. n_calls >= n_resolved (has a realised
- * forward return) >= n_scored (resolved AND has a directional thesis AND a known cost -- 'core'
- * rows are never scored). hit_rate_pct/mean/cumulative are net of round_trip_cost_pct.
- * status === 'insufficient' means n_scored is too small to trust hit_rate_pct -- render the counts,
- * not a misleadingly precise percentage.
- */
-export const ScoreboardSchema = z.object({
-  status: z.enum(['insufficient', 'ok']),
-  n_calls: z.number(),
-  n_resolved: z.number(),
-  n_scored: z.number(),
-  hit_rate_pct: z.number().nullable(),
-  mean_net_return_pct: z.number().nullable(),
-  cumulative_net_return_pct: z.number().nullable(),
 });
 
 const DashboardPayloadEmptySchema = z.object({
@@ -245,17 +181,11 @@ const DashboardPayloadOkSchema = z.object({
   regime: jsonRecord,
   market_context: jsonRecord,
   provider_status: jsonRecord,
-  factor_weights: jsonRecord,
-  model_weights: ModelWeightsSchema,
-  factor_correlations: z.array(FactorCorrelationSchema),
-  factor_decay: jsonRecord,
-  walk_forward: jsonRecord,
   validation: jsonRecord,
   freshness: FreshnessSchema,
   quality: QualitySchema,
   sections: SectionsSchema,
   watchlists: z.array(WatchlistSchema),
-  scoreboard: ScoreboardSchema,
   /** set by the route handler; optional here so this schema also validates the builder's raw return. */
   refresh_status: z.unknown().nullable().optional(),
 });
@@ -270,10 +200,7 @@ export type DashboardRowSide = z.infer<typeof DashboardRowSideSchema>;
 export type RunSummary = z.infer<typeof RunSummarySchema>;
 export type Freshness = z.infer<typeof FreshnessSchema>;
 export type Quality = z.infer<typeof QualitySchema>;
-export type FactorCorrelation = z.infer<typeof FactorCorrelationSchema>;
-export type ModelWeights = z.infer<typeof ModelWeightsSchema>;
 export type Sections = z.infer<typeof SectionsSchema>;
 export type WatchlistId = z.infer<typeof WatchlistIdSchema>;
 export type Watchlist = z.infer<typeof WatchlistSchema>;
-export type Scoreboard = z.infer<typeof ScoreboardSchema>;
 export type DashboardPayload = z.infer<typeof DashboardPayloadSchema>;

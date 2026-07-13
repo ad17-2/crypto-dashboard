@@ -1,21 +1,16 @@
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../../src/db/client.js';
-import { saveFactorHistoryRecords } from '../../src/db/factorHistory.js';
 import {
-  computeScoreboard,
-  loadRecommendationsWithOutcomes,
   recommendationsFromWatchlists,
   saveRecommendations,
 } from '../../src/db/recommendations.js';
 import { ensureSchema } from '../../src/db/schema.js';
-import { formatJakartaIso } from '../../src/db/time.js';
 import type {
-  RecommendationOutcome,
   RecommendationRecordInput,
   RecommendationWatchlistInput,
 } from '../../src/db/types.js';
-import { hoursAgo, setupTempDb, teardownTempDb } from '../support/tempDb.js';
+import { setupTempDb, teardownTempDb } from '../support/tempDb.js';
 
 let dir: string;
 let dbPath: string;
@@ -312,167 +307,5 @@ describe('recommendationsFromWatchlists', () => {
         round_trip_cost_pct: null,
       },
     ]);
-  });
-});
-
-describe('loadRecommendationsWithOutcomes', () => {
-  it('joins a recommendation to the realised forward return computed from factor_history', () => {
-    const now = new Date();
-    const recommendedAt = hoursAgo(now, 40);
-
-    saveFactorHistoryRecords(db, [
-      { run_id: 'base', generated_at: recommendedAt, symbol: 'BTC', price_usd: 100 },
-      { run_id: 'target', generated_at: hoursAgo(now, 10), symbol: 'BTC', price_usd: 150 },
-    ]);
-    saveRecommendations(db, [
-      {
-        run_id: 'base',
-        generated_at: recommendedAt,
-        symbol: 'BTC',
-        watchlist: 'long',
-        side: 'long',
-        score_field: 'long_score',
-        signal_value: 32.5,
-        size_multiplier: 1.1,
-        round_trip_cost_pct: 0.12,
-      },
-    ]);
-
-    const outcomes = loadRecommendationsWithOutcomes(db, {
-      forwardReturnHours: 24,
-      icWindowDays: 30,
-    });
-
-    expect(outcomes).toEqual([
-      {
-        run_id: 'base',
-        generated_at: recommendedAt,
-        symbol: 'BTC',
-        watchlist: 'long',
-        side: 'long',
-        score_field: 'long_score',
-        signal_value: 32.5,
-        size_multiplier: 1.1,
-        round_trip_cost_pct: 0.12,
-        forward_return_pct: 50, // (150-100)/100 * 100
-      },
-    ]);
-  });
-
-  it('leaves forward_return_pct null when no realised outcome is available yet', () => {
-    const recommendedAt = formatJakartaIso(new Date());
-    saveFactorHistoryRecords(db, [
-      { run_id: 'base', generated_at: recommendedAt, symbol: 'BTC', price_usd: 100 },
-    ]);
-    saveRecommendations(db, [
-      {
-        run_id: 'base',
-        generated_at: recommendedAt,
-        symbol: 'BTC',
-        watchlist: 'long',
-        side: 'long',
-        signal_value: 32.5,
-        round_trip_cost_pct: 0.12,
-      },
-    ]);
-
-    const outcomes = loadRecommendationsWithOutcomes(db, {
-      forwardReturnHours: 24,
-      icWindowDays: 30,
-    });
-
-    expect(outcomes).toHaveLength(1);
-    expect(outcomes[0]?.forward_return_pct).toBeNull();
-  });
-
-  it('filters to a single run_id when options.runId is passed', () => {
-    saveRecommendations(db, [
-      {
-        run_id: 'run-1',
-        generated_at: '2026-07-01T00:00:00+07:00',
-        symbol: 'BTC',
-        watchlist: 'long',
-        signal_value: 1,
-      },
-      {
-        run_id: 'run-2',
-        generated_at: '2026-07-02T00:00:00+07:00',
-        symbol: 'ETH',
-        watchlist: 'long',
-        signal_value: 2,
-      },
-    ]);
-
-    const outcomes = loadRecommendationsWithOutcomes(db, { runId: 'run-2' });
-    expect(outcomes.map((row) => row.run_id)).toEqual(['run-2']);
-  });
-});
-
-describe('computeScoreboard', () => {
-  function outcome(overrides: Partial<RecommendationOutcome>): RecommendationOutcome {
-    return {
-      run_id: 'run-1',
-      generated_at: '2026-07-01T00:00:00+07:00',
-      symbol: 'BTC',
-      watchlist: 'long',
-      side: 'long',
-      score_field: 'long_score',
-      signal_value: 10,
-      size_multiplier: 1,
-      round_trip_cost_pct: 0.3,
-      forward_return_pct: null,
-      ...overrides,
-    };
-  }
-
-  it('reports honest zero counts and a null hit rate when nothing has resolved yet', () => {
-    const board = computeScoreboard([outcome({}), outcome({ symbol: 'ETH' })]);
-    expect(board).toEqual({
-      status: 'insufficient',
-      n_calls: 2,
-      n_resolved: 0,
-      n_scored: 0,
-      hit_rate_pct: null,
-      mean_net_return_pct: null,
-      cumulative_net_return_pct: null,
-    });
-  });
-
-  it('excludes core rows (no directional thesis) from n_scored even when resolved', () => {
-    const board = computeScoreboard([
-      outcome({ watchlist: 'core', side: 'core', forward_return_pct: 5 }),
-    ]);
-    expect(board.n_calls).toBe(1);
-    expect(board.n_resolved).toBe(1);
-    expect(board.n_scored).toBe(0);
-  });
-
-  it('scores long calls net of cost: forward_return_pct - round_trip_cost_pct', () => {
-    const board = computeScoreboard([
-      outcome({ side: 'long', forward_return_pct: 2, round_trip_cost_pct: 0.3 }), // net 1.7, hit
-      outcome({ side: 'long', forward_return_pct: -1, round_trip_cost_pct: 0.3 }), // net -1.3, miss
-    ]);
-    expect(board.n_scored).toBe(2);
-    expect(board.hit_rate_pct).toBe(50);
-    expect(board.mean_net_return_pct).toBeCloseTo((1.7 + -1.3) / 2, 6);
-    expect(board.cumulative_net_return_pct).toBeCloseTo(1.7 + -1.3, 6);
-  });
-
-  it('flips the sign for bearish theses (short/fade-long): a price drop is a hit', () => {
-    const board = computeScoreboard([
-      outcome({ side: 'short', forward_return_pct: -4, round_trip_cost_pct: 0.3 }), // net 3.7
-      outcome({ side: 'fade-long', forward_return_pct: -2, round_trip_cost_pct: 0.3 }), // net 1.7
-    ]);
-    expect(board.hit_rate_pct).toBe(100);
-    expect(board.cumulative_net_return_pct).toBeCloseTo(3.7 + 1.7, 6);
-  });
-
-  it('status flips to ok once n_scored reaches the trust threshold', () => {
-    const winners = Array.from({ length: 20 }, () =>
-      outcome({ forward_return_pct: 1, round_trip_cost_pct: 0.1 }),
-    );
-    const board = computeScoreboard(winners);
-    expect(board.n_scored).toBe(20);
-    expect(board.status).toBe('ok');
   });
 });

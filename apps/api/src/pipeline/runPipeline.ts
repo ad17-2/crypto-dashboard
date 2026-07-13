@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto';
 import type { AppConfig } from '../config/index.js';
 import { buildSections, buildWatchlists } from '../dashboard/payload.js';
 import {
-  loadLabeledFactorRecords,
-  loadLabeledRecordsByHorizon,
   loadLatestRegimeState,
   loadPriceLookback,
   openDatabase,
@@ -16,10 +14,8 @@ import type { SnapshotPayload } from '../db/types.js';
 import { writeReports } from '../reports/writeReports.js';
 import { collectMarket } from './collector.js';
 import { scoreSnapshot } from './factors.js';
-import type { FactorRecord } from './ic.js';
 import type { RunPayload } from './models.js';
 import { pctChange, toFloat } from './scoring.js';
-import { factorDecay } from './validation.js';
 
 export interface RunPipelineOptions {
   save?: boolean;
@@ -53,11 +49,6 @@ export async function runPipeline(
   try {
     const collected = await collectMarket(config);
 
-    const historyRecords = loadLabeledFactorRecords(db, {
-      forwardReturnHours: config.factors.forward_return_hours,
-      icWindowDays: config.factors.ic_window_days,
-    });
-
     const lookbackHours = config.factors.reversal_lookback_hours;
     const lookbackPrices = loadPriceLookback(db, lookbackHours);
     for (const row of collected.rows) {
@@ -72,21 +63,15 @@ export async function runPipeline(
     const latestRegimeState = loadLatestRegimeState(db);
     // Fresh literal (same exemption as `regime` below): RegimeStateSummary has no index signature.
     const priorMarketState = latestRegimeState ? { ...latestRegimeState } : null;
-    // LabeledFactorRecordWithRegime and FactorRecord are the same open record shape; the cast is
-    // safe only because every field FactorRecord reads is present on LabeledFactorRecordWithRegime.
+    // `[]`: the factor-history engine that used to consume this argument was deleted; see
+    // scoreSnapshot's doc comment in factors.ts.
     const scored = scoreSnapshot(
       collected.rows,
       collected.market_context,
-      historyRecords as unknown as FactorRecord[],
+      [],
       config,
       priorMarketState,
     );
-
-    const decayHorizons = config.factors.decay_horizons;
-    const recordsByHorizon = loadLabeledRecordsByHorizon(db, decayHorizons, {
-      icWindowDays: config.factors.ic_window_days,
-    });
-    const decay = factorDecay(recordsByHorizon as unknown as Map<number, FactorRecord[]>, config);
 
     const payload: RunPayload = {
       run_id: runId,
@@ -94,7 +79,6 @@ export async function runPipeline(
       rows: scored.rows,
       market_context: scored.market_context ?? collected.market_context,
       provider_status: collected.provider_status,
-      factor_weights: { ...scored.factor_weights, factor_decay: decay },
       // Fresh literal: InferredRegime has no index signature, so assigning it directly to
       // RunPayload's Record<string, unknown> field is rejected even though it's unknown-compatible.
       regime: { ...scored.regime },
@@ -107,7 +91,7 @@ export async function runPipeline(
       saveSnapshot(db, payload as unknown as SnapshotPayload, config);
 
       // `{}` history is safe here -- see recommendationsFromWatchlists.
-      const sections = buildSections(payload.rows, config.report.limit, {}, payload.regime);
+      const sections = buildSections(payload.rows, config.report.limit, {});
       const watchlists = buildWatchlists(sections, config.report.limit);
       saveRecommendations(
         db,

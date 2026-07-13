@@ -21,7 +21,6 @@ export interface SignalConflictSummary {
 }
 
 export interface RowScores {
-  factor_score: number;
   liquidity_quality: number;
   long_score: number;
   short_score: number;
@@ -35,30 +34,36 @@ export interface RowScores {
   size_multiplier: number;
 }
 
-export interface DirectionalWeightsLike {
-  directional?: Record<string, number>;
-}
 export interface RegimeLike {
   bias?: string;
   bias_score?: number | null;
 }
 
+/**
+ * No directional model prediction exists any more (the factor-weighting engine that used to
+ * produce one was deleted -- no factor forward-validates, so every weight was 0 anyway). The
+ * signal-conflict/confidence/cost computations below used to take a sign from that deleted
+ * factor-weighted score; they now treat direction as neutral (0), which is exactly their
+ * already-observed production behaviour under the old zero_unvalidated_weights gate.
+ */
+const NO_DIRECTIONAL_SIGNAL = 0;
+
 /** Mutates `row` in place. */
 export function applyScores(
   row: Row,
   factors: Record<string, number>,
-  weights: DirectionalWeightsLike,
   regime: RegimeLike,
   marketContext: MarketContext,
   config: PipelineConfig,
 ): void {
-  const directionalWeights = weights.directional ?? {};
-  let directionalScore = 0.0;
-  for (const [name, weight] of Object.entries(directionalWeights)) {
-    directionalScore += (factors[name] ?? 0.0) * weight;
-  }
   const liquidityQuality = qualityPercentile(factors.liquidity_30d ?? 0.0);
-  const conflicts = signalConflictSummary(row, factors, directionalScore, regime, marketContext);
+  const conflicts = signalConflictSummary(
+    row,
+    factors,
+    NO_DIRECTIONAL_SIGNAL,
+    regime,
+    marketContext,
+  );
 
   const funding = toFloat(row.funding_rate_pct, 0.0) ?? 0.0;
   let ls = toFloat(row.long_short_account_ratio);
@@ -112,7 +117,7 @@ export function applyScores(
     row,
     config.costs ?? {},
     config.factors?.forward_return_hours ?? 24,
-    directionalScore,
+    NO_DIRECTIONAL_SIGNAL,
   );
 
   // Inverse-vol position sizing (measured, not just backtest theory -- see the MEASURED note):
@@ -128,14 +133,13 @@ export function applyScores(
       : clamp(medianAtrPct / Math.max(rowAtrPct ?? medianAtrPct, 1.0), 0.25, 2.0);
 
   const scores: RowScores = {
-    factor_score: pyRound(directionalScore, 4),
     liquidity_quality: pyRound(liquidityQuality, 2),
     long_score: pyRound(Math.max(longScore, 0.0), 2),
     short_score: pyRound(Math.max(shortScore, 0.0), 2),
     crowded_long_score: pyRound(crowdedLongScore, 2),
     squeeze_risk_score: pyRound(squeezeRiskScore, 2),
     confidence_score: pyRound(
-      confidenceScore(row, factors, directionalScore, liquidityQuality, conflicts),
+      confidenceScore(row, factors, NO_DIRECTIONAL_SIGNAL, liquidityQuality, conflicts),
       0,
     ),
     signal_conflict_score: pyRound(conflictScore, 0),
@@ -152,7 +156,6 @@ export function applyScores(
 /** Mutates `row` in place. */
 export function applyExcludedScores(row: Row): void {
   const scores: RowScores = {
-    factor_score: 0.0,
     liquidity_quality: 0.0,
     long_score: 0.0,
     short_score: 0.0,

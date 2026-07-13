@@ -6,12 +6,7 @@ export {
   loadPriceLookback,
   saveFactorHistoryRecords,
 } from './factorHistory.js';
-export {
-  computeScoreboard,
-  loadRecommendationsWithOutcomes,
-  recommendationsFromWatchlists,
-  saveRecommendations,
-} from './recommendations.js';
+export { recommendationsFromWatchlists, saveRecommendations } from './recommendations.js';
 export { loadLatestRegimeState, loadRegimeStates, recordRegimeHistory } from './regimeHistory.js';
 export { pruneOldRuns, saveSnapshot } from './runs.js';
 export { ensureSchema } from './schema.js';

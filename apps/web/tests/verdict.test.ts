@@ -85,21 +85,16 @@ describe('marketVerdict headline: bias x breadth', () => {
   });
 });
 
-describe('marketVerdict summary: calibration_label', () => {
-  it.each([
-    ['learning', /still calibrating/],
-    ['useful', /right more often than not/],
-    ['neutral', /coin flip/],
-    ['weak', /missed more than/],
-  ])('phrases %s honestly', (calibrationLabel, expectedPattern) => {
-    const result = marketVerdict(
-      verdictInput({ validation: { calibration_label: calibrationLabel } }),
-    );
-    expect(result.summary).toMatch(expectedPattern);
+describe('marketVerdict summary: no model, so the summary is a fixed honest disclaimer', () => {
+  it('is the same regardless of what validation carries -- there is no calibration_label any more', () => {
+    const withData = marketVerdict(verdictInput({ validation: { watchlist_counts: { long: 1 } } }));
+    const empty = marketVerdict(verdictInput());
+    expect(withData.summary).toBe(empty.summary);
+    expect(withData.summary).toBe('These are names to review, not signals.');
   });
 
-  it('has a safe default summary when calibration_label is missing', () => {
-    const result = marketVerdict(verdictInput());
+  it('never leaks a raw value even when validation is malformed', () => {
+    const result = marketVerdict(verdictInput({ validation: 'not-an-object' }));
     expect(result.summary.length).toBeGreaterThan(0);
     expect(result.summary).not.toMatch(NO_LEAKED_VALUES);
   });
@@ -188,7 +183,7 @@ describe('marketVerdict against the real frozen fixture', () => {
       quality: fixture.quality,
     });
     expect(result.headline).toBe("Risk-off, and it's broad.");
-    expect(result.summary).toMatch(/still calibrating/);
+    expect(result.summary).toBe('These are names to review, not signals.');
     expect(result.facts.length).toBeGreaterThan(0);
     const joined = `${result.headline}\n${result.summary}\n${result.facts.join('\n')}`;
     expect(joined).not.toMatch(NO_LEAKED_VALUES);

@@ -118,15 +118,6 @@ const DataQualityConfigSchema = z
   })
   .strict();
 
-const RegimeWeightingConfigSchema = z
-  .object({
-    enabled: z.boolean().default(true),
-    max_factor_multiplier: z.number().default(1.35),
-    score_adjustment_strength: z.number().default(0.08),
-    conflict_penalty_strength: z.number().default(0.18),
-  })
-  .strict();
-
 const RegimeConfigSchema = z
   .object({
     dispersion_threshold_pct: z.number().default(8.0),
@@ -145,53 +136,11 @@ const RegimeConfigSchema = z
 const FactorsConfigSchema = z
   .object({
     forward_return_hours: z.number().default(24),
-    decay_horizons: z.array(z.number()).default([4, 8, 12, 24, 48, 72]),
     reversal_lookback_hours: z.number().default(72),
-    /**
-     * How far back IC/validation reads factor_history. At 30 this capped n_periods near 186
-     * (30 days x 6 snapshots), and since 24h returns sampled every 4h overlap 6:1, that left only
-     * ~31 independent observations -- too few to resolve an IC of ~0.04 from zero.
-     */
-    ic_window_days: z.number().int().default(180),
-    min_observations: z.number().int().default(30),
-    min_abs_ic: z.number().default(0.02),
-    max_abs_weight: z.number().default(0.35),
-    ic_min_periods: z.number().int().default(10),
-    min_abs_t: z.number().default(2.0),
-    ic_prior_strength: z.number().int().default(10),
     ic_min_cross_section: z.number().int().default(5),
-    // See pipeline/ic.ts; off compares against the naive (uncorrected) t-stat.
-    ic_overlap_correction: z.boolean().default(true),
     // See pipeline/factors.ts#residualiseOiPriceSignal; off compares against the raw, collinear factor.
     residualise_collinear_factors: z.boolean().default(true),
-    walk_forward_train_fraction: z.number().default(0.6),
-    walk_forward_min_train_periods: z.number().int().default(15),
-    walk_forward_min_oos_periods: z.number().int().default(10),
-    walk_forward_robust_min_ic: z.number().default(0.02),
-    walk_forward_overfit_penalty: z.number().default(0.0),
-    walk_forward_gating: z.boolean().default(false),
-    regime_conditional_prior_strength: z.number().default(12.0),
-    regime_min_periods: z.number().int().default(8),
-    regime_weighting: RegimeWeightingConfigSchema.default(() =>
-      RegimeWeightingConfigSchema.parse({}),
-    ),
     regime: RegimeConfigSchema.default(() => RegimeConfigSchema.parse({})),
-    priors: z.record(z.string(), z.number()).default({}),
-    // Rank the IC against risk-adjusted returns; raw-% targets let a few high-ATR names dominate.
-    // Downgrades to 'raw' when no row carries an ATR (weighting.ts's icTargetEffective).
-    ic_target: z.enum(['vol_adjusted', 'raw']).default('vol_adjusted'),
-    // See pipeline/weighting.ts: 'net_edge' gates factor selection on money after costs, not rank IC.
-    selection_objective: z.enum(['net_edge', 'rank_ic']).default('net_edge'),
-    // See pipeline/edgeWalkForward.ts: an in-sample-only net_edge gate still overfits (technical_trend_4h
-    // passed train t=+2.20, died forward net -0.030). Requires money earned on train to hold on validation.
-    edge_walk_forward_gating: z.boolean().default(true),
-    edge_validation_fraction: z.number().default(0.3),
-    // See pipeline/economicEdge.ts: 'inverse_vol' weights each decile leg by 1/ATR so a high-ATR
-    // name's occasional huge move can't dominate the leg's mean; 'equal_weight' is 1/k per name.
-    position_sizing: z.enum(['inverse_vol', 'equal_weight']).default('inverse_vol'),
-    // See pipeline/weighting.ts: a factor that fails edge_walk_forward_gating falls to weight 0,
-    // not its prior -- the priors are a blend of noise, net-negative after costs (MEASURED note).
-    zero_unvalidated_weights: z.boolean().default(true),
   })
   .strict();
 
@@ -234,7 +183,6 @@ export type CoinGeckoConfig = z.infer<typeof CoinGeckoConfigSchema>;
 export type SoSoValueConfig = z.infer<typeof SoSoValueConfigSchema>;
 export type DataQualityConfig = z.infer<typeof DataQualityConfigSchema>;
 export type FactorsConfig = z.infer<typeof FactorsConfigSchema>;
-export type RegimeWeightingConfig = z.infer<typeof RegimeWeightingConfigSchema>;
 export type RegimeConfig = z.infer<typeof RegimeConfigSchema>;
 export type CostsConfig = z.infer<typeof CostsConfigSchema>;
 export type ReportConfig = z.infer<typeof ReportConfigSchema>;

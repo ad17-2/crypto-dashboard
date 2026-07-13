@@ -17,8 +17,7 @@ import { AppConfigSchema } from '../src/config/schema.js';
 import { buildDashboardPayload } from '../src/dashboard/payload.js';
 import { openDatabase } from '../src/db/client.js';
 import { scoreSnapshot } from '../src/pipeline/factors.js';
-import type { FactorRecord } from '../src/pipeline/ic.js';
-import type { MarketContext, Row } from '../src/pipeline/types.js';
+import type { FactorRecord, MarketContext, Row } from '../src/pipeline/types.js';
 import type { Diff, JNode } from './lib/losslessJson.js';
 import { parseLossless, reconcile, serialize } from './lib/losslessJson.js';
 
@@ -96,13 +95,10 @@ export function regenParity(): void {
     }));
 
   const newExpected = {
-    factor_weights: result.factor_weights,
     regime: result.regime,
     rows: trustedRows,
   };
 
-  // factor_decay needs per-horizon records the fixture doesn't ship (see parity.test.ts) and
-  // scoreSnapshot() never produces it -- carried over from the previous fixture untouched.
   const diffs: Diff[] = [];
   const reconciled = reconcile(
     oldExpected,
@@ -110,7 +106,7 @@ export function regenParity(): void {
     'expected',
     { diffs },
     {
-      pinnedPaths: new Set(['expected.factor_weights.factor_decay']),
+      pinnedPaths: new Set(),
     },
   );
 

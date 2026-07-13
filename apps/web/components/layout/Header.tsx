@@ -1,5 +1,4 @@
 import type { Freshness, RunSummary } from '@crypto-screener/contracts';
-import Link from 'next/link';
 import { lookupFreshness } from '@/lib/copy';
 import { ReloadButton } from './ReloadButton';
 import { RunSelector } from './RunSelector';
@@ -26,9 +25,6 @@ export function Header({ freshness, runs, selectedRunId }: HeaderProps) {
       </div>
       {/* Wraps rather than stretches: full-width stacked controls ate the whole fold on mobile. */}
       <div className="flex gap-2 items-center flex-wrap justify-end max-[680px]:justify-start">
-        <Link href="/model" className="text-muted text-[13px] whitespace-nowrap hover:text-ink">
-          Model health
-        </Link>
         <RunSelector runs={runs} selectedRunId={selectedRunId} />
         <ThemeToggle />
         <ReloadButton />

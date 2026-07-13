@@ -37,7 +37,6 @@ describe('runPipeline', () => {
     // market_context omitted here on purpose: exercises the fallback to collected.market_context.
     const scored = {
       rows: [{ symbol: 'BTC', scores: {}, factors: {} }],
-      factor_weights: { mode: 'prior' },
       regime: { bias: 'risk-on' },
     };
 
@@ -70,15 +69,13 @@ describe('runPipeline', () => {
         rows: [
           {
             symbol: 'BTC',
-            // Long-list membership is an OBSERVATION now (the coin advanced), not a factor_score.
+            // Long-list membership is an OBSERVATION now (the coin advanced), not a model score.
             price_change_24h_pct: 4.2,
-            factor_score: 0.8,
             long_score: 5,
             is_trusted: true,
-            scores: { factor_score: 0.8, round_trip_cost_pct: 0.05, size_multiplier: 1.15 },
+            scores: { round_trip_cost_pct: 0.05, size_multiplier: 1.15 },
           },
         ],
-        factor_weights: { mode: 'prior' },
         regime: { bias: 'risk-on' },
       };
       collectMarketMock.mockResolvedValueOnce(collected);
@@ -116,10 +113,11 @@ describe('runPipeline', () => {
           expect(row.size_multiplier).toBe(1.15);
         }
         const core = rows.find((row) => row.watchlist === 'core');
+        // Majors are shown for context, not ranked -- there is no observable "core" score.
         expect(core).toMatchObject({
           side: 'core',
-          score_field: 'factor_score',
-          signal_value: 0.8,
+          score_field: null,
+          signal_value: null,
         });
         const long = rows.find((row) => row.watchlist === 'long');
         expect(long).toMatchObject({ side: 'long', score_field: 'long_score', signal_value: 5 });

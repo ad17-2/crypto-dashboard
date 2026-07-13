@@ -101,13 +101,11 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   }).length;
 
   const regime = payload.regime ?? {};
-  const factorWeights = payload.factor_weights ?? {};
 
   console.log(`run_id=${payload.run_id}`);
   console.log(`screened_symbols=${rows.length}`);
   console.log(`bias=${pyStr(regime.bias)}`);
   console.log(`factor_regime=${pyStr(regime.label)}`);
-  console.log(`weight_mode=${pyStr(factorWeights.mode)}`);
   console.log(`long_candidates=${longCount}`);
   console.log(`short_candidates=${shortCount}`);
   console.log(`crowded_longs=${fadeCount}`);

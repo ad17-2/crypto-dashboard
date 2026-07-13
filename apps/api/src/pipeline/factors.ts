@@ -1,7 +1,4 @@
 import { DIRECTIONAL_FACTORS, QUALITY_FACTORS } from './factorDefinitions.js';
-import type { FactorRecord } from './ic.js';
-import type { FactorCorrelationFlag } from './independence.js';
-import { factorCorrelations } from './independence.js';
 import { marketSensingSummary, marketStructureSummary } from './market.js';
 import { type InferredRegime, inferRegime } from './regime.js';
 import { applyExcludedScores, applyScores } from './rowScoring.js';
@@ -13,23 +10,26 @@ import {
   safeLog10,
   toFloat,
 } from './scoring.js';
-import type { MarketContext, PipelineConfig, Row } from './types.js';
+import type { FactorRecord, MarketContext, PipelineConfig, Row } from './types.js';
 import { asRecord } from './types.js';
-import { type FactorWeights, factorWeights } from './weighting.js';
 
 export interface ScoreSnapshotResult {
   rows: Row[];
   market_context: MarketContext;
-  factor_weights: FactorWeights;
-  factor_correlations: FactorCorrelationFlag[];
   regime: InferredRegime;
 }
 
-/** Mutates every row in `rows` in place. */
+/**
+ * Mutates every row in `rows` in place. `historyRecords` is accepted but unused: the factor
+ * weighting/IC engine that used to consume it was deleted (no factor forward-validated -- see
+ * CLAUDE.md's purge/simplify-screener notes). Kept in the signature for call-site parity with the
+ * golden parity fixture (tests/parity.test.ts, scripts/regen-golden.ts), which still ships a
+ * frozen `factor_history` array.
+ */
 export function scoreSnapshot(
   rows: Row[],
   marketContext: MarketContext,
-  historyRecords: FactorRecord[],
+  _historyRecords: FactorRecord[],
   config: PipelineConfig,
   priorMarketState?: Record<string, unknown> | null,
 ): ScoreSnapshotResult {
@@ -53,18 +53,15 @@ export function scoreSnapshot(
     residualiseOiPriceSignal(rawFactorsList, factorCfg.ic_min_cross_section ?? 5);
   }
   const normalized = normalizeFactors(rawFactorsList);
-  const baseWeights = factorWeights(historyRecords, config);
   const priorState = (asRecord(priorMarketState).regime_state as string | undefined) ?? null;
-  const baseRegime = inferRegime(baseWeights, trustedRows, enrichedContext, priorState, config);
-  const weights = factorWeights(historyRecords, config, baseRegime.regime_state);
-  const regime = inferRegime(weights, trustedRows, enrichedContext, priorState, config);
+  const regime = inferRegime(undefined, trustedRows, enrichedContext, priorState, config);
 
   trustedRows.forEach((row, index) => {
     const raw = rawFactorsList[index] as Record<string, number | null>;
     const factors = normalized[index] as Record<string, number>;
     row.raw_factors = raw;
     row.factors = factors;
-    applyScores(row, factors, weights, regime, enrichedContext, config);
+    applyScores(row, factors, regime, enrichedContext, config);
   });
 
   for (const row of rows) {
@@ -76,15 +73,9 @@ export function scoreSnapshot(
     applyExcludedScores(row);
   }
 
-  const correlationRows = normalized.map((factors) => ({ factors }));
-  const factorCorrelationFlags = factorCorrelations(correlationRows, DIRECTIONAL_FACTORS);
-  weights.factor_correlations = factorCorrelationFlags;
-
   return {
     rows,
     market_context: enrichedContext,
-    factor_weights: weights,
-    factor_correlations: factorCorrelationFlags,
     regime,
   };
 }

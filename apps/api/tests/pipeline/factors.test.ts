@@ -1,85 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rawFactors, residualiseOiPriceSignal, scoreSnapshot } from '../../src/pipeline/factors.js';
 import type { Row } from '../../src/pipeline/types.js';
-import { factorWeights } from '../../src/pipeline/weighting.js';
-
-describe('factorWeights', () => {
-  it('falls back to prior weights without history (test_prior_weights_without_history)', () => {
-    const config = { factors: { min_observations: 30 } };
-    const weights = factorWeights([], config);
-    expect(weights.mode).toBe('prior');
-    expect(weights.directional.momentum_24h as number).toBeGreaterThan(0);
-    expect(weights.validation.status).toBe('insufficient');
-  });
-
-  it('includes validation metrics (test_factor_weights_include_validation_metrics)', () => {
-    const records = [
-      {
-        forward_return_pct: 2,
-        factors: { momentum_24h: 1, reversal_3d: -1 },
-        scores: { factor_score: 0.4 },
-      },
-      {
-        forward_return_pct: -3,
-        factors: { momentum_24h: -1, reversal_3d: 1 },
-        scores: { factor_score: -0.5 },
-      },
-      {
-        forward_return_pct: 1,
-        factors: { momentum_24h: -1, reversal_3d: 1 },
-        scores: { factor_score: -0.2 },
-      },
-    ];
-    const weights = factorWeights(records, { factors: { min_observations: 3, min_abs_ic: 0.0 } });
-
-    expect(weights.validation.observations).toBe(3);
-    expect(weights.validation.model.hit_rate as number).toBeCloseTo(66.67, 2);
-    expect(weights.validation.factors).toHaveProperty('momentum_24h');
-  });
-
-  it('weights factors by cross-sectional IC when there is enough history (test_cross_sectional_ic_weighting)', () => {
-    const records: Array<Record<string, unknown>> = [];
-    const symbols = ['A', 'B', 'C', 'D', 'E', 'F'];
-    for (let period = 0; period < 12; period += 1) {
-      const generatedAt = `2026-01-${String(period + 1).padStart(2, '0')}T00:00:00`;
-      symbols.forEach((symbol, index) => {
-        const rank = index + 1;
-        let forward = rank;
-        if (period % 2 === 1 && index === 2) {
-          forward = 4.0;
-        } else if (period % 2 === 1 && index === 3) {
-          forward = 3.0;
-        }
-        records.push({
-          symbol,
-          generated_at: generatedAt,
-          forward_return_pct: forward,
-          factors: {
-            momentum_24h: rank,
-            reversal_3d: period % 2 === 0 ? rank : -rank,
-          },
-        });
-      });
-    }
-    const config = {
-      factors: {
-        ic_min_periods: 10,
-        min_abs_t: 2.0,
-        min_abs_ic: 0.02,
-        ic_prior_strength: 10,
-        ic_min_cross_section: 5,
-        // Pinned to the rank_ic escape hatch: only 6 symbols/period, under economicEdge's
-        // minNamesPerPeriod (20), and no forward_return_vol_adj on these records -- this test is
-        // about the pooled cross-sectional IC blend, not net_edge selection or vol-adjustment.
-        selection_objective: 'rank_ic' as const,
-        ic_target: 'raw' as const,
-      },
-    };
-    const weights = factorWeights(records, config);
-    expect(weights.stats.momentum_24h?.mode).toBe('ic');
-    expect(weights.stats.reversal_3d?.mode).toBe('prior');
-  });
-});
 
 describe('rawFactors', () => {
   it('normalizes reversal by volatility (test_reversal_is_volatility_normalized)', () => {
@@ -238,7 +159,7 @@ describe('scoreSnapshot', () => {
     );
   });
 
-  it('adds regime adjustments and conflict labels (test_score_snapshot_adds_regime_adjustments_and_conflict_labels)', () => {
+  it('merges regime/breadth into market_context; signal-conflict fields stay permanently neutral with no directional model (test_score_snapshot_adds_regime_adjustments_and_conflict_labels)', () => {
     const rows: Row[] = [
       {
         symbol: 'BTC',
@@ -287,13 +208,13 @@ describe('scoreSnapshot', () => {
     const scored = scoreSnapshot(rows, context, [], { factors: {} });
     const alt = scored.rows.find((row) => row.symbol === 'ALT') as Row;
 
-    expect(scored.factor_weights.regime_adjusted).toBe(true);
-    expect(scored.factor_weights).toHaveProperty('base_directional');
     expect((scored.market_context.breadth as Record<string, unknown>).status).toBe('ok');
     expect(['selective-risk-on', 'broad-risk-on', 'mixed']).toContain(scored.regime.breadth_label);
-    expect(alt.signal_conflict_label).toBe('high-conflict');
-    expect(alt.signal_conflict_score as number).toBeGreaterThan(0);
-    expect((alt.signal_conflicts as unknown[]).length).toBeGreaterThan(0);
+    // No directional model prediction exists any more, so signalConflictSummary's direction is
+    // always neutral (0) -- these fields never flag a conflict (see rowScoring.ts).
+    expect(alt.signal_conflict_label).toBe('neutral');
+    expect(alt.signal_conflict_score).toBe(0);
+    expect(alt.signal_conflicts).toEqual([]);
   });
 
   it('residualise_collinear_factors=false reproduces the raw copysign value (test_residualise_toggle_wired_through_scoresnapshot)', () => {
@@ -337,9 +258,9 @@ describe('scoreSnapshot', () => {
       costs: { taker_fee_bps: 0, slippage_bps: 0, assumed_spread_bps: 0 },
     });
     const top = scored.rows.find((row) => row.symbol === 'S4') as Row;
-    // Highest momentum in the cross-section -> long side. With fee/slippage/spread zeroed out,
-    // only funding remains: 0.01 * 3 settlements/day * (24/24) = 0.03.
-    expect((top.factor_score as number) > 0).toBe(true);
+    // Highest momentum in the cross-section -> long side (the SCREEN's own observable score).
+    // With fee/slippage/spread zeroed out, only funding remains: 0.01 * 3 settlements/day * (24/24) = 0.03.
+    expect(top.long_score as number).toBeGreaterThan(top.short_score as number);
     expect((top.scores as { round_trip_cost_pct: number }).round_trip_cost_pct).toBeCloseTo(
       0.03,
       9,

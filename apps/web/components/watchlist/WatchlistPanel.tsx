@@ -27,12 +27,11 @@ export interface WatchlistPanelProps {
 // Ranked setups vs "crowding risk" fade/squeeze candidates -- two intents, not one flat list.
 // Not labeled "worth trading": this is THE SCREEN (observable facts), not a verdict -- the model's
 // own net edge lives on the one-bet section instead.
-const SHORTLIST_IDS: readonly WatchlistId[] = ['chart_next', 'regime_fit', 'long', 'short'];
+const SHORTLIST_IDS: readonly WatchlistId[] = ['chart_next', 'long', 'short'];
 const CROWDING_RISK_IDS: readonly WatchlistId[] = ['crowded_longs', 'squeeze_risks'];
 
 const EMPTY_WATCHLIST_MESSAGE: Record<WatchlistId, string> = {
   chart_next: 'No standout setups right now.',
-  regime_fit: "Nothing fits today's regime right now.",
   long: 'No long candidates right now.',
   short: 'No short candidates right now.',
   crowded_longs: 'Nothing is crowded long right now.',

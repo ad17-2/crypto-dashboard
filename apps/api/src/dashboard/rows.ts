@@ -20,7 +20,6 @@ export interface HistoryPoint {
   technical_trend_4h: number | null;
   technical_momentum_4h: number | null;
   rsi_14: number | null;
-  factor_score: number | null;
   long_score: number | null;
   short_score: number | null;
   crowded_long_score: number | null;
@@ -127,7 +126,7 @@ export function setupTone(side: string): string {
  * cross-section "chart_next" watchlist, and persisted as `recommendations.priority` for the
  * scoreboard.
  */
-export function chartPriority(row: Row, scoreField: string, score: unknown): number {
+export function chartPriority(row: Row, scoreField: string | null, score: unknown): number {
   const numericScore =
     Math.abs(toFloat(score) ?? 0.0) * (scoreField === 'factor_score' ? 100.0 : 1.0);
   const quality = toFloat(row.data_quality_score);
@@ -182,7 +181,6 @@ function appendReasonMetric(
 
 export function reasonParts(row: Row, side: string): ReasonPart[] {
   const parts: ReasonPart[] = [];
-  const scores = asRecord(row.scores);
   const factors = asRecord(row.factors);
 
   appendReasonMetric(
@@ -214,15 +212,6 @@ export function reasonParts(row: Row, side: string): ReasonPart[] {
       (n) => n.toFixed(2),
       'Long/short volume ratio; above 1 leans long, below 1 leans short.',
       1.0,
-    );
-  }
-  if (scores.factor_score !== null && scores.factor_score !== undefined) {
-    appendReasonMetric(
-      parts,
-      'Factor',
-      scores.factor_score,
-      (n) => formatSigned(n, 2),
-      'Weighted directional model score before watchlist-specific ranking.',
     );
   }
   if (row.technical_setup) {
@@ -336,7 +325,6 @@ export function technicalTone(row: Row): string {
 }
 
 const SCORE_KEYS = [
-  'factor_score',
   'long_score',
   'short_score',
   'crowded_long_score',
@@ -355,12 +343,12 @@ function rowScores(scores: Record<string, unknown>): DashboardRow['scores'] {
 
 export function dashboardRow(
   row: Row,
-  scoreField: string,
+  scoreField: string | null,
   side: DashboardRowSide,
   history: HistoryPoint[] | null | undefined = null,
 ): DashboardRow {
   const scores = asRecord(row.scores);
-  const score = row[scoreField];
+  const score = scoreField === null ? null : row[scoreField];
   const setup = setupLabel(row, side);
   const priority = chartPriority(row, scoreField, score);
   let positioningRatio = row.long_short_account_ratio;

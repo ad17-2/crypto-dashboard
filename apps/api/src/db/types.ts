@@ -63,7 +63,7 @@ export interface RecommendationRecordInput {
   watchlist: string;
   /** DashboardRow['side'] -- the call's directional thesis ('core' rows have none). */
   side?: string | null;
-  /** Which score field drove this call (e.g. 'long_score', 'regime_fit_score'). */
+  /** Which score field drove this call (e.g. 'long_score', 'squeeze_risk_score'). */
   score_field?: string | null;
   /** The value of `score_field` at call time -- "the signal value that drove the call". */
   signal_value?: number | null;
@@ -77,7 +77,7 @@ export interface RecommendationWatchlistInput {
   rows: Array<{
     symbol: string | null;
     side: string;
-    score_field: string;
+    score_field: string | null;
     score: number | null;
     scores: { round_trip_cost_pct?: number | null; size_multiplier?: number | null };
   }>;

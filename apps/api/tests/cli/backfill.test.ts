@@ -85,7 +85,7 @@ describe('backfill: buildSymbolRows + scoreBackfillRows write only compact facto
 
     const config = AppConfigSchema.parse({
       storage_path: dbPath,
-      factors: { forward_return_hours: 24, ic_window_days: 5000, min_observations: 3 },
+      factors: { forward_return_hours: 24 },
     });
     const records = scoreBackfillRows(rowsByTime, config, 3);
     expect(records.length).toBeGreaterThan(0);

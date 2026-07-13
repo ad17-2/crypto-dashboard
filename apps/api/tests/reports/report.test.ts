@@ -110,15 +110,6 @@ function buildPayload(): RunPayload {
       coinglass: { status: 'ok', rows: 2 },
       coingecko: { status: 'error', reason: 'timeout' },
     },
-    factor_weights: {
-      history_records: 120,
-      mode: 'ic',
-      stats: {
-        momentum_24h: { weight: 0.31, ic: 0.05, observations: 120, mode: 'ic' },
-        reversal_3d: { weight: -0.08, ic: null, observations: 12, mode: 'prior' },
-      },
-      validation: { status: 'ok', observations: 120, horizon_hours: 24, model: { hit_rate: 55.5 } },
-    },
     regime: {
       bias: 'risk-on',
       label: 'btc-led',
@@ -210,7 +201,6 @@ describe('renderJson', () => {
     const json = renderJson(buildPayload());
     const parsed = JSON.parse(json) as Record<string, unknown>;
     expect(Object.keys(parsed)).toEqual([...Object.keys(parsed)].sort());
-    expect(json).toContain('\n  "factor_weights"');
     expect(parsed.run_id).toBe('run-report-test');
   });
 });
@@ -225,7 +215,6 @@ describe('renderMarkdown', () => {
       '## Market Bias',
       '## Provider Status',
       '## Data Quality',
-      '## Factor Regime',
       '## Dominance And Sector Rotation',
       '## BTC / ETH / SOL Core Read',
       '## Top Long Watchlist',

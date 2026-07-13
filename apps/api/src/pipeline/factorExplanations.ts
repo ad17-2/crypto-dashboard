@@ -29,10 +29,6 @@ export function reasonFor(row: Row, side: string): string {
     const ratio = toFloat(row.long_short_ratio) ?? 0.0;
     parts.push(`L/S ${ratio.toFixed(2)}`);
   }
-  const factorScore = toFloat(scores.factor_score);
-  if (factorScore !== null) {
-    parts.push(`factor ${formatSigned(factorScore, 2)}`);
-  }
   const confidenceScore = toFloat(scores.confidence_score);
   if (confidenceScore !== null) {
     parts.push(`confidence ${confidenceScore.toFixed(0)}`);

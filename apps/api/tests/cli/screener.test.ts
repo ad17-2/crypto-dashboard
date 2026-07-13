@@ -42,7 +42,6 @@ describe('screener CLI', () => {
         },
       ],
       regime: { bias: 'risk-on', label: 'neutral' },
-      factor_weights: { mode: 'prior' },
     };
     runPipelineMock.mockResolvedValueOnce({ payload, paths: {} });
 
@@ -67,7 +66,6 @@ describe('screener CLI', () => {
         'screened_symbols=4',
         'bias=risk-on',
         'factor_regime=neutral',
-        'weight_mode=prior',
         'long_candidates=1',
         'short_candidates=1',
         'crowded_longs=1',
@@ -84,7 +82,6 @@ describe('screener CLI', () => {
       run_id: 'run-cli-2',
       rows: [],
       regime: { bias: 'mixed', label: 'chaos' },
-      factor_weights: { mode: 'ic' },
     };
     runPipelineMock.mockResolvedValueOnce({
       payload,

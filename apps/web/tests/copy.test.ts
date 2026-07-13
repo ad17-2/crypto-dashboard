@@ -6,11 +6,9 @@ import {
   BIAS,
   BREADTH_LABEL,
   DATA_QUALITY_FLAG,
-  EDGE_VERDICT,
   FACTOR,
   FIXED_SETUP,
   FRESHNESS,
-  lookupEdgeVerdict,
   lookupFactor,
   lookupFreshness,
   lookupProvider,
@@ -85,15 +83,7 @@ const FIXED_SETUPS = [
 ];
 
 // apps/api/src/dashboard/watchlists.ts:6-14 WATCHLIST_LABELS.
-const WATCHLIST_IDS = [
-  'chart_next',
-  'regime_fit',
-  'long',
-  'short',
-  'squeeze_risks',
-  'crowded_longs',
-  'core',
-];
+const WATCHLIST_IDS = ['chart_next', 'long', 'short', 'squeeze_risks', 'crowded_longs', 'core'];
 
 // apps/api/src/pipeline/regime.ts `inferRegime()` bias union.
 const BIAS_VALUES = ['risk-on', 'risk-off', 'mixed'];
@@ -124,9 +114,6 @@ const REGIME_STATES = ['btc-led', 'alts-strong', 'neutral', 'chaos', 'momentum']
 
 // apps/api/src/dashboard/freshness.ts label thresholds.
 const FRESHNESS_LABELS = ['fresh', 'aging', 'stale', 'old', 'unknown'];
-
-// apps/api/src/pipeline/edgeWalkForward.ts `EdgeWalkForwardResult['verdict']`.
-const EDGE_VERDICTS = ['validated', 'failed-forward', 'failed-train', 'insufficient-data'];
 
 // apps/api/src/pipeline/collector.ts and enrichment.ts `status.<key> = ...` assignment sites.
 const PROVIDER_KEYS = [
@@ -225,13 +212,6 @@ describe('copy dictionaries cover every source-derived key', () => {
     for (const label of FRESHNESS_LABELS) {
       expect(FRESHNESS[label], `FRESHNESS missing "${label}"`).toBeDefined();
       assertHuman(lookupFreshness(label).label);
-    }
-  });
-
-  it('covers every edge (money) walk-forward verdict', () => {
-    for (const verdict of EDGE_VERDICTS) {
-      expect(EDGE_VERDICT[verdict], `EDGE_VERDICT missing "${verdict}"`).toBeDefined();
-      assertHuman(lookupEdgeVerdict(verdict).label);
     }
   });
 

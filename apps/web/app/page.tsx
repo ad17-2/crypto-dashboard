@@ -1,8 +1,6 @@
-import { OneBetStage } from '@/components/bet';
 import { Header } from '@/components/layout/Header';
 import { ReloadButton } from '@/components/layout/ReloadButton';
 import { BreadthRotationStage, CoreReadStage, MarketStage } from '@/components/market';
-import { ScoreboardStage } from '@/components/scoreboard';
 import { WatchlistWorkbench } from '@/components/watchlist';
 import { getDashboard } from '@/lib/api';
 
@@ -95,10 +93,6 @@ export default async function Page({ searchParams }: PageProps) {
         </h2>
         <WatchlistWorkbench watchlists={screenedWatchlists} />
       </section>
-
-      <OneBetStage modelWeights={payload.model_weights} watchlists={screenedWatchlists} />
-
-      <ScoreboardStage scoreboard={payload.scoreboard} />
     </main>
   );
 }

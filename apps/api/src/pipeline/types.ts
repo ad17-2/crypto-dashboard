@@ -9,6 +9,20 @@ export interface Row {
 
 export type MarketContext = Record<string, unknown>;
 
+/**
+ * Shape of one labeled `factor_history` record. Relocated from the deleted pipeline/ic.ts (the
+ * IC/weighting engine that used to consume these) -- kept only for the golden parity fixture
+ * (tests/parity.test.ts, scripts/regen-golden.ts), which still ships a frozen `factor_history`
+ * array and passes it through scoreSnapshot's unused historyRecords parameter.
+ */
+export interface FactorRecord {
+  generated_at?: unknown;
+  forward_return_pct?: unknown;
+  factors?: unknown;
+  regime?: unknown;
+  [key: string]: unknown;
+}
+
 export function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -20,13 +34,6 @@ export function asArray(value: unknown): unknown[] {
 }
 
 // Structurally compatible with AppConfig['factors'] (config/schema.ts) -- a zod-validated config can be passed here as-is.
-export interface RegimeWeightingConfigInput {
-  enabled?: boolean;
-  max_factor_multiplier?: number;
-  score_adjustment_strength?: number;
-  conflict_penalty_strength?: number;
-}
-
 export interface RegimeConfigInput {
   dispersion_threshold_pct?: number;
   hysteresis_margin?: number;
@@ -42,35 +49,10 @@ export interface RegimeConfigInput {
 
 export interface FactorsConfigInput {
   forward_return_hours?: number;
-  decay_horizons?: number[];
   reversal_lookback_hours?: number;
-  ic_window_days?: number;
-  min_observations?: number;
-  min_abs_ic?: number;
-  max_abs_weight?: number;
-  ic_min_periods?: number;
-  min_abs_t?: number;
-  ic_prior_strength?: number;
   ic_min_cross_section?: number;
-  ic_overlap_correction?: boolean;
   residualise_collinear_factors?: boolean;
-  walk_forward_train_fraction?: number;
-  walk_forward_min_train_periods?: number;
-  walk_forward_min_oos_periods?: number;
-  walk_forward_robust_min_ic?: number;
-  walk_forward_overfit_penalty?: number;
-  walk_forward_gating?: boolean;
-  regime_conditional_prior_strength?: number;
-  regime_min_periods?: number;
-  regime_weighting?: RegimeWeightingConfigInput;
   regime?: RegimeConfigInput;
-  priors?: Record<string, number>;
-  ic_target?: 'vol_adjusted' | 'raw';
-  selection_objective?: 'net_edge' | 'rank_ic';
-  edge_walk_forward_gating?: boolean;
-  edge_validation_fraction?: number;
-  position_sizing?: 'inverse_vol' | 'equal_weight';
-  zero_unvalidated_weights?: boolean;
 }
 
 export interface CostsConfigInput {

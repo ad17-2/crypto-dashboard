@@ -29,7 +29,6 @@ const sampleRow = {
   is_trusted: true,
   data_quality_flags: [],
   scores: {
-    factor_score: 0.42,
     long_score: 42.5,
     short_score: 0,
     crowded_long_score: 10,
@@ -51,7 +50,6 @@ const sampleRow = {
       technical_trend_4h: 0.5,
       technical_momentum_4h: 0.3,
       rsi_14: 56.1,
-      factor_score: 0.38,
       long_score: 40.1,
       short_score: 0,
       crowded_long_score: 8,
@@ -114,48 +112,6 @@ describe('DashboardPayloadSchema', () => {
       regime: { bias: 'risk-on', label: 'trend' },
       market_context: { breadth_score: 0.4 },
       provider_status: { coinglass: { status: 'ok' } },
-      factor_weights: { mode: 'ic', stats: {} },
-      model_weights: {
-        mode: 'ic',
-        regime: { label: 'trend' },
-        factors: [
-          {
-            name: 'momentum_24h',
-            label: 'Momentum',
-            weight: 0.3,
-            base_weight: 0.3,
-            mode: 'ic',
-            ic: 0.05,
-            t_stat: 2.1,
-            n_periods: 40,
-            credibility_k: 0.8,
-            regime_multiplier: 1.1,
-            robustness: 'robust',
-            oos_ic: 0.04,
-            regime_ic: 0.06,
-            regime_mode: 'trend',
-            net_spread_pct: 0.5,
-            net_edge_per_30d_pct: 15.0,
-            edge_t_stat: 2.3,
-            edge_n_effective: 12.0,
-            edge_overlap_factor: 6.0,
-            edge_verdict: 'validated',
-            edge_train_net_spread_pct: 0.4,
-            edge_validation_net_spread_pct: 0.6,
-          },
-        ],
-        factor_correlations: [
-          { a: 'momentum_24h', b: 'reversal_3d', rho: -0.82, verdict: 'redundant' },
-        ],
-        factor_decay: {},
-        walk_forward: {},
-        validated_factor_count: 1,
-      },
-      factor_correlations: [
-        { a: 'momentum_24h', b: 'reversal_3d', rho: -0.82, verdict: 'redundant' },
-      ],
-      factor_decay: {},
-      walk_forward: {},
       validation: { observations: 100 },
       freshness: {
         status: 'ok',
@@ -168,7 +124,6 @@ describe('DashboardPayloadSchema', () => {
       sections: {
         core: [sampleRow],
         long: [sampleRow],
-        regime_fit: [],
         short: [],
         crowded_longs: [],
         squeeze_risks: [],
@@ -177,15 +132,6 @@ describe('DashboardPayloadSchema', () => {
         { id: 'chart_next', label: 'Top Setups', rows: [sampleRow] },
         { id: 'core', label: 'Core', rows: [sampleRow] },
       ],
-      scoreboard: {
-        status: 'insufficient',
-        n_calls: 5,
-        n_resolved: 2,
-        n_scored: 2,
-        hit_rate_pct: 50,
-        mean_net_return_pct: 0.1,
-        cumulative_net_return_pct: 0.2,
-      },
     };
 
     expect(() => DashboardPayloadSchema.parse(payload)).not.toThrow();

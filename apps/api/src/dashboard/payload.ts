@@ -1,9 +1,6 @@
 import type {
   DashboardPayload,
   DashboardRow,
-  DashboardRowSide,
-  FactorCorrelation,
-  ModelWeights,
   Quality,
   RunSummary,
   Sections,
@@ -13,13 +10,10 @@ import type {
 import type Database from 'better-sqlite3';
 import type { AppConfig } from '../config/schema.js';
 import { sqlPlaceholders } from '../db/client.js';
-import { computeScoreboard, loadRecommendationsWithOutcomes } from '../db/recommendations.js';
-import { median, pyRound, toFloat } from '../pipeline/scoring.js';
 import type { Row } from '../pipeline/types.js';
 import { asArray, asRecord } from '../pipeline/types.js';
 import { freshnessSummary } from './freshness.js';
 import { dashboardRow, type HistoryPoint, numberOrNull, stringOrNull } from './rows.js';
-import { factorLabel } from './taxonomy.js';
 import {
   isCrowdedLong,
   isCrowdedShort,
@@ -108,11 +102,10 @@ interface SelectedRunDbRow {
   context_json: string;
   provider_status_json: string;
   regime_json: string;
-  factor_weights_json: string;
 }
 
 const SELECTED_RUN_COLUMNS =
-  'run_id, generated_at, context_json, provider_status_json, regime_json, factor_weights_json';
+  'run_id, generated_at, context_json, provider_status_json, regime_json';
 
 function selectedRunRow(
   db: Database.Database,
@@ -179,7 +172,6 @@ function historyBySymbol(
       technical_trend_4h: numberOrNull(factors.technical_trend_4h),
       technical_momentum_4h: numberOrNull(factors.technical_momentum_4h),
       rsi_14: numberOrNull(item.rsi_14),
-      factor_score: numberOrNull(scores.factor_score),
       long_score: numberOrNull(scores.long_score),
       short_score: numberOrNull(scores.short_score),
       crowded_long_score: numberOrNull(scores.crowded_long_score),
@@ -195,80 +187,11 @@ function historyBySymbol(
   return result;
 }
 
-function regimeFitScoreField(
-  row: Row,
-  regime: Record<string, unknown>,
-): [string, DashboardRowSide] {
-  const bias = regime.bias ? String(regime.bias) : 'mixed';
-  const label = regime.regime_state
-    ? String(regime.regime_state)
-    : regime.label
-      ? String(regime.label)
-      : 'neutral';
-  const factorScore = toFloat(row.factor_score, 0.0) ?? 0.0;
-  if (label === 'chaos') {
-    const crowdedScore = toFloat(row.crowded_long_score, 0.0) ?? 0.0;
-    const squeezeScore = toFloat(row.squeeze_risk_score, 0.0) ?? 0.0;
-    if (crowdedScore >= squeezeScore) {
-      return ['crowded_long_score', 'fade-long'];
-    }
-    return ['squeeze_risk_score', 'squeeze-risk'];
-  }
-  if (bias === 'risk-off') {
-    return ['short_score', 'short'];
-  }
-  if (bias === 'risk-on') {
-    return ['long_score', 'long'];
-  }
-  if (factorScore < 0) {
-    return ['short_score', 'short'];
-  }
-  return ['long_score', 'long'];
-}
-
-function regimeFitRows(
-  rows: Row[],
-  limit: number,
-  history: Record<string, HistoryPoint[]>,
-  regime: Record<string, unknown>,
-): DashboardRow[] {
-  const ranked: Array<{ fitScore: number; row: Row; side: DashboardRowSide }> = [];
-  for (const row of rows) {
-    if (row.is_trusted === false) {
-      continue;
-    }
-    const [scoreField, side] = regimeFitScoreField(row, regime);
-    const factorScore = toFloat(row.factor_score, 0.0) ?? 0.0;
-    if (side === 'long' && factorScore <= 0) {
-      continue;
-    }
-    if (side === 'short' && factorScore >= 0) {
-      continue;
-    }
-    const baseScore = toFloat(row[scoreField], 0.0) ?? 0.0;
-    if (baseScore <= 0) {
-      continue;
-    }
-    // fitScore ranks purely on the side's own observable crowding/momentum score plus a
-    // data-quality tiebreaker.
-    const quality = toFloat(row.data_quality_score, 100.0) ?? 100.0;
-    const fitScore = baseScore + quality * 0.05;
-    ranked.push({ fitScore, row, side });
-  }
-
-  const top = [...ranked].sort((a, b) => b.fitScore - a.fitScore).slice(0, limit);
-  return top.map(({ fitScore, row, side }) => {
-    const item: Row = { ...row, regime_fit_score: pyRound(Math.max(0.0, fitScore), 2) };
-    return dashboardRow(item, 'regime_fit_score', side, history[String(row.symbol)] ?? []);
-  });
-}
-
 /** `CORE_SYMBOLS` is deliberately hardcoded, not read from config.report.core_symbols — they coincide today but are not the same source of truth. */
 export function buildSections(
   rows: Row[],
   limit: number,
   history: Record<string, HistoryPoint[]>,
-  regime: Record<string, unknown>,
 ): Sections {
   const coreBySymbol = new Map<string, Row>();
   for (const row of rows) {
@@ -279,13 +202,13 @@ export function buildSections(
   }
 
   return {
+    // Majors are shown for context, not ranked -- there is no observable "core" score.
     core: CORE_SYMBOLS.filter((symbol) => coreBySymbol.has(symbol)).map((symbol) =>
-      dashboardRow(coreBySymbol.get(symbol) as Row, 'factor_score', 'core', history[symbol] ?? []),
+      dashboardRow(coreBySymbol.get(symbol) as Row, null, 'core', history[symbol] ?? []),
     ),
     long: topBy(rows, 'long_score', limit, { predicate: isLongCandidate }).map((row) =>
       dashboardRow(row, 'long_score', 'long', history[String(row.symbol)] ?? []),
     ),
-    regime_fit: regimeFitRows(rows, limit, history, regime),
     short: topBy(rows, 'short_score', limit, { predicate: isShortCandidate }).map((row) =>
       dashboardRow(row, 'short_score', 'short', history[String(row.symbol)] ?? []),
     ),
@@ -302,14 +225,7 @@ export function buildSections(
 
 function chartNextRows(sections: Sections, limit: number): DashboardRow[] {
   const candidates = new Map<string, DashboardRow>();
-  const keys: Array<keyof Sections> = [
-    'regime_fit',
-    'long',
-    'short',
-    'squeeze_risks',
-    'crowded_longs',
-    'core',
-  ];
+  const keys: Array<keyof Sections> = ['long', 'short', 'squeeze_risks', 'crowded_longs', 'core'];
   for (const key of keys) {
     for (const row of sections[key]) {
       const symbol = row.symbol ?? '';
@@ -327,7 +243,6 @@ function chartNextRows(sections: Sections, limit: number): DashboardRow[] {
 export function buildWatchlists(sections: Sections, limit: number): Watchlist[] {
   const ordered: Array<[WatchlistId, DashboardRow[]]> = [
     ['chart_next', chartNextRows(sections, limit)],
-    ['regime_fit', sections.regime_fit],
     ['long', sections.long],
     ['short', sections.short],
     ['squeeze_risks', sections.squeeze_risks],
@@ -354,173 +269,21 @@ function qualitySummary(rows: Row[]): Quality {
   };
 }
 
-function calibrationLabel(hitRate: number | null, observations: number): string {
-  if (observations < 20 || hitRate === null) {
-    return 'learning';
-  }
-  if (hitRate >= 58.0) {
-    return 'useful';
-  }
-  if (hitRate >= 50.0) {
-    return 'neutral';
-  }
-  return 'weak';
-}
-
-interface ModelWeightFactor {
-  name: string;
-  label: string;
-  weight: number | null;
-  base_weight: number | null;
-  mode: string | null;
-  ic: number | null;
-  t_stat: number | null;
-  n_periods: number;
-  credibility_k: number | null;
-  regime_multiplier: number | null;
-  robustness: unknown;
-  oos_ic: number | null;
-  regime_ic: number | null;
-  regime_mode: unknown;
-  net_spread_pct: number | null;
-  net_edge_per_30d_pct: number | null;
-  edge_t_stat: number | null;
-  edge_n_effective: number | null;
-  edge_overlap_factor: number | null;
-  edge_verdict: string | null;
-  edge_train_net_spread_pct: number | null;
-  edge_validation_net_spread_pct: number | null;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function modelWeightsSummary(factorWeights: Record<string, unknown>): ModelWeights {
-  const stats = asRecord(factorWeights.stats);
-  const factors: ModelWeightFactor[] = [];
-  for (const [name, details] of Object.entries(stats)) {
-    if (!isPlainObject(details)) {
-      continue;
-    }
-    factors.push({
-      name,
-      label: factorLabel(name),
-      weight: toFloat(details.weight),
-      base_weight: toFloat(details.base_weight),
-      mode: stringOrNull(details.mode),
-      ic: toFloat(details.ic),
-      t_stat: toFloat(details.t_stat),
-      n_periods: Math.trunc(toFloat(details.n_periods, 0) ?? 0),
-      credibility_k: toFloat(details.credibility_k),
-      regime_multiplier: toFloat(details.regime_multiplier),
-      // `?? null`, not undefined: JSON.stringify drops undefined keys, and consumers expect these present even when unset.
-      robustness: details.robustness ?? null,
-      oos_ic: toFloat(details.oos_ic),
-      regime_ic: toFloat(details.regime_ic),
-      regime_mode: details.regime_mode ?? null,
-      net_spread_pct: toFloat(details.net_spread_pct),
-      net_edge_per_30d_pct: toFloat(details.net_edge_per_30d_pct),
-      edge_t_stat: toFloat(details.edge_t_stat),
-      edge_n_effective: toFloat(details.edge_n_effective),
-      edge_overlap_factor: toFloat(details.edge_overlap_factor),
-      edge_verdict: stringOrNull(details.edge_verdict),
-      edge_train_net_spread_pct: toFloat(details.edge_train_net_spread_pct),
-      edge_validation_net_spread_pct: toFloat(details.edge_validation_net_spread_pct),
-    });
-  }
-  factors.sort((a, b) => Math.abs(b.weight ?? 0) - Math.abs(a.weight ?? 0));
+/**
+ * `validation` is trimmed to a pure observable: counts of how many rows landed in each watchlist.
+ * The model-derived fields this used to carry (calibration_label, hit rates, best/weakest
+ * factors, net directional return, ...) were retired along with the factor-weighting engine.
+ */
+function validationSummary(sections: Sections): Record<string, unknown> {
   return {
-    mode: stringOrNull(factorWeights.mode),
-    regime: asRecord(factorWeights.regime_adjustment),
-    factors,
-    factor_correlations: asArray(factorWeights.factor_correlations) as FactorCorrelation[],
-    factor_decay: asRecord(factorWeights.factor_decay),
-    walk_forward: asRecord(factorWeights.walk_forward),
-    validated_factor_count: Math.trunc(toFloat(factorWeights.validated_factor_count, 0) ?? 0),
+    watchlist_counts: {
+      core: sections.core.length,
+      long: sections.long.length,
+      short: sections.short.length,
+      crowded_longs: sections.crowded_longs.length,
+      squeeze_risks: sections.squeeze_risks.length,
+    },
   };
-}
-
-interface ValidationFactorRank {
-  name: string;
-  label: string;
-  hit_rate: number;
-  observations: number;
-  avg_forward_return_pct: number | null;
-}
-
-function rankValidationFactors(
-  factors: Record<string, unknown>,
-  reverse: boolean,
-): ValidationFactorRank[] {
-  const ranked: ValidationFactorRank[] = [];
-  for (const [name, details] of Object.entries(factors)) {
-    if (!isPlainObject(details)) {
-      continue;
-    }
-    const hitRate = toFloat(details.hit_rate);
-    const observations = Math.trunc(toFloat(details.observations, 0.0) ?? 0);
-    if (hitRate === null || observations <= 0) {
-      continue;
-    }
-    ranked.push({
-      name,
-      label: factorLabel(name),
-      hit_rate: pyRound(hitRate, 2),
-      observations,
-      avg_forward_return_pct: toFloat(details.avg_forward_return_pct),
-    });
-  }
-  // Tuple sort on (hit_rate, observations), sign-flipped for reverse; ties keep insertion order (stable sort).
-  const sign = reverse ? -1 : 1;
-  return ranked
-    .sort((a, b) => sign * (a.hit_rate - b.hit_rate || a.observations - b.observations))
-    .slice(0, 3);
-}
-
-/** Trusted rows only: an excluded row's round_trip_cost_pct is a 0.0 placeholder (see rowScoring.ts applyExcludedScores), not a real cost estimate. */
-function medianRoundTripCostPct(rows: Row[]): number | null {
-  const values = rows
-    .filter((row) => row.is_trusted !== false)
-    .map((row) => toFloat(asRecord(row.scores).round_trip_cost_pct))
-    .filter((value): value is number => value !== null);
-  return values.length > 0 ? median(values) : null;
-}
-
-/** Returns an opaque record: factor_weights.validation has no fixed schema in the contract type. */
-function validationSummary(
-  validation: Record<string, unknown>,
-  rows: Row[],
-  sections: Sections,
-): Record<string, unknown> {
-  const summary: Record<string, unknown> = { ...validation };
-  const model = asRecord(summary.model);
-  const factors = asRecord(summary.factors);
-  const hitRate = toFloat(model.hit_rate);
-  const observations = Math.trunc(toFloat(summary.observations, 0.0) ?? 0);
-  summary.model = model;
-  summary.factors = factors;
-  summary.model_hit_rate = hitRate;
-  summary.model_avg_forward_return_pct = toFloat(model.avg_forward_return_pct);
-  summary.calibration_label = calibrationLabel(hitRate, observations);
-  summary.best_factors = rankValidationFactors(factors, true);
-  summary.weakest_factors = rankValidationFactors(factors, false);
-
-  const avgDirectional = toFloat(model.avg_directional_return_pct);
-  const medianCost = medianRoundTripCostPct(rows);
-  summary.median_round_trip_cost_pct = medianCost !== null ? pyRound(medianCost, 4) : null;
-  summary.net_directional_return_pct =
-    avgDirectional !== null && medianCost !== null ? pyRound(avgDirectional - medianCost, 3) : null;
-
-  summary.watchlist_counts = {
-    core: sections.core.length,
-    long: sections.long.length,
-    regime_fit: sections.regime_fit.length,
-    short: sections.short.length,
-    crowded_longs: sections.crowded_longs.length,
-    squeeze_risks: sections.squeeze_risks.length,
-  };
-  return summary;
 }
 
 /** `config` is passed alongside `db` so `database` reports the CONFIGURED storage_path, not whatever file `db` is physically backed by (e.g. a test's temp copy). */
@@ -548,17 +311,8 @@ export function buildDashboardPayload(
   const context = loadsJson<Record<string, unknown>>(selected.context_json, {});
   const providerStatus = loadsJson<Record<string, unknown>>(selected.provider_status_json, {});
   const regime = loadsJson<Record<string, unknown>>(selected.regime_json, {});
-  const factorWeights = loadsJson<Record<string, unknown>>(selected.factor_weights_json, {});
-  const sections = buildSections(rows, options.limit, history, regime);
+  const sections = buildSections(rows, options.limit, history);
   const freshness = freshnessSummary(selected.generated_at);
-  // Not filtered to `selected.run_id`: the scoreboard is a track record across every run ever
-  // logged, not just the currently-selected one.
-  const scoreboard = computeScoreboard(
-    loadRecommendationsWithOutcomes(db, {
-      forwardReturnHours: config.factors.forward_return_hours,
-      icWindowDays: config.factors.ic_window_days,
-    }),
-  );
 
   return {
     status: 'ok',
@@ -568,16 +322,10 @@ export function buildDashboardPayload(
     regime,
     market_context: context,
     provider_status: providerStatus,
-    factor_weights: factorWeights,
-    model_weights: modelWeightsSummary(factorWeights),
-    factor_correlations: asArray(factorWeights.factor_correlations) as FactorCorrelation[],
-    factor_decay: asRecord(factorWeights.factor_decay),
-    walk_forward: asRecord(factorWeights.walk_forward),
-    validation: validationSummary(asRecord(factorWeights.validation), rows, sections),
+    validation: validationSummary(sections),
     freshness,
     quality: qualitySummary(rows),
     sections,
     watchlists: buildWatchlists(sections, options.limit),
-    scoreboard,
   };
 }

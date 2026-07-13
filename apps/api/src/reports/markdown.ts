@@ -8,7 +8,7 @@ import {
 } from '../dashboard/watchlists.js';
 import { reasonFor } from '../pipeline/factorExplanations.js';
 import type { RunPayload } from '../pipeline/models.js';
-import { formatSigned, pyStr, toFloat } from '../pipeline/scoring.js';
+import { pyStr, toFloat } from '../pipeline/scoring.js';
 import type { Row } from '../pipeline/types.js';
 import { asArray, asRecord } from '../pipeline/types.js';
 import { formatPct, formatUsd } from './format.js';
@@ -25,7 +25,6 @@ export function renderMarkdown(payload: RunPayload, config: AppConfig): string {
   const regime = payload.regime ?? {};
   const context = payload.market_context ?? {};
   const providerStatus = payload.provider_status ?? {};
-  const weights = payload.factor_weights ?? {};
 
   const longRows = topBy(rows, 'long_score', limit, { predicate: isLongCandidate });
   const shortRows = topBy(rows, 'short_score', limit, { predicate: isShortCandidate });
@@ -52,14 +51,11 @@ export function renderMarkdown(payload: RunPayload, config: AppConfig): string {
     '## Data Quality',
     dataQualityBlock(rows),
     '',
-    '## Factor Regime',
-    factorWeightsTable(weights),
-    '',
     '## Dominance And Sector Rotation',
     rotationBlock(context),
     '',
     '## BTC / ETH / SOL Core Read',
-    candidateTable(coreRows, 'factor_score', 'long'),
+    candidateTable(coreRows, null, 'long'),
     '',
     '## Top Long Watchlist',
     candidateTable(longRows, 'long_score', 'long'),
@@ -127,38 +123,6 @@ function stringOrDash(...values: unknown[]): string {
   return '-';
 }
 
-function factorWeightsTable(weights: Record<string, unknown>): string {
-  const stats = asRecord(get(weights, 'stats', {}));
-  const statEntries = Object.entries(stats);
-  if (statEntries.length === 0) {
-    return '_No factor weights._';
-  }
-  const lines = [
-    `History records: \`${pyStr(get(weights, 'history_records', 0))}\`. Weight mode: \`${pyStr(get(weights, 'mode', 'prior'))}\`.`,
-    validationSummary(asRecord(get(weights, 'validation', {}))),
-    '',
-    '| Factor | Weight | IC | Obs | Mode |',
-    '|---|---:|---:|---:|---|',
-  ];
-  const sorted = [...statEntries].sort(
-    (a, b) => Math.abs(weightOf(b[1])) - Math.abs(weightOf(a[1])),
-  );
-  for (const [factor, rawDetails] of sorted) {
-    const details = asRecord(rawDetails);
-    const ic = get(details, 'ic', null);
-    const icText = ic === null ? '-' : formatSigned(toFloat(ic) ?? 0, 3);
-    lines.push(
-      `| ${factor} | ${formatSigned(weightOf(details), 3)} | ${icText} | ${pyStr(get(details, 'observations', 0))} | ${pyStr(get(details, 'mode', '-'))} |`,
-    );
-  }
-  return lines.join('\n');
-}
-
-function weightOf(details: unknown): number {
-  const value = get(asRecord(details), 'weight', 0.0);
-  return typeof value === 'number' ? value : 0.0;
-}
-
 function rotationBlock(context: Record<string, unknown>): string {
   const categories = asRecord(get(context, 'categories', {}));
   const breadth = asRecord(get(context, 'breadth', {}));
@@ -194,20 +158,17 @@ function categoryLines(categories: unknown[]): string[] {
   });
 }
 
-function validationSummary(validation: Record<string, unknown>): string {
-  if (Object.keys(validation).length === 0) {
-    return 'Validation: `unavailable`.';
+/** `scoreField === null` (the core/majors table): there is no observable score, so the column renders `-`, not a fake `0.00`. Otherwise unchanged: a non-number/missing value still falls back to `0.00`. */
+function scoreFieldText(row: Row, scoreField: string | null): string {
+  if (scoreField === null) {
+    return '-';
   }
-  const model = asRecord(get(validation, 'model', {}));
-  const hitRateNumeric = toFloat(model.hit_rate);
-  const hitText = hitRateNumeric === null ? '-' : `${hitRateNumeric.toFixed(2)}%`;
-  const status = pyStr(get(validation, 'status', 'unknown'));
-  const observations = pyStr(get(validation, 'observations', 0));
-  const horizon = pyStr(get(validation, 'horizon_hours', '-'));
-  return `Validation: \`${status}\`, observations \`${observations}\`, horizon \`${horizon}h\`, model hit rate \`${hitText}\`.`;
+  const scoreRaw = row[scoreField];
+  const score = typeof scoreRaw === 'number' && scoreRaw !== 0 ? scoreRaw : 0.0;
+  return score.toFixed(2);
 }
 
-function candidateTable(rows: Row[], scoreField: string, side: string): string {
+function candidateTable(rows: Row[], scoreField: string | null, side: string): string {
   if (rows.length === 0) {
     return '_No matches._';
   }
@@ -216,8 +177,7 @@ function candidateTable(rows: Row[], scoreField: string, side: string): string {
     '|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|---|',
   ];
   for (const row of rows) {
-    const scoreRaw = row[scoreField];
-    const score = typeof scoreRaw === 'number' && scoreRaw !== 0 ? scoreRaw : 0.0;
+    const scoreText = scoreFieldText(row, scoreField);
     const symbol = pyStr(get(row, 'symbol', '-'));
     const confidenceRaw = get(row, 'confidence_score', null);
     const confidence = confidenceRaw === null ? '-' : (toFloat(confidenceRaw) ?? 0).toFixed(0);
@@ -236,7 +196,7 @@ function candidateTable(rows: Row[], scoreField: string, side: string): string {
     const source = pyStr(get(row, 'data_source', '-'));
     const reason = reasonFor(row, side).replace(/\|/g, '/');
     lines.push(
-      `| ${symbol} | ${score.toFixed(2)} | ${confidence} | ${quality} | ${tech} | ${price} | ${oi} | ${funding} | ${ls} | ${volume} | ${source} | ${reason} |`,
+      `| ${symbol} | ${scoreText} | ${confidence} | ${quality} | ${tech} | ${price} | ${oi} | ${funding} | ${ls} | ${volume} | ${source} | ${reason} |`,
     );
   }
   return lines.join('\n');
