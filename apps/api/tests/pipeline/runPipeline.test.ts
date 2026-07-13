@@ -1,9 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AppConfigSchema } from '../../src/config/schema.js';
-import { openDatabase } from '../../src/db/client.js';
 
 const { collectMarketMock, scoreSnapshotMock, saveSnapshotMock, writeReportsMock } = vi.hoisted(
   () => ({
@@ -53,79 +49,5 @@ describe('runPipeline', () => {
     expect(paths).toEqual({});
     expect(saveSnapshotMock).toHaveBeenCalledOnce();
     expect(writeReportsMock).not.toHaveBeenCalled();
-  });
-
-  it('persists one recommendations row per watchlist a row lands in, on a real db file', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'crypto-screener-run-pipeline-'));
-    const dbPath = join(dir, 'screener.sqlite3');
-    try {
-      const config = AppConfigSchema.parse({ storage_path: dbPath });
-      const collected = {
-        rows: [{ symbol: 'BTC' }],
-        market_context: { btc_dominance_pct: 55 },
-        provider_status: { coinglass: { status: 'ok' } },
-      };
-      const scored = {
-        rows: [
-          {
-            symbol: 'BTC',
-            // Long-list membership is an OBSERVATION now (the coin advanced), not a model score.
-            price_change_24h_pct: 4.2,
-            long_score: 5,
-            is_trusted: true,
-            scores: { round_trip_cost_pct: 0.05, size_multiplier: 1.15 },
-          },
-        ],
-        regime: { bias: 'risk-on' },
-      };
-      collectMarketMock.mockResolvedValueOnce(collected);
-      scoreSnapshotMock.mockReturnValueOnce(scored);
-
-      const { payload } = await runPipeline(config, '/tmp/crypto-screener-unused-out-dir', {
-        save: true,
-        writeReportFiles: false,
-      });
-
-      // A fresh connection to the same file, not the pipeline's own (closed) handle.
-      const db = openDatabase(dbPath);
-      try {
-        const rows = db
-          .prepare(
-            'SELECT symbol, watchlist, side, score_field, signal_value, size_multiplier, round_trip_cost_pct FROM recommendations WHERE run_id = ?',
-          )
-          .all(payload.run_id) as Array<{
-          symbol: string;
-          watchlist: string;
-          side: string;
-          score_field: string;
-          signal_value: number;
-          size_multiplier: number;
-          round_trip_cost_pct: number;
-        }>;
-        expect(rows.length).toBeGreaterThan(0);
-        expect(rows.map((row) => row.watchlist)).toEqual(expect.arrayContaining(['core', 'long']));
-        // round_trip_cost_pct/size_multiplier come from the same row.scores regardless of which
-        // watchlist a row lands in; signal_value/score_field/side are watchlist-specific -- "the
-        // signal value that drove THIS call", not a single blended number repeated everywhere.
-        for (const row of rows) {
-          expect(row.symbol).toBe('BTC');
-          expect(row.round_trip_cost_pct).toBe(0.05);
-          expect(row.size_multiplier).toBe(1.15);
-        }
-        const core = rows.find((row) => row.watchlist === 'core');
-        // Majors are shown for context, not ranked -- there is no observable "core" score.
-        expect(core).toMatchObject({
-          side: 'core',
-          score_field: null,
-          signal_value: null,
-        });
-        const long = rows.find((row) => row.watchlist === 'long');
-        expect(long).toMatchObject({ side: 'long', score_field: 'long_score', signal_value: 5 });
-      } finally {
-        db.close();
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
   });
 });

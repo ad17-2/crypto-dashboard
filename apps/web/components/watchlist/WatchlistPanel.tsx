@@ -25,8 +25,8 @@ export interface WatchlistPanelProps {
 }
 
 // Ranked setups vs "crowding risk" fade/squeeze candidates -- two intents, not one flat list.
-// Not labeled "worth trading": this is THE SCREEN (observable facts), not a verdict -- the model's
-// own net edge lives on the one-bet section instead.
+// Not labeled "worth trading": this is THE SCREEN (observable facts), not a verdict -- there is no
+// model any more to back a verdict with (see lib/verdict.ts).
 const SHORTLIST_IDS: readonly WatchlistId[] = ['chart_next', 'long', 'short'];
 const CROWDING_RISK_IDS: readonly WatchlistId[] = ['crowded_longs', 'squeeze_risks'];
 

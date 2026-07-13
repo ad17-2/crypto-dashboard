@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS runs (
     context_json TEXT NOT NULL,
     provider_status_json TEXT NOT NULL,
     regime_json TEXT NOT NULL DEFAULT '{}',
+    -- Retired: no longer populated explicitly by application code; relies on the DEFAULT above.
     factor_weights_json TEXT NOT NULL DEFAULT '{}'
 );
 
@@ -59,6 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_market_regime_history_time
 
 -- priority/factor_score are legacy: still readable on old rows, no longer written (see
 -- ensureSchema's ensureColumn calls below for the columns that replaced them).
+-- Retired: no longer written by application code; table/index kept as-is for existing databases.
 CREATE TABLE IF NOT EXISTS recommendations (
     run_id TEXT NOT NULL,
     generated_at TEXT NOT NULL,

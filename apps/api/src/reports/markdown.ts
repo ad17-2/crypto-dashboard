@@ -173,14 +173,12 @@ function candidateTable(rows: Row[], scoreField: string | null, side: string): s
     return '_No matches._';
   }
   const lines = [
-    '| Symbol | Score | Conf | Quality | Tech | 24h | OI 24h | Funding | L/S | Volume | Source | Reason |',
-    '|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|---|',
+    '| Symbol | Score | Quality | Tech | 24h | OI 24h | Funding | L/S | Volume | Source | Reason |',
+    '|---|---:|---:|---|---:|---:|---:|---:|---:|---|---|',
   ];
   for (const row of rows) {
     const scoreText = scoreFieldText(row, scoreField);
     const symbol = pyStr(get(row, 'symbol', '-'));
-    const confidenceRaw = get(row, 'confidence_score', null);
-    const confidence = confidenceRaw === null ? '-' : (toFloat(confidenceRaw) ?? 0).toFixed(0);
     const quality = pyStr(get(row, 'data_quality_score', 100));
     const techRaw = row.technical_setup;
     const tech = (typeof techRaw === 'string' && techRaw !== '' ? techRaw : '-').replace(
@@ -196,7 +194,7 @@ function candidateTable(rows: Row[], scoreField: string | null, side: string): s
     const source = pyStr(get(row, 'data_source', '-'));
     const reason = reasonFor(row, side).replace(/\|/g, '/');
     lines.push(
-      `| ${symbol} | ${scoreText} | ${confidence} | ${quality} | ${tech} | ${price} | ${oi} | ${funding} | ${ls} | ${volume} | ${source} | ${reason} |`,
+      `| ${symbol} | ${scoreText} | ${quality} | ${tech} | ${price} | ${oi} | ${funding} | ${ls} | ${volume} | ${source} | ${reason} |`,
     );
   }
   return lines.join('\n');

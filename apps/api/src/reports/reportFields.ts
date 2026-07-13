@@ -1,4 +1,10 @@
-/** Fixed 49-column CSV allowlist -- do not add, remove, reorder, or rename entries; downstream tooling depends on this exact column order. */
+/**
+ * Fixed 43-column CSV allowlist -- do not add, remove, reorder, or rename entries; downstream
+ * tooling depends on this exact column order. `factor_score`, `confidence_score`,
+ * `signal_conflict_label`, `signal_conflict_score`, `regime_alignment_score`, and
+ * `breadth_alignment_score` were removed when the quant model that produced them was retired;
+ * they are no longer set on any row.
+ */
 export const REPORT_FIELDS: readonly string[] = [
   'symbol',
   'contract_symbol',
@@ -14,9 +20,7 @@ export const REPORT_FIELDS: readonly string[] = [
   'short_liquidation_usd_24h',
   'spread_bps',
   'depth_0_5pct_usd',
-  'factor_score',
   'liquidity_quality',
-  'confidence_score',
   'technical_setup',
   'technical_interval',
   'rsi_14',
@@ -42,10 +46,6 @@ export const REPORT_FIELDS: readonly string[] = [
   'short_score',
   'crowded_long_score',
   'squeeze_risk_score',
-  'signal_conflict_label',
-  'signal_conflict_score',
-  'regime_alignment_score',
-  'breadth_alignment_score',
   'is_trusted',
   'data_quality_score',
   'data_quality_flags',

@@ -153,13 +153,12 @@ describe('scoreSnapshot', () => {
     expect(longRow.factors).toHaveProperty('technical_trend_4h');
     expect(longRow.factors).toHaveProperty('oi_acceleration_signal');
     expect(longRow.factors).toHaveProperty('taker_flow_24h');
-    expect(longRow.confidence_score as number).toBeGreaterThan(0);
     expect(scoreSnapshot(longShortRows(), {}, [], { factors: {} }).market_context).toHaveProperty(
       'breadth',
     );
   });
 
-  it('merges regime/breadth into market_context; signal-conflict fields stay permanently neutral with no directional model (test_score_snapshot_adds_regime_adjustments_and_conflict_labels)', () => {
+  it('merges regime/breadth into market_context (test_score_snapshot_adds_regime_adjustments_and_conflict_labels)', () => {
     const rows: Row[] = [
       {
         symbol: 'BTC',
@@ -206,15 +205,9 @@ describe('scoreSnapshot', () => {
     };
 
     const scored = scoreSnapshot(rows, context, [], { factors: {} });
-    const alt = scored.rows.find((row) => row.symbol === 'ALT') as Row;
 
     expect((scored.market_context.breadth as Record<string, unknown>).status).toBe('ok');
     expect(['selective-risk-on', 'broad-risk-on', 'mixed']).toContain(scored.regime.breadth_label);
-    // No directional model prediction exists any more, so signalConflictSummary's direction is
-    // always neutral (0) -- these fields never flag a conflict (see rowScoring.ts).
-    expect(alt.signal_conflict_label).toBe('neutral');
-    expect(alt.signal_conflict_score).toBe(0);
-    expect(alt.signal_conflicts).toEqual([]);
   });
 
   it('residualise_collinear_factors=false reproduces the raw copysign value (test_residualise_toggle_wired_through_scoresnapshot)', () => {

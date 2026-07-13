@@ -61,7 +61,7 @@ export function scoreSnapshot(
     const factors = normalized[index] as Record<string, number>;
     row.raw_factors = raw;
     row.factors = factors;
-    applyScores(row, factors, regime, enrichedContext, config);
+    applyScores(row, factors, enrichedContext, config);
   });
 
   for (const row of rows) {

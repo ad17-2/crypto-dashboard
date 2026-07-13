@@ -25,9 +25,7 @@ const EXPECTED_REPORT_FIELDS = [
   'short_liquidation_usd_24h',
   'spread_bps',
   'depth_0_5pct_usd',
-  'factor_score',
   'liquidity_quality',
-  'confidence_score',
   'technical_setup',
   'technical_interval',
   'rsi_14',
@@ -53,17 +51,13 @@ const EXPECTED_REPORT_FIELDS = [
   'short_score',
   'crowded_long_score',
   'squeeze_risk_score',
-  'signal_conflict_label',
-  'signal_conflict_score',
-  'regime_alignment_score',
-  'breadth_alignment_score',
   'is_trusted',
   'data_quality_score',
   'data_quality_flags',
 ];
 
 describe('REPORT_FIELDS', () => {
-  it('is the exact 49-column allowlist, in order', () => {
+  it('is the exact 43-column allowlist, in order', () => {
     expect(REPORT_FIELDS).toEqual(EXPECTED_REPORT_FIELDS);
   });
 });
@@ -82,7 +76,6 @@ function buildPayload(): RunPayload {
         quote_volume_usd: 1_500_000_000,
         factor_score: 0.42,
         long_score: 10,
-        confidence_score: 71.4,
         long_short_ratio: 1.12,
         technical_setup: 'Trend Continuation',
         is_trusted: true,

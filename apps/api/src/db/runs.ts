@@ -12,8 +12,8 @@ export function saveSnapshot(
 ): void {
   const insertRun = db.prepare(`
     INSERT OR REPLACE INTO runs
-        (run_id, generated_at, config_json, context_json, provider_status_json, regime_json, factor_weights_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+        (run_id, generated_at, config_json, context_json, provider_status_json, regime_json)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
   const insertMarketRow = db.prepare(`
     INSERT OR REPLACE INTO market_rows
@@ -30,7 +30,6 @@ export function saveSnapshot(
       stableStringify(payload.market_context ?? {}),
       stableStringify(payload.provider_status ?? {}),
       stableStringify(payload.regime ?? {}),
-      stableStringify(payload.factor_weights ?? {}),
     );
 
     for (const row of payload.rows ?? []) {

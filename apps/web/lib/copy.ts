@@ -503,42 +503,11 @@ export const METRIC: Record<string, CopyEntry> = {
     definition:
       'Whether overall conditions favor risk-taking (risk-on), caution (risk-off), or neither clearly (mixed).',
   },
-  // -- Model-health terms (apps/web/app/model) -- definitions verified against apps/api/src/
-  // pipeline/{weighting,ic,validation,independence}.ts; see the field-semantics audit this page
-  // was built from. Same not-from-an-API-enum, stable-id convention as the rest of this dict.
-  calibration: {
-    label: 'Calibration',
-    definition:
-      "A read on how much to trust the model's historical track record, based on how many outcomes have been checked and how often the calls were right.",
-  },
-  observations: {
-    label: 'Observations',
-    definition:
-      'The number of individual (coin, snapshot) pairs with a known outcome on record — not the same as the number of distinct time snapshots those pairs are drawn from.',
-  },
   // Hardcoded prose, not read from config -- keep in sync with costs.ts / CostsConfigSchema by hand.
   round_trip_cost: {
     label: 'Round-trip cost (est.)',
     definition:
       "An estimated cost to enter and exit this position, not a measured number. Assumes 5bps taker fee and 2bps slippage per fill (both sides = 4x), plus a 2bps spread (used only because the real spread isn't available), plus funding over the model's forward-return horizon at 3 settlements/day -- charged if this side pays it, credited if this side receives it.",
-  },
-  // -- Layer 4 (the scoreboard) -- what the screen actually called, net of estimated costs. See
-  // apps/api/src/db/recommendations.ts computeScoreboard(): a call is "scored" once it has both a
-  // realised forward return AND a directional thesis (a 'core' row is never scored).
-  hit_rate: {
-    label: 'Hit rate',
-    definition:
-      'Share of scored calls that were net profitable after estimated trading costs, not merely whether price moved the right direction. A coin flip is 50%.',
-  },
-  mean_net_return: {
-    label: 'Avg. net return',
-    definition:
-      "The average return per scored call, net of the estimated round-trip trading cost for that call. Positive means the calls have made money on average after costs; negative means they haven't.",
-  },
-  cumulative_net_return: {
-    label: 'Cumulative net return',
-    definition:
-      "The sum (not compounded) of every scored call's net-of-cost return so far -- what a fixed one-unit bet on every call would have added up to, before compounding.",
   },
   size_multiplier: {
     label: 'Position size',

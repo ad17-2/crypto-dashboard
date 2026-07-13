@@ -19,7 +19,6 @@ function appendMetric(
 export function reasonFor(row: Row, side: string): string {
   const parts: string[] = [];
   const factors = asRecord(row.factors);
-  const scores = asRecord(row.scores);
   const qualityFlags = Array.isArray(row.data_quality_flags) ? row.data_quality_flags : [];
 
   appendMetric(parts, '24h', row.price_change_24h_pct, 2, '%');
@@ -28,14 +27,6 @@ export function reasonFor(row: Row, side: string): string {
   if (row.long_short_ratio !== null && row.long_short_ratio !== undefined) {
     const ratio = toFloat(row.long_short_ratio) ?? 0.0;
     parts.push(`L/S ${ratio.toFixed(2)}`);
-  }
-  const confidenceScore = toFloat(scores.confidence_score);
-  if (confidenceScore !== null) {
-    parts.push(`confidence ${confidenceScore.toFixed(0)}`);
-  }
-  const conflictLabel = row.signal_conflict_label;
-  if (conflictLabel && conflictLabel !== 'aligned') {
-    parts.push(`signals ${String(conflictLabel)}`);
   }
   if (row.technical_setup) {
     parts.push(`tech ${String(row.technical_setup)}`);
