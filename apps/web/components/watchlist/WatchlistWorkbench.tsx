@@ -23,6 +23,8 @@ const SORT_KEYS: readonly SortColumnKey[] = [
   'oi',
   'funding',
   'crowding',
+  'btc_correlation',
+  'positioning_divergence',
 ];
 
 function defaultTab(watchlists: Watchlist[]): WatchlistId {

@@ -252,3 +252,111 @@ describe('appendCoinglassLongShortRatio', () => {
     expect(client.topCalls).toEqual([['Binance', 'BTCUSDT']]);
   });
 });
+
+// Returns a distinct close series per contract symbol so BTC correlation is actually discriminating,
+// unlike FakeCoinGlassClient.priceHistory which returns one identical monotonic series for every symbol.
+class VariedSeriesClient extends FakeCoinGlassClient {
+  constructor(private readonly closesByContract: Record<string, number[]>) {
+    super();
+  }
+
+  override async priceHistory(
+    exchange: string,
+    contractSymbol: string,
+    interval: string,
+    limit: number,
+  ): Promise<CoinGlassHistoryRow[]> {
+    this.priceHistoryCalls.push([exchange, contractSymbol, interval, limit]);
+    const closes = this.closesByContract[contractSymbol] ?? [];
+    return closes.map((close, index) => ({
+      time: index,
+      open: close,
+      high: close,
+      low: close,
+      close,
+    }));
+  }
+}
+
+function returnsOf(closes: number[]): number[] {
+  const out: number[] = [];
+  for (let index = 1; index < closes.length; index += 1) {
+    const previous = closes[index - 1] as number;
+    out.push(((closes[index] as number) - previous) / previous);
+  }
+  return out;
+}
+
+describe('appendCoinglassTechnicals BTC correlation', () => {
+  // Varied, strictly-positive series with non-constant returns (variance > 0 so Pearson r is defined).
+  const btcCloses = Array.from({ length: 64 }, (_, index) => 100 + (index % 6) * 3 + (index % 4));
+  // Each 4h return is the exact negation of BTC's, so Pearson r must be -1.
+  const inverseCloses = [100];
+  for (const ret of returnsOf(btcCloses)) {
+    inverseCloses.push((inverseCloses.at(-1) as number) * (1 - ret));
+  }
+  const shortCloses = btcCloses.slice(0, 30); // 29 shared return-pairs < MIN_CORR_PAIRS (60)
+
+  const technicalCfg = {
+    technical_indicators: {
+      enabled: true,
+      interval: '4h',
+      limit: 220,
+      max_symbols: 0,
+      request_delay_seconds: 0,
+    },
+  };
+
+  const rowFor = (symbol: string): Row => ({
+    symbol,
+    primary_exchange: 'OKX',
+    contract_symbol: `${symbol}-USDT-SWAP`,
+  });
+
+  it('sets a per-row correlation to BTC: self and a clone ~= 1, an inverse ~= -1', async () => {
+    const rows = [rowFor('BTC'), rowFor('CLONE'), rowFor('INV')];
+    const client = new VariedSeriesClient({
+      'BTC-USDT-SWAP': btcCloses,
+      'CLONE-USDT-SWAP': btcCloses,
+      'INV-USDT-SWAP': inverseCloses,
+    });
+    const status: ProviderStatus = {};
+
+    await appendCoinglassTechnicals(rows, client, coinglassConfig(technicalCfg), status);
+
+    expect(rows[0]?.btc_correlation).toBeCloseTo(1, 6);
+    expect(rows[1]?.btc_correlation).toBeCloseTo(1, 6);
+    expect(rows[2]?.btc_correlation).toBeCloseTo(-1, 6);
+    expect((status.technicals as { btc_correlation_rows: number }).btc_correlation_rows).toBe(3);
+  });
+
+  it('leaves btc_correlation unset when the shared overlap is below the minimum', async () => {
+    const rows = [rowFor('BTC'), rowFor('TINY')];
+    const client = new VariedSeriesClient({
+      'BTC-USDT-SWAP': btcCloses,
+      'TINY-USDT-SWAP': shortCloses,
+    });
+    const status: ProviderStatus = {};
+
+    await appendCoinglassTechnicals(rows, client, coinglassConfig(technicalCfg), status);
+
+    expect(rows[0]?.btc_correlation).toBeCloseTo(1, 6);
+    expect(rows[1]).not.toHaveProperty('btc_correlation');
+    expect((status.technicals as { btc_correlation_rows: number }).btc_correlation_rows).toBe(1);
+  });
+
+  it('assigns no correlation when BTC is absent from the universe', async () => {
+    const rows = [rowFor('CLONE'), rowFor('INV')];
+    const client = new VariedSeriesClient({
+      'CLONE-USDT-SWAP': btcCloses,
+      'INV-USDT-SWAP': inverseCloses,
+    });
+    const status: ProviderStatus = {};
+
+    await appendCoinglassTechnicals(rows, client, coinglassConfig(technicalCfg), status);
+
+    expect(rows[0]).not.toHaveProperty('btc_correlation');
+    expect(rows[1]).not.toHaveProperty('btc_correlation');
+    expect((status.technicals as { btc_correlation_rows: number }).btc_correlation_rows).toBe(0);
+  });
+});

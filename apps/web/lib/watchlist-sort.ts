@@ -3,7 +3,16 @@ import { numeric } from './format';
 
 /** Default sort is 'price' (24h change) descending — set by WatchlistWorkbench. Every column is
  * an observable fact, not a model opinion -- there is no rank/conviction column to sort by. */
-export type SortColumnKey = 'symbol' | 'setup' | 'price' | 'volume' | 'oi' | 'funding' | 'crowding';
+export type SortColumnKey =
+  | 'symbol'
+  | 'setup'
+  | 'price'
+  | 'volume'
+  | 'oi'
+  | 'funding'
+  | 'crowding'
+  | 'btc_correlation'
+  | 'positioning_divergence';
 
 export type SortDirection = 'asc' | 'desc';
 
@@ -16,6 +25,8 @@ type SortableField = Extract<
   | 'oi_change_24h_pct'
   | 'funding_rate_pct'
   | 'long_short_ratio'
+  | 'btc_correlation'
+  | 'positioning_divergence'
 >;
 
 interface SortColumnConfig {
@@ -31,6 +42,8 @@ export const SORT_COLUMNS: Record<SortColumnKey, SortColumnConfig> = {
   oi: { field: 'oi_change_24h_pct', type: 'numeric' },
   funding: { field: 'funding_rate_pct', type: 'numeric' },
   crowding: { field: 'long_short_ratio', type: 'numeric' },
+  btc_correlation: { field: 'btc_correlation', type: 'numeric' },
+  positioning_divergence: { field: 'positioning_divergence', type: 'numeric' },
 };
 
 export function defaultSortDirection(key: SortColumnKey): SortDirection {

@@ -464,10 +464,35 @@ export const METRIC: Record<string, CopyEntry> = {
     definition:
       'Total dollar value of open futures positions on this contract. Rising open interest alongside rising price usually means new money is entering, not just existing positions changing hands.',
   },
+  oi_price_read: {
+    label: 'OI / Price',
+    definition:
+      'How price and open interest moved together over 24h. New longs (both up) = fresh money behind the move; Short covering (price up, OI down) = a weak rally on closing shorts; New shorts (price down, OI up) = fresh downside positioning; Long liquidation (both down) = a washout.',
+  },
   crowding: {
     label: 'Crowding',
     definition:
       'How one-sided current leveraged positioning is, based on funding and the long/short ratio. High long crowding raises the odds of a long unwind; high short crowding raises squeeze risk.',
+  },
+  liquidation_imbalance: {
+    label: 'Liq imbalance',
+    definition:
+      'Net 24h liquidation skew between longs and shorts. Positive means more short positions were liquidated than long (a short squeeze); negative means more longs were liquidated than shorts (a long washout).',
+  },
+  taker_flow: {
+    label: 'Taker flow',
+    definition:
+      'Net 24h aggressive (taker) buy vs. sell volume imbalance. Positive means aggressive buyers outweighed aggressive sellers; negative means aggressive sellers dominated.',
+  },
+  btc_correlation: {
+    label: 'BTC corr',
+    definition:
+      "How closely this coin's 4h price moves track BTC's over the last ~30 days (Pearson correlation, −1 to +1). Near +1 = moves with BTC, so a BTC pump can squeeze a short even when the coin's own signal says short; near 0 = decoupled, so its own technicals stand alone.",
+  },
+  positioning_divergence: {
+    label: 'Smart $',
+    definition:
+      "Top traders' long/short positioning vs. the broader crowd's (top-trader ÷ global account ratio). Above 1 = smart money leans more long than retail; below 1 = the crowd is more long than the pros — a divergence that flags where retail may be offside.",
   },
   change_24h: {
     label: '24h change',

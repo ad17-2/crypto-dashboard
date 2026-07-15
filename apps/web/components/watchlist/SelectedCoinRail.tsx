@@ -10,7 +10,7 @@ import {
   lookupTechnicalPattern,
   lookupWatchlist,
 } from '@/lib/copy';
-import { positioningDivergence, tradingViewUrl } from '@/lib/dashboard-row';
+import { oiPriceQuadrant, positioningDivergence, tradingViewUrl } from '@/lib/dashboard-row';
 import { fmtNum, fmtPct, fmtUsd, numeric, ordinal, qualityTone } from '@/lib/format';
 import { sideMeta } from './WatchlistTable';
 
@@ -358,11 +358,34 @@ function MetricTiles({ row }: { row: DashboardRow }) {
         value={fmtPct(row.oi_change_24h_pct)}
         tone={signTone(row.oi_change_24h_pct)}
       />
+      {(() => {
+        const q = oiPriceQuadrant(row);
+        return q ? (
+          <StatTile
+            label={lookupMetric('oi_price_read').label}
+            definition={lookupMetric('oi_price_read').definition}
+            value={q.label}
+            tone={q.tone}
+          />
+        ) : null;
+      })()}
       <StatTile
         label={lookupMetric('funding').label}
         definition={lookupMetric('funding').definition}
         value={fmtPct(row.funding_rate_pct, 4)}
         tone={signTone(row.funding_rate_pct)}
+      />
+      <StatTile
+        label={lookupMetric('liquidation_imbalance').label}
+        definition={lookupMetric('liquidation_imbalance').definition}
+        value={fmtPct(row.liquidation_imbalance_24h_pct)}
+        tone={signTone(row.liquidation_imbalance_24h_pct)}
+      />
+      <StatTile
+        label={lookupMetric('taker_flow').label}
+        definition={lookupMetric('taker_flow').definition}
+        value={fmtPct(row.taker_imbalance_24h_pct)}
+        tone={signTone(row.taker_imbalance_24h_pct)}
       />
       <StatTile
         label={lookupMetric('crowding').label}

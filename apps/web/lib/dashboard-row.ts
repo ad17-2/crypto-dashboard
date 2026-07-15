@@ -47,6 +47,12 @@ const POSITIONING_SHORT_THRESHOLD = 0.85;
 export function positioningDivergence(
   row: Pick<DashboardRow, 'long_short_account_ratio' | 'top_trader_long_short_ratio'>,
 ): PositioningDivergence | null {
+  // numeric(null) === 0, so guard the raw fields before coercion — otherwise a row with no
+  // positioning data reads as 0/0, falls through to an 'Aligned' verdict, and (via
+  // WatchlistTable's tone) paints a spurious highlight the rail badge's own null-guard suppresses.
+  if (row.long_short_account_ratio == null || row.top_trader_long_short_ratio == null) {
+    return null;
+  }
   const retail = numeric(row.long_short_account_ratio);
   const top = numeric(row.top_trader_long_short_ratio);
   if (retail === null || top === null) return null;
@@ -84,4 +90,16 @@ export function positioningDivergence(
     label: 'Mixed',
     title: `Retail ${retail.toFixed(2)}x / top ${top.toFixed(2)}x`,
   };
+}
+
+export function oiPriceQuadrant(
+  row: Pick<DashboardRow, 'price_change_24h_pct' | 'oi_change_24h_pct'>,
+): { label: string; tone: 'pos' | 'neg' | 'warn' } | null {
+  const price = row.price_change_24h_pct;
+  const oi = row.oi_change_24h_pct;
+  if (price == null || oi == null) return null;
+  if (price >= 0 && oi >= 0) return { label: 'New longs', tone: 'pos' }; // fresh money
+  if (price >= 0 && oi < 0) return { label: 'Short covering', tone: 'warn' }; // weak rally
+  if (price < 0 && oi >= 0) return { label: 'New shorts', tone: 'neg' }; // fresh downside
+  return { label: 'Long liquidation', tone: 'warn' }; // washout
 }

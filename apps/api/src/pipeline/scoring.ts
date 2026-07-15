@@ -224,7 +224,7 @@ function averageRanks(values: number[]): number[] {
   return ranks;
 }
 
-function pearsonCorr(xValues: number[], yValues: number[]): number | null {
+export function pearsonCorr(xValues: number[], yValues: number[]): number | null {
   if (xValues.length !== yValues.length || xValues.length < 2) {
     return null;
   }

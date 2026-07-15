@@ -35,6 +35,17 @@ export function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/** Top-trader long/short positioning relative to the crowd's (top ÷ global). >1 = smart money more long than retail; null when either ratio is missing or the crowd ratio is non-positive. */
+export function positioningDivergenceRatio(
+  global: number | null,
+  top: number | null,
+): number | null {
+  if (global === null || top === null || global <= 0) {
+    return null;
+  }
+  return top / global;
+}
+
 export function historyPercentile(
   history: HistoryPoint[] | null | undefined,
   historyKey: keyof HistoryPoint,
@@ -381,9 +392,16 @@ export function dashboardRow(
     long_short_ratio: numberOrNull(row.long_short_ratio),
     long_short_account_ratio: numberOrNull(row.long_short_account_ratio),
     top_trader_long_short_ratio: numberOrNull(row.top_trader_long_short_ratio),
+    btc_correlation: numberOrNull(row.btc_correlation),
     funding_percentile: fundingPercentile,
     oi_change_percentile: oiChangePercentile,
     positioning_percentile: positioningPercentile,
+    positioning_divergence: positioningDivergenceRatio(
+      numberOrNull(row.long_short_account_ratio),
+      numberOrNull(row.top_trader_long_short_ratio),
+    ),
+    liquidation_imbalance_24h_pct: numberOrNull(row.liquidation_imbalance_24h_pct),
+    taker_imbalance_24h_pct: numberOrNull(row.taker_imbalance_24h_pct),
     quote_volume_usd: numberOrNull(row.quote_volume_usd),
     open_interest_usd: numberOrNull(row.open_interest_usd),
     technical_setup: stringOrNull(row.technical_setup),

@@ -2,7 +2,7 @@ import type { DashboardRow, DashboardRowSide } from '@crypto-screener/contracts'
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { Term } from '@/components/ui/Tooltip';
 import { lookupMetric, lookupQualityFlag, lookupSetup } from '@/lib/copy';
-import { rowKey, tradingViewUrl } from '@/lib/dashboard-row';
+import { positioningDivergence, rowKey, tradingViewUrl } from '@/lib/dashboard-row';
 import { arrowPct, clsFor, fmtNum, fmtPct, fmtUsd } from '@/lib/format';
 import type { SortColumnKey, SortDirection } from '@/lib/watchlist-sort';
 
@@ -34,10 +34,12 @@ const COLUMNS: ColumnDef[] = [
   { key: 'oi', label: 'OI 24h', definition: lookupMetric('open_interest').definition },
   { key: 'funding', ...lookupMetric('funding') },
   { key: 'crowding', ...lookupMetric('crowding') },
+  { key: 'btc_correlation', ...lookupMetric('btc_correlation') },
+  { key: 'positioning_divergence', ...lookupMetric('positioning_divergence') },
 ];
 
 /**
- * 7-column desktop layout, overriding `.watch-head`/`.watch-row`'s 11-column
+ * 9-column desktop layout, overriding `.watch-head`/`.watch-row`'s 11-column
  * `grid-template-columns` in app/globals.css (out of scope for this change -- owned elsewhere).
  * Tailwind v4 utilities beat components in the cascade layers regardless of specificity, so this
  * arbitrary grid-cols utility wins over the component rule -- including globals.css's own
@@ -46,7 +48,7 @@ const COLUMNS: ColumnDef[] = [
  * Conviction column here -- THE SCREEN ranks by observable facts, not a model opinion.
  */
 const GRID_COLUMNS =
-  'grid-cols-[minmax(96px,1.05fr)_minmax(150px,1.5fr)_minmax(68px,0.62fr)_minmax(86px,0.8fr)_minmax(76px,0.68fr)_minmax(82px,0.74fr)_minmax(76px,0.68fr)] max-[900px]:grid-cols-2';
+  'grid-cols-[minmax(96px,1.05fr)_minmax(150px,1.5fr)_minmax(68px,0.62fr)_minmax(86px,0.8fr)_minmax(76px,0.68fr)_minmax(82px,0.74fr)_minmax(76px,0.68fr)_minmax(76px,0.68fr)_minmax(76px,0.68fr)] max-[900px]:grid-cols-2';
 
 export interface SideMeta {
   label: string;
@@ -236,8 +238,46 @@ function WatchlistRow({
       <td className="watch-cell" data-label="Crowding">
         {row.long_short_ratio == null ? '-' : fmtNum(row.long_short_ratio)}
       </td>
+      <td className={`watch-cell ${correlationTone(row.btc_correlation)}`} data-label="BTC corr">
+        {row.btc_correlation == null ? '-' : fmtNum(row.btc_correlation, 2)}
+      </td>
+      <td className={`watch-cell ${positioningDivergenceTone(row)}`} data-label="Smart $">
+        {row.positioning_divergence == null ? '-' : fmtNum(row.positioning_divergence, 2)}
+      </td>
     </tr>
   );
+}
+
+/**
+ * `clsFor` (green-up/red-down) is the wrong tone here: correlation isn't good or bad by sign, it's
+ * a risk-magnitude read. High |correlation| (chained to BTC -- a BTC pump can squeeze a short even
+ * against its own signal) gets the existing amber 'warn' tone; near-zero (decoupled) gets the
+ * existing muted tone; the mid range is left unstyled.
+ */
+function correlationTone(value: number | null): string {
+  if (value === null) return '';
+  const magnitude = Math.abs(value);
+  if (magnitude >= 0.7) return 'text-gold';
+  if (magnitude <= 0.3) return 'text-muted';
+  return '';
+}
+
+/** Tone for the Smart $ column. Delegates to positioningDivergence() so the column's highlight
+ *  matches the SelectedCoinRail badge for the same row, instead of re-thresholding the top÷global
+ *  ratio independently (which could contradict the badge). Stays uncolored when the cell shows "-"
+ *  (positioning_divergence null — e.g. the crowd ratio is non-positive so top÷global is undefined). */
+export function positioningDivergenceTone(
+  row: Pick<
+    DashboardRow,
+    'long_short_account_ratio' | 'top_trader_long_short_ratio' | 'positioning_divergence'
+  >,
+): string {
+  if (row.positioning_divergence == null) return '';
+  const divergence = positioningDivergence(row);
+  if (!divergence) return '';
+  if (divergence.tone === 'warn') return 'text-gold';
+  if (divergence.tone === 'pos') return 'text-up';
+  return '';
 }
 
 function SymbolCell({ row }: { row: DashboardRow }) {

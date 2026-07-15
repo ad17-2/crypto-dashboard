@@ -2,6 +2,8 @@ import type { CoinGlassConfig } from '../config/index.js';
 import type { CoinGlassClient, CoinGlassHistoryRow } from '../providers/coinglass.js';
 import { collectProviderError } from '../providers/errors.js';
 import { sleep } from '../providers/http.js';
+import type { PriceBar } from './correlation.js';
+import { closeSeries, returnCorrelation, returnsByTime } from './correlation.js';
 import { derivativesSnapshot } from './derivatives.js';
 import { toFloat } from './scoring.js';
 import { technicalSnapshot } from './technicals.js';
@@ -9,6 +11,9 @@ import type { Row } from './types.js';
 
 // A provider failure for one row is captured into `status[...]`, not thrown -- must not abort the whole run.
 export type ProviderStatus = Record<string, unknown>;
+
+// ~10 days of 4h bars; below this the correlation is too noisy to report.
+const MIN_CORR_PAIRS = 60;
 
 export async function appendCoinglassTechnicals(
   rows: Row[],
@@ -33,6 +38,7 @@ export async function appendCoinglassTechnicals(
   const target = maxSymbols <= 0 ? rows : rows.slice(0, maxSymbols);
   let enriched = 0;
   const errors: string[] = [];
+  const seriesBySymbol = new Map<string, PriceBar[]>();
 
   for (const row of target) {
     const exchange = String(row.primary_exchange ?? '');
@@ -47,10 +53,32 @@ export async function appendCoinglassTechnicals(
         Object.assign(row, snapshot);
         enriched += 1;
       }
+      const symbol = String(row.symbol ?? '');
+      const series = closeSeries(candles);
+      if (symbol && series.length > 0) {
+        seriesBySymbol.set(symbol, series);
+      }
     } catch (error) {
       collectProviderError(errors, error, String(row.symbol ?? contractSymbol));
     } finally {
       await sleepBetweenRequests(requestDelay);
+    }
+  }
+
+  let btcCorrelationRows = 0;
+  const btcBars = seriesBySymbol.get('BTC');
+  if (btcBars) {
+    const btcReturns = returnsByTime(btcBars);
+    for (const row of target) {
+      const bars = seriesBySymbol.get(String(row.symbol ?? ''));
+      if (!bars) {
+        continue;
+      }
+      const correlation = returnCorrelation(returnsByTime(bars), btcReturns, MIN_CORR_PAIRS);
+      if (correlation !== null) {
+        row.btc_correlation = correlation;
+        btcCorrelationRows += 1;
+      }
     }
   }
 
@@ -62,6 +90,7 @@ export async function appendCoinglassTechnicals(
       interval,
       errors: errors.slice(0, 5),
       note: 'CoinGlass futures price OHLC technical indicators',
+      btc_correlation_rows: btcCorrelationRows,
     };
   }
 }
