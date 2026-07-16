@@ -15,6 +15,7 @@ import { asArray, asRecord } from '../pipeline/types.js';
 import { freshnessSummary } from './freshness.js';
 import { dashboardRow, type HistoryPoint, numberOrNull, stringOrNull } from './rows.js';
 import {
+  CORE_SYMBOLS,
   isCrowdedLong,
   isCrowdedShort,
   isLongCandidate,
@@ -23,7 +24,6 @@ import {
   WATCHLIST_LABELS,
 } from './watchlists.js';
 
-const CORE_SYMBOLS = ['BTC', 'ETH', 'SOL'] as const;
 const HISTORY_POINTS_LIMIT = 16;
 
 export interface BuildDashboardPayloadOptions {

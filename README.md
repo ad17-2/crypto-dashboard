@@ -31,7 +31,7 @@ Nothing on the page is a black box. Every term (open interest, funding, crowding
 
 ## What The Screener Shows
 
-Each row is scored into one of four watchlists — **long**, **short**, **crowded long** (fade watch), and **squeeze risk** — and carries a set of observables for manual review. Most are display-only; BTC correlation and BTC beta are the exception — they also feed the long/short formulas directly, as a residual and a fights-BTC guard (see How Ranking Works). Rows default to the API's own score order; click any column header to re-sort on that one value instead.
+Each row is scored into one of four watchlists — **long**, **short**, **crowded long** (fade watch), and **squeeze risk** — and carries a set of observables for manual review. Long/short membership requires at least a ±0.5% 24h move (a noise floor below which a move isn't a real advance or decline) and never includes BTC, ETH, or SOL — the majors live in the Core read, not as directional candidates. Most are display-only; BTC correlation and BTC beta are the exception — they also feed the long/short formulas directly, as a residual and a fights-BTC guard (see How Ranking Works). Rows default to the API's own score order; click any column header to re-sort on that one value instead.
 
 The **table** shows, per coin: the setup label, 24h price change, quote volume, 24h OI change, funding rate, crowding, and two risk lenses:
 

@@ -38,14 +38,32 @@ export function topBy(
   return ranked.filter((row) => (toFloat(row[field], 0) ?? 0) >= minimum).slice(0, limit);
 }
 
+/** Majors get their own Core section (see dashboard/payload.ts); they never populate the directional lists. */
+export const CORE_SYMBOLS = ['BTC', 'ETH', 'SOL'] as const;
+
+// Same dead-zone rationale as the OI/price quadrant's 0.5% price floor (dashboard/rows.ts): below
+// this magnitude, a 24h move is tape noise, not an advance/decline worth reviewing.
+const MEMBERSHIP_MOVE_FLOOR_PCT = 0.5;
+
+function isCoreSymbol(row: Row): boolean {
+  const symbol = typeof row.symbol === 'string' ? row.symbol : null;
+  return symbol !== null && (CORE_SYMBOLS as readonly string[]).includes(symbol);
+}
+
 // Membership is an OBSERVATION -- this coin is advancing / declining -- not a prediction. Gating on
 // factor_score would empty both lists the moment no factor validates, which is now the standing state.
+// Majors are excluded: they are context (the Core section), never directional candidates, and a
+// sub-floor move isn't a real advance/decline either way.
 export function isLongCandidate(row: Row): boolean {
-  return (toFloat(row.price_change_24h_pct, 0) ?? 0) > 0;
+  return (
+    !isCoreSymbol(row) && (toFloat(row.price_change_24h_pct, 0) ?? 0) >= MEMBERSHIP_MOVE_FLOOR_PCT
+  );
 }
 
 export function isShortCandidate(row: Row): boolean {
-  return (toFloat(row.price_change_24h_pct, 0) ?? 0) < 0;
+  return (
+    !isCoreSymbol(row) && (toFloat(row.price_change_24h_pct, 0) ?? 0) <= -MEMBERSHIP_MOVE_FLOOR_PCT
+  );
 }
 
 export function isCrowdedLong(row: Row): boolean {
