@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const BtcPulseSchema = z.object({
   price_usd: z.number(),
   fetched_at: z.string(),
-  source: z.literal('binance'),
+  source: z.enum(['binance', 'coinbase']),
 });
 
 export type BtcPulse = z.infer<typeof BtcPulseSchema>;
