@@ -1,4 +1,4 @@
-import { buildUrl, fetchWithTimeout, parseJsonResponse, sleep } from './http.js';
+import { buildUrl, fetchWithRetry429, parseJsonResponse } from './http.js';
 
 export interface CoinGeckoClient {
   globalData(): Promise<Record<string, unknown>>;
@@ -52,43 +52,18 @@ export class CoinGeckoHttpClient implements CoinGeckoClient {
       headers['x-cg-demo-api-key'] = this.apiKey;
     }
 
-    let attempt = 0;
-    let delay = Math.max(0, this.retry429InitialDelaySeconds);
-
-    for (;;) {
-      const response = await fetchWithTimeout(url, {
-        timeoutSeconds: this.timeoutSeconds,
-        headers,
-      });
-
-      if (response.status >= 400 && this.shouldRetry429(response.status, attempt)) {
-        attempt += 1;
-        await sleep(this.retry429Delay(response.headers, delay));
-        delay = Math.min(Math.max(delay * 2, 1.0), this.retry429MaxDelaySeconds);
-        continue;
-      }
-
-      return parseJsonResponse(path, response);
-    }
-  }
-
-  private shouldRetry429(statusCode: number, attempt: number): boolean {
-    if (statusCode !== 429 || !this.retry429) {
-      return false;
-    }
-    return this.retry429MaxAttempts <= 0 || attempt < this.retry429MaxAttempts;
-  }
-
-  private retry429Delay(headers: Headers, delay: number): number {
-    const retryAfter = headers.get('Retry-After');
-    if (retryAfter) {
-      const parsed = Number.parseFloat(retryAfter);
-      if (!Number.isNaN(parsed)) {
-        return Math.max(0, parsed);
-      }
-    }
-    const jitter = Math.random() * Math.max(0, this.retry429JitterSeconds);
-    return Math.min(delay + jitter, this.retry429MaxDelaySeconds);
+    const response = await fetchWithRetry429(
+      url,
+      { timeoutSeconds: this.timeoutSeconds, headers },
+      {
+        enabled: this.retry429,
+        initialDelaySeconds: this.retry429InitialDelaySeconds,
+        maxDelaySeconds: this.retry429MaxDelaySeconds,
+        jitterSeconds: this.retry429JitterSeconds,
+        maxAttempts: this.retry429MaxAttempts,
+      },
+    );
+    return parseJsonResponse(path, response);
   }
 
   async globalData(): Promise<Record<string, unknown>> {
