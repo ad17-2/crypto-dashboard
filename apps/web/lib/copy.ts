@@ -10,6 +10,8 @@
  * in tests/copy.test.ts fails loudly if a real payload contains a key with no mapping.
  */
 
+import type { CvdAbsorptionState } from '@crypto-screener/contracts';
+
 export interface CopyEntry {
   readonly label: string;
   readonly definition: string;
@@ -709,3 +711,89 @@ export function lookupQualityFlag(flag: string): QualityFlagCopy {
   const entry = DATA_QUALITY_FLAG[code] ?? unknownEntry(code);
   return { ...entry, value, detail: value ? qualityFlagDetail(code, value) : '' };
 }
+
+// apps/api/src/dashboard/rows.ts `setupConfidence()` -- 'A' (every directional vote agrees),
+// 'B' (most agree), 'C' (few agree), for a directional (long/short) row only.
+export const SETUP_CONFIDENCE: Record<string, CopyEntry> = {
+  A: {
+    label: 'A',
+    definition:
+      'Every directional check agrees: 4h trend, 4h momentum, 24h open interest, and no live BTC-fight veto.',
+  },
+  B: {
+    label: 'B',
+    definition: 'Most directional checks agree, but not all of them.',
+  },
+  C: {
+    label: 'C',
+    definition: 'Few directional checks agree on this setup -- treat it with extra caution.',
+  },
+};
+
+export const lookupSetupConfidence = makeLookup(SETUP_CONFIDENCE, {
+  label: 'Unknown',
+  definition: 'Not reported.',
+});
+
+// apps/api/src/pipeline/rowScoring.ts `cvd_absorption_state` -- a 72h taker-flow (CVD) read on
+// whether the tape confirms or contradicts a 3-day price move. Keyed by the CvdAbsorptionState
+// enum (packages/contracts/src/dashboard.ts) so a new enum value fails this file to compile
+// instead of silently falling through to unknownEntry().
+export const CVD_ABSORPTION_STATE: Record<CvdAbsorptionState, CopyEntry> = {
+  absorption_bearish: {
+    label: 'Distribution into strength',
+    definition:
+      'Price is up over the last 3 days, but net taker (aggressor) flow over the same window has been negative -- selling into the rally rather than confirming it.',
+  },
+  absorption_bullish: {
+    label: 'Sellers absorbed',
+    definition:
+      'Price is down over the last 3 days, but net taker flow over the same window has been positive -- buyers absorbing the decline rather than confirming it.',
+  },
+  confirmation_long: {
+    label: 'Confirms strength',
+    definition:
+      'Price is up over the last 3 days and net taker flow agrees -- the rally has real aggressive buying behind it.',
+  },
+  confirmation_short: {
+    label: 'Confirms weakness',
+    definition:
+      'Price is down over the last 3 days and net taker flow agrees -- the decline has real aggressive selling behind it.',
+  },
+};
+
+export const lookupCvdAbsorptionState = makeLookup(CVD_ABSORPTION_STATE, NOT_REPORTED);
+
+// apps/api/src/pipeline/rowScoring.ts `oi_price_trend_state` -- only the 'diverging_*' values
+// ever reach a reason-part chip ('confirmed_*' are chip-silent by design, per the API spec).
+export const OI_PRICE_TREND_STATE: Record<string, CopyEntry> = {
+  diverging_long: {
+    label: '3d OI drain vs. move',
+    definition:
+      'Price is up over 24h, but open interest has been draining over the last 3 days -- the move looks late, without fresh positioning behind it.',
+  },
+  diverging_short: {
+    label: '3d OI build vs. move',
+    definition:
+      'Price is down over 24h, but open interest has been building over the last 3 days -- a crowded short that a bounce could squeeze.',
+  },
+};
+
+export const lookupOiPriceTrendState = makeLookup(OI_PRICE_TREND_STATE, NOT_REPORTED);
+
+// apps/api/src/pipeline/technicals.ts RSI/price swing divergence detector -- `technical_divergence`
+// is 'bearish' | 'bullish' | null (null when no active divergence).
+export const TECHNICAL_DIVERGENCE: Record<string, CopyEntry> = {
+  bearish: {
+    label: 'Bearish RSI divergence',
+    definition:
+      'Price made a higher swing high on the 4h chart, but RSI made a lower high -- momentum did not confirm the new price extreme.',
+  },
+  bullish: {
+    label: 'Bullish RSI divergence',
+    definition:
+      'Price made a lower swing low on the 4h chart, but RSI made a higher low -- momentum did not confirm the new price extreme.',
+  },
+};
+
+export const lookupTechnicalDivergence = makeLookup(TECHNICAL_DIVERGENCE, NOT_REPORTED);

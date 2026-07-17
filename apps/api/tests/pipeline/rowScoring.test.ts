@@ -32,6 +32,10 @@ describe('applyScores', () => {
     expect(row.short_score).toBeCloseTo(22.5, 9);
     expect(row.residual_change_24h_pct).toBeUndefined();
     expect(row.fights_btc).toBeNull();
+    // C1/C2/C3 inputs (breakout_pct_20, breakdown_pct_20, cvd_trend_72h_pct,
+    // oi_change_72h_pct_history) are all absent from this row too -> all three new terms inert.
+    expect(row.cvd_absorption_state).toBeUndefined();
+    expect(row.oi_price_trend_state).toBeUndefined();
   });
 
   it('suppresses short momentum once the BTC-implied move is stripped out (test_beta_drop_short_suppressed)', () => {
@@ -137,6 +141,182 @@ describe('applyScores', () => {
     // lateShort = clamp((80-40)/40) * 6 = clamp(1) * 6 = 6.
     expect((onTime.short_score as number) - (late.short_score as number)).toBeCloseTo(6, 9);
   });
+
+  describe('Donchian breakout boost (test_donchian_boost)', () => {
+    // price/oi/funding all neutral -> longScore/shortScore baseline is exactly liquidityQuality*0.25
+    // = 12.5, with atr_14_pct=5 so momentumScale is fixed regardless (momentum terms are 0 either
+    // way since priceChange=0), isolating the boost term cleanly.
+    function neutralRow(overrides: Partial<Row> = {}): Row {
+      return {
+        symbol: 'BRK',
+        price_change_24h_pct: 0,
+        oi_change_24h_pct: 0,
+        funding_rate_pct: 0,
+        atr_14_pct: 5,
+        ...overrides,
+      };
+    }
+
+    it('boosts long_score in proportion to breakout/ATR, capped at 8', () => {
+      const base = score(neutralRow());
+      const partial = score(neutralRow({ breakout_pct_20: 2.5 })); // ratio 0.5 -> boost 4
+      const capped = score(neutralRow({ breakout_pct_20: 15 })); // ratio 3 -> clamp 1 -> boost 8
+      expect((partial.long_score as number) - (base.long_score as number)).toBeCloseTo(4, 9);
+      expect((capped.long_score as number) - (base.long_score as number)).toBeCloseTo(8, 9);
+    });
+
+    it('boosts short_score from breakdown_pct_20 the same way', () => {
+      const base = score(neutralRow());
+      const partial = score(neutralRow({ breakdown_pct_20: 2.5 })); // ratio 0.5 -> boost 4
+      expect((partial.short_score as number) - (base.short_score as number)).toBeCloseTo(4, 9);
+    });
+
+    it('is inert when breakout/breakdown are zero or negative', () => {
+      const base = score(neutralRow());
+      const zero = score(neutralRow({ breakout_pct_20: 0, breakdown_pct_20: 0 }));
+      const negative = score(neutralRow({ breakout_pct_20: -3, breakdown_pct_20: -3 }));
+      expect(zero.long_score).toBeCloseTo(base.long_score as number, 9);
+      expect(zero.short_score).toBeCloseTo(base.short_score as number, 9);
+      expect(negative.long_score).toBeCloseTo(base.long_score as number, 9);
+      expect(negative.short_score).toBeCloseTo(base.short_score as number, 9);
+    });
+
+    it('is inert when atr_14_pct is missing, even with a breakout present', () => {
+      // priceChange=0 makes momentum 0 regardless of momentumScale's fallback-to-10, so the two
+      // rows below are only distinguished by the (inert) boost term.
+      const noAtrNoBreakout: Row = {
+        symbol: 'NOATR',
+        price_change_24h_pct: 0,
+        oi_change_24h_pct: 0,
+        funding_rate_pct: 0,
+      };
+      const noAtrWithBreakout: Row = {
+        ...noAtrNoBreakout,
+        breakout_pct_20: 10,
+        breakdown_pct_20: 10,
+      };
+      const base = score(noAtrNoBreakout);
+      const withBreakout = score(noAtrWithBreakout);
+      expect(withBreakout.long_score).toBeCloseTo(base.long_score as number, 9);
+      expect(withBreakout.short_score).toBeCloseTo(base.short_score as number, 9);
+    });
+  });
+
+  describe('CVD absorption veto (test_cvd_absorption_veto)', () => {
+    // Same neutral baseline trick as the Donchian tests: price/oi/funding at 0 pins
+    // longScore/shortScore to exactly 12.5 absent the new terms, and price_change_72h_pct's
+    // magnitude here (well under 3*momentumScale=30) keeps stretchLong/stretchShort at 0 too.
+    function neutralRow(overrides: Partial<Row> = {}): Row {
+      return {
+        symbol: 'CVD',
+        price_change_24h_pct: 0,
+        oi_change_24h_pct: 0,
+        funding_rate_pct: 0,
+        ...overrides,
+      };
+    }
+
+    it('fires absorption_bearish and vetoes long_score in proportion, capped at 12', () => {
+      const partial = score(neutralRow({ price_change_72h_pct: 2, cvd_trend_72h_pct: -6 }));
+      const capped = score(neutralRow({ price_change_72h_pct: 2, cvd_trend_72h_pct: -20 }));
+      // vetoCvdLong = clamp((6-5)/10) * 12 = 1.2
+      expect(partial.cvd_absorption_state).toBe('absorption_bearish');
+      expect(12.5 - (partial.long_score as number)).toBeCloseTo(1.2, 9);
+      expect(partial.short_score).toBeCloseTo(12.5, 9);
+      // vetoCvdLong = clamp((20-5)/10) * 12 = clamp(1.5) * 12 = 12 (capped)
+      expect(12.5 - (capped.long_score as number)).toBeCloseTo(12, 9);
+    });
+
+    it('fires absorption_bullish and vetoes short_score in proportion', () => {
+      const row = score(neutralRow({ price_change_72h_pct: -2, cvd_trend_72h_pct: 6 }));
+      // vetoCvdShort = clamp((6-5)/10) * 12 = 1.2
+      expect(row.cvd_absorption_state).toBe('absorption_bullish');
+      expect(12.5 - (row.short_score as number)).toBeCloseTo(1.2, 9);
+      expect(row.long_score).toBeCloseTo(12.5, 9);
+    });
+
+    it('flags confirmation states with no score effect (display-only)', () => {
+      const confirmedLong = score(neutralRow({ price_change_72h_pct: 2, cvd_trend_72h_pct: 6 }));
+      const confirmedShort = score(neutralRow({ price_change_72h_pct: -2, cvd_trend_72h_pct: -6 }));
+      expect(confirmedLong.cvd_absorption_state).toBe('confirmation_long');
+      expect(confirmedLong.long_score).toBeCloseTo(12.5, 9);
+      expect(confirmedLong.short_score).toBeCloseTo(12.5, 9);
+      expect(confirmedShort.cvd_absorption_state).toBe('confirmation_short');
+      expect(confirmedShort.long_score).toBeCloseTo(12.5, 9);
+      expect(confirmedShort.short_score).toBeCloseTo(12.5, 9);
+    });
+
+    it('is inert (state null, no veto) when the 3d move sits inside the 1.5% dead-zone', () => {
+      const row = score(neutralRow({ price_change_72h_pct: 1, cvd_trend_72h_pct: -10 }));
+      expect(row.cvd_absorption_state).toBeNull();
+      expect(row.long_score).toBeCloseTo(12.5, 9);
+      expect(row.short_score).toBeCloseTo(12.5, 9);
+    });
+
+    it('leaves the state unset (not null) and vetoes at 0 when either input is missing', () => {
+      const missingCvd = score(neutralRow({ price_change_72h_pct: 2 }));
+      const missingPrice = score(neutralRow({ cvd_trend_72h_pct: -10 }));
+      expect(missingCvd.cvd_absorption_state).toBeUndefined();
+      expect(missingCvd.long_score).toBeCloseTo(12.5, 9);
+      expect(missingPrice.cvd_absorption_state).toBeUndefined();
+      expect(missingPrice.long_score).toBeCloseTo(12.5, 9);
+    });
+  });
+
+  describe('OI-trend divergence veto (test_oi_trend_veto)', () => {
+    // price_change_24h_pct is shared between the two compared rows in each case below (it feeds
+    // both longMomentum/shortMomentum and the divergence predicate), so diffing isolates the veto.
+    function rowWith(priceChange24h: number, oi72h: number | undefined): Row {
+      const row: Row = {
+        symbol: 'OIDIV',
+        price_change_24h_pct: priceChange24h,
+        oi_change_24h_pct: 0,
+        funding_rate_pct: 0,
+      };
+      if (oi72h !== undefined) {
+        row.oi_change_72h_pct_history = oi72h;
+      }
+      return row;
+    }
+
+    it('fires diverging_long and vetoes long_score in proportion, capped at 10', () => {
+      const inert = score(rowWith(1, -1)); // above the -3.0 dead-zone -> no divergence
+      const partial = score(rowWith(1, -5));
+      const capped = score(rowWith(1, -20));
+      expect(inert.oi_price_trend_state).toBeNull();
+      expect(partial.oi_price_trend_state).toBe('diverging_long');
+      // vetoOiLong = clamp((5-3)/6) * 10 = 10/3 = 3.333...; both scores are independently
+      // pyRound(_, 2)'d, so only 2-decimal precision survives the diff (same as test_stretch_penalty).
+      expect((inert.long_score as number) - (partial.long_score as number)).toBeCloseTo(10 / 3, 2);
+      // vetoOiLong = clamp((20-3)/6) * 10 = clamp(2.83) * 10 = 10 (capped)
+      expect((inert.long_score as number) - (capped.long_score as number)).toBeCloseTo(10, 9);
+    });
+
+    it('fires diverging_short and vetoes short_score in proportion', () => {
+      const inert = score(rowWith(-1, 1)); // below the +3.0 dead-zone -> no divergence
+      const partial = score(rowWith(-1, 5));
+      expect(partial.oi_price_trend_state).toBe('diverging_short');
+      // vetoOiShort = clamp((5-3)/6) * 10 = 10/3; 2-decimal precision only, per above.
+      expect((inert.short_score as number) - (partial.short_score as number)).toBeCloseTo(
+        10 / 3,
+        2,
+      );
+    });
+
+    it('flags confirmed states with no score effect (display-only)', () => {
+      const missing = score(rowWith(1, undefined));
+      const confirmedLong = score(rowWith(1, 5));
+      const confirmedShort = score(rowWith(-1, -5));
+      expect(confirmedLong.oi_price_trend_state).toBe('confirmed_long');
+      expect(confirmedLong.long_score).toBeCloseTo(missing.long_score as number, 9);
+      expect(confirmedShort.oi_price_trend_state).toBe('confirmed_short');
+    });
+
+    it('leaves the state unset (not null) and vetoes at 0 when oi_change_72h_pct_history is missing', () => {
+      const row = score(rowWith(1, undefined));
+      expect(row.oi_price_trend_state).toBeUndefined();
+    });
+  });
 });
 
 describe('applyExcludedScores', () => {
@@ -147,5 +327,24 @@ describe('applyExcludedScores', () => {
     expect(row.short_score).toBe(0);
     expect(row.fights_btc).toBeUndefined();
     expect(row.residual_change_24h_pct).toBeUndefined();
+    expect(row.cvd_absorption_state).toBeUndefined();
+    expect(row.oi_price_trend_state).toBeUndefined();
+  });
+
+  it('leaves the new state fields unset even when the underlying inputs are present on the row (applyExcludedScores never runs the term logic)', () => {
+    const row: Row = {
+      symbol: 'EXCLUDED_WITH_INPUTS',
+      is_trusted: false,
+      breakout_pct_20: 10,
+      breakdown_pct_20: 10,
+      cvd_trend_72h_pct: -10,
+      price_change_72h_pct: 5,
+      oi_change_72h_pct_history: -10,
+    };
+    applyExcludedScores(row);
+    expect(row.long_score).toBe(0);
+    expect(row.short_score).toBe(0);
+    expect(row.cvd_absorption_state).toBeUndefined();
+    expect(row.oi_price_trend_state).toBeUndefined();
   });
 });

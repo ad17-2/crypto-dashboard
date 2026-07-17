@@ -1,7 +1,7 @@
 import type { DashboardRow, DashboardRowSide } from '@crypto-screener/contracts';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { Term } from '@/components/ui/Tooltip';
-import { lookupMetric, lookupQualityFlag, lookupSetup } from '@/lib/copy';
+import { lookupMetric, lookupQualityFlag, lookupSetup, lookupSetupConfidence } from '@/lib/copy';
 import { positioningDivergence, rowKey, tradingViewUrl } from '@/lib/dashboard-row';
 import { arrowPct, clsFor, fmtNum, fmtPct, fmtUsd } from '@/lib/format';
 import type { SortColumnKey, SortDirection } from '@/lib/watchlist-sort';
@@ -329,8 +329,30 @@ function SetupCell({ row }: { row: DashboardRow }) {
     <td className="watch-cell left watch-setup" data-label="Setup">
       <span className={`setup-badge ${side.tone}`}>{side.label}</span>
       <span className={`setup-badge ${row.setup_tone || 'neutral'}`}>{setup.label}</span>
+      {row.setup_confidence ? <SetupConfidenceBadge confidence={row.setup_confidence} /> : null}
       {row.fights_btc ? <FightsBtcChip /> : null}
     </td>
+  );
+}
+
+/** A/B/C = how many of setupConfidence()'s directional votes agreed (apps/api/src/dashboard/rows.ts).
+ *  A gets the same 'pos' tone as an aligned verdict; C is deliberately duller than the default
+ *  badge look (`text-muted`, a Tailwind utility, beats `.setup-badge`'s own color in the cascade --
+ *  see GRID_COLUMNS's comment above for why utilities always win here) so a C-grade setup doesn't
+ *  visually compete with the badges next to it. */
+const SETUP_CONFIDENCE_CLASS: Record<'A' | 'B' | 'C', string> = {
+  A: 'setup-badge pos',
+  B: 'setup-badge neutral',
+  C: 'setup-badge neutral text-muted',
+};
+
+/** Shared with SelectedCoinRail -- same reuse pattern as `sideMeta`/`FightsBtcChip` above. */
+export function SetupConfidenceBadge({ confidence }: { confidence: 'A' | 'B' | 'C' }) {
+  const meta = lookupSetupConfidence(confidence);
+  return (
+    <span className={SETUP_CONFIDENCE_CLASS[confidence]} title={meta.definition}>
+      {meta.label}
+    </span>
   );
 }
 

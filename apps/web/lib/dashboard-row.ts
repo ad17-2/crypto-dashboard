@@ -1,4 +1,4 @@
-import type { DashboardRow } from '@crypto-screener/contracts';
+import { type DashboardRow, FRESH_EMA_CROSS_MAX_BARS } from '@crypto-screener/contracts';
 import { numeric } from './format';
 
 /** symbol+side+score_field. Unique only within the active watchlist tab — selection resets on tab change. */
@@ -128,4 +128,45 @@ export function oiPriceQuadrant(
   if (price >= 0 && oi < 0) return { label: 'Short covering', tone: 'warn' }; // weak rally
   if (price < 0 && oi >= 0) return { label: 'New shorts', tone: 'neg' }; // fresh downside
   return { label: 'Long liquidation', tone: 'warn' }; // washout
+}
+
+export interface EmaCrossLine {
+  tone: 'pos' | 'neg';
+  text: string;
+}
+
+// Presentation decides freshness -- apps/api/src/pipeline/technicals.ts emits only the raw
+// ema_cross_bars_since fact, no freshness float (see its own doc comment). FRESH_EMA_CROSS_MAX_BARS
+// (packages/contracts/src/dashboard.ts) is the same cutoff apps/api/src/dashboard/rows.ts uses for
+// its "Fresh EMA20/50 cross" reason-part chip, so the chip and this Chart-detail line agree on
+// "fresh".
+
+/** null when there's no cross in the lookback window, or the cross is no longer fresh. */
+export function emaCrossLine(
+  state: Pick<DashboardRow['technical_state'], 'ema_cross_direction' | 'ema_cross_bars_since'>,
+): EmaCrossLine | null {
+  const bars = state.ema_cross_bars_since;
+  if (bars == null || bars > FRESH_EMA_CROSS_MAX_BARS) return null;
+  if (state.ema_cross_direction === 'bullish') {
+    return { tone: 'pos', text: `EMA20/50 bull cross, ${bars} bars ago` };
+  }
+  if (state.ema_cross_direction === 'bearish') {
+    return { tone: 'neg', text: `EMA20/50 bear cross, ${bars} bars ago` };
+  }
+  return null;
+}
+
+/** null when there's no active divergence (technical_divergence is only ever set while active). */
+export function divergenceLine(
+  state: Pick<
+    DashboardRow['technical_state'],
+    'technical_divergence' | 'technical_divergence_strength'
+  >,
+): string | null {
+  if (state.technical_divergence !== 'bearish' && state.technical_divergence !== 'bullish') {
+    return null;
+  }
+  const direction = state.technical_divergence === 'bearish' ? 'Bearish' : 'Bullish';
+  const strength = state.technical_divergence_strength;
+  return strength == null ? direction : `${direction} (${strength.toFixed(2)})`;
 }

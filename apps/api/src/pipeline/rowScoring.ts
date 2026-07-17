@@ -22,6 +22,15 @@ export interface RowScores {
  */
 const NO_DIRECTIONAL_SIGNAL = 0;
 
+// 3x the 0.5% membership move floor (dashboard/watchlists.ts' MEMBERSHIP_MOVE_FLOOR_PCT), scaled
+// for the CVD term's 3d window: below this 3d price move, there's no clear directional print for
+// the tape to agree or disagree with.
+const CVD_PRICE_DEADZONE_PCT = 1.5;
+const CVD_TREND_FLOOR_PCT = 5.0;
+
+// 3x dashboard/rows.ts' OI_PRICE_QUADRANT_OI_DEADZONE_PCT (1.0%), scaled for this term's 3d window.
+const OI_TREND_DEADZONE_PCT = 3.0;
+
 /** Mutates `row` in place. */
 export function applyScores(
   row: Row,
@@ -118,6 +127,72 @@ export function applyScores(
       ? clamp((liquidationImbalance24h - 40.0) / 40.0) * 6.0
       : 0;
 
+  // A break past the prior 20-bar (3.3d) extreme, measured in units of the coin's own ATR --
+  // reuses the momentumScale volatility convention. Cap 8 sits below the 10-18pt penalty family
+  // and far below the 45pt momentum ceiling.
+  const breakout = toFloat(row.breakout_pct_20);
+  const breakdown = toFloat(row.breakdown_pct_20);
+  const boostLong =
+    breakout !== null && breakout > 0 && atrPct !== null && atrPct > 0
+      ? clamp(breakout / atrPct) * 8.0
+      : 0;
+  const boostShort =
+    breakdown !== null && breakdown > 0 && atrPct !== null && atrPct > 0
+      ? clamp(breakdown / atrPct) * 8.0
+      : 0;
+
+  // Net taker flow disagreeing with a 3d price move reads as absorption (distribution into
+  // strength / sellers absorbed on weakness); agreeing reads as confirmation, which is a
+  // display-only chip -- momentum already rewards the same move. Cap 12 sits below fights-btc's
+  // 18 (a newer, less-proven read).
+  const cvdTrend = toFloat(row.cvd_trend_72h_pct);
+  let vetoCvdLong = 0;
+  let vetoCvdShort = 0;
+  if (cvdTrend !== null && priceChange72h !== null) {
+    const absorptionBearish =
+      priceChange72h >= CVD_PRICE_DEADZONE_PCT && cvdTrend <= -CVD_TREND_FLOOR_PCT;
+    const absorptionBullish =
+      priceChange72h <= -CVD_PRICE_DEADZONE_PCT && cvdTrend >= CVD_TREND_FLOOR_PCT;
+    const confirmationLong =
+      priceChange72h >= CVD_PRICE_DEADZONE_PCT && cvdTrend >= CVD_TREND_FLOOR_PCT;
+    const confirmationShort =
+      priceChange72h <= -CVD_PRICE_DEADZONE_PCT && cvdTrend <= -CVD_TREND_FLOOR_PCT;
+    row.cvd_absorption_state = absorptionBearish
+      ? 'absorption_bearish'
+      : absorptionBullish
+        ? 'absorption_bullish'
+        : confirmationLong
+          ? 'confirmation_long'
+          : confirmationShort
+            ? 'confirmation_short'
+            : null;
+    vetoCvdLong = absorptionBearish ? clamp((-cvdTrend - CVD_TREND_FLOOR_PCT) / 10.0) * 12.0 : 0;
+    vetoCvdShort = absorptionBullish ? clamp((cvdTrend - CVD_TREND_FLOOR_PCT) / 10.0) * 12.0 : 0;
+  }
+
+  // 3d of OI drain/build running against the 24h price move reads as late/crowded positioning;
+  // agreeing reads as confirmed, display-only (momentum/oiTerm already reward the same move).
+  const oi72h = toFloat(row.oi_change_72h_pct_history);
+  let vetoOiLong = 0;
+  let vetoOiShort = 0;
+  if (oi72h !== null) {
+    const divergingLong = priceChange >= 0.5 && oi72h <= -OI_TREND_DEADZONE_PCT;
+    const divergingShort = priceChange <= -0.5 && oi72h >= OI_TREND_DEADZONE_PCT;
+    const confirmedLong = priceChange >= 0.5 && oi72h >= OI_TREND_DEADZONE_PCT;
+    const confirmedShort = priceChange <= -0.5 && oi72h <= -OI_TREND_DEADZONE_PCT;
+    row.oi_price_trend_state = divergingLong
+      ? 'diverging_long'
+      : divergingShort
+        ? 'diverging_short'
+        : confirmedLong
+          ? 'confirmed_long'
+          : confirmedShort
+            ? 'confirmed_short'
+            : null;
+    vetoOiLong = divergingLong ? clamp((-oi72h - OI_TREND_DEADZONE_PCT) / 6.0) * 10.0 : 0;
+    vetoOiShort = divergingShort ? clamp((oi72h - OI_TREND_DEADZONE_PCT) / 6.0) * 10.0 : 0;
+  }
+
   const longScore =
     longMomentum * 45.0 +
     oiTermLong +
@@ -125,7 +200,10 @@ export function applyScores(
     longCrowding * 10.0 -
     vetoLong -
     stretchLong -
-    lateLong;
+    lateLong +
+    boostLong -
+    vetoCvdLong -
+    vetoOiLong;
   const shortScore =
     shortMomentum * 45.0 +
     oiTermShort +
@@ -133,7 +211,10 @@ export function applyScores(
     shortCrowding * 8.0 -
     vetoShort -
     stretchShort -
-    lateShort;
+    lateShort +
+    boostShort -
+    vetoCvdShort -
+    vetoOiShort;
   const crowdedLongScore =
     longCrowding * 35.0 +
     clamp(Math.max(oiChange, 0.0) / 12.0) * 25.0 +

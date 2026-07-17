@@ -4,15 +4,24 @@ import { Panel } from '@/components/layout/Panel';
 import { QualityFlagChip } from '@/components/QualityFlagChip';
 import { Term } from '@/components/ui/Tooltip';
 import {
+  lookupCvdAbsorptionState,
   lookupFactor,
   lookupMetric,
+  lookupOiPriceTrendState,
   lookupSetup,
+  lookupTechnicalDivergence,
   lookupTechnicalPattern,
   lookupWatchlist,
 } from '@/lib/copy';
-import { oiPriceQuadrant, positioningDivergence, tradingViewUrl } from '@/lib/dashboard-row';
+import {
+  divergenceLine,
+  emaCrossLine,
+  oiPriceQuadrant,
+  positioningDivergence,
+  tradingViewUrl,
+} from '@/lib/dashboard-row';
 import { fmtNum, fmtPct, fmtUsd, numeric, ordinal, qualityTone } from '@/lib/format';
-import { FightsBtcChip, sideMeta } from './WatchlistTable';
+import { FightsBtcChip, SetupConfidenceBadge, sideMeta } from './WatchlistTable';
 
 export interface SelectedCoinRailProps {
   row: DashboardRow | null;
@@ -111,6 +120,7 @@ function VerdictBlock({ row }: { row: DashboardRow }) {
       <div className="detail-badges flex flex-wrap gap-1.5">
         <span className={`setup-badge ${side.tone}`}>{side.label}</span>
         <span className={`setup-badge ${row.setup_tone || 'neutral'}`}>{setup.label}</span>
+        {row.setup_confidence ? <SetupConfidenceBadge confidence={row.setup_confidence} /> : null}
         {row.fights_btc ? <FightsBtcChip /> : null}
       </div>
       <p className="text-sm text-ink m-0 leading-snug">
@@ -195,6 +205,16 @@ interface ReasonPartView {
   tone: string;
 }
 
+/** A context chip whose definition/value come straight from a copy.ts lookup entry. */
+function metaContextView(
+  key: string,
+  label: string,
+  meta: { label: string; definition: string },
+  tone: string,
+): ReasonPartView {
+  return { key, label, definition: meta.definition, value: meta.label, tone };
+}
+
 function resolveReasonPart(
   row: DashboardRow,
   part: DashboardRow['reason_parts'][number],
@@ -247,6 +267,47 @@ function resolveReasonPart(
         value: sideMeta(row.side).label,
         tone,
       };
+    }
+    if (part.label === 'Tape' && row.cvd_absorption_state) {
+      return metaContextView(
+        'context-tape',
+        'Tape',
+        lookupCvdAbsorptionState(row.cvd_absorption_state),
+        tone,
+      );
+    }
+    if (
+      part.label === 'OI' &&
+      (row.oi_price_trend_state === 'diverging_long' ||
+        row.oi_price_trend_state === 'diverging_short')
+    ) {
+      return metaContextView(
+        'context-oi-trend',
+        'OI trend',
+        lookupOiPriceTrendState(row.oi_price_trend_state),
+        tone,
+      );
+    }
+    if (part.label === 'RSI divergence' && row.technical_state.technical_divergence) {
+      return metaContextView(
+        'context-divergence',
+        'RSI divergence',
+        lookupTechnicalDivergence(row.technical_state.technical_divergence),
+        tone,
+      );
+    }
+    if (part.label === 'Fresh EMA20/50 cross') {
+      const direction = row.technical_state.ema_cross_direction;
+      const bars = row.technical_state.ema_cross_bars_since;
+      if ((direction === 'bullish' || direction === 'bearish') && bars != null) {
+        return {
+          key: 'context-ema-cross',
+          label: 'Fresh EMA20/50 cross',
+          definition: `EMA20 crossed EMA50 ${bars} bars ago (4h bars).`,
+          value: direction === 'bullish' ? 'Bull' : 'Bear',
+          tone,
+        };
+      }
     }
     return null;
   }
@@ -537,6 +598,38 @@ function ChartDetailBlock({ row }: { row: DashboardRow }) {
         label="Candles"
         value={`${state.technical_candle_count ?? '-'} ${state.technical_interval || ''}`}
       />
+      <StatTile
+        label="Donchian position (20)"
+        value={
+          state.donchian_position_20 == null
+            ? '-'
+            : fmtPct(state.donchian_position_20 * 100, 2).replace('+', '')
+        }
+      />
+      {state.breakout_pct_20 ? (
+        <StatTile label="Breakout (20)" value={fmtPct(state.breakout_pct_20, 2)} tone="pos" />
+      ) : null}
+      {state.breakdown_pct_20 ? (
+        <StatTile label="Breakdown (20)" value={fmtPct(state.breakdown_pct_20, 2)} tone="neg" />
+      ) : null}
+      <StatTile
+        label="Volume vs avg (20)"
+        value={
+          state.breakout_volume_ratio_20 == null
+            ? '-'
+            : `${fmtNum(state.breakout_volume_ratio_20, 2)}x`
+        }
+      />
+      {(() => {
+        const cross = emaCrossLine(state);
+        return cross ? <StatTile label="Trend shift" value={cross.text} tone={cross.tone} /> : null;
+      })()}
+      {(() => {
+        const divergence = divergenceLine(state);
+        return divergence ? (
+          <StatTile label="RSI divergence" value={divergence} tone="warn" />
+        ) : null;
+      })()}
     </div>
   );
 }

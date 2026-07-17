@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { oiPriceQuadrant, positioningDivergence } from '../lib/dashboard-row';
+import {
+  divergenceLine,
+  emaCrossLine,
+  oiPriceQuadrant,
+  positioningDivergence,
+} from '../lib/dashboard-row';
 
 describe('oiPriceQuadrant', () => {
   it('reads price up + OI up as new longs (fresh money)', () => {
@@ -139,6 +144,65 @@ describe('positioningDivergence', () => {
     ).toBeNull();
     expect(
       positioningDivergence({ long_short_account_ratio: null, top_trader_long_short_ratio: 1.1 }),
+    ).toBeNull();
+  });
+});
+
+// apps/api/src/dashboard/rows.ts FRESH_EMA_CROSS_MAX_BARS gates its own "Fresh EMA20/50 cross"
+// reason-part chip the same way (<= 6 bars) -- kept in sync by hand, see this function's own comment.
+describe('emaCrossLine', () => {
+  it('reads a fresh bullish cross', () => {
+    const result = emaCrossLine({ ema_cross_direction: 'bullish', ema_cross_bars_since: 3 });
+    expect(result).toEqual({ tone: 'pos', text: 'EMA20/50 bull cross, 3 bars ago' });
+  });
+
+  it('reads a fresh bearish cross', () => {
+    const result = emaCrossLine({ ema_cross_direction: 'bearish', ema_cross_bars_since: 0 });
+    expect(result).toEqual({ tone: 'neg', text: 'EMA20/50 bear cross, 0 bars ago' });
+  });
+
+  it('is still fresh exactly at the 6-bar cutoff', () => {
+    const result = emaCrossLine({ ema_cross_direction: 'bullish', ema_cross_bars_since: 6 });
+    expect(result).toEqual({ tone: 'pos', text: 'EMA20/50 bull cross, 6 bars ago' });
+  });
+
+  it('returns null one bar past the cutoff', () => {
+    expect(emaCrossLine({ ema_cross_direction: 'bullish', ema_cross_bars_since: 7 })).toBeNull();
+  });
+
+  it('returns null when there is no cross in the lookback window', () => {
+    expect(emaCrossLine({ ema_cross_direction: null, ema_cross_bars_since: null })).toBeNull();
+  });
+});
+
+describe('divergenceLine', () => {
+  it('formats an active bearish divergence with its strength', () => {
+    const result = divergenceLine({
+      technical_divergence: 'bearish',
+      technical_divergence_strength: 0.723,
+    });
+    expect(result).toBe('Bearish (0.72)');
+  });
+
+  it('formats an active bullish divergence with its strength', () => {
+    const result = divergenceLine({
+      technical_divergence: 'bullish',
+      technical_divergence_strength: 1,
+    });
+    expect(result).toBe('Bullish (1.00)');
+  });
+
+  it('omits the strength suffix when strength is missing', () => {
+    const result = divergenceLine({
+      technical_divergence: 'bearish',
+      technical_divergence_strength: null,
+    });
+    expect(result).toBe('Bearish');
+  });
+
+  it('returns null when there is no active divergence', () => {
+    expect(
+      divergenceLine({ technical_divergence: null, technical_divergence_strength: null }),
     ).toBeNull();
   });
 });

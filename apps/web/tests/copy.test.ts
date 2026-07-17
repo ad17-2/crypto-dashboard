@@ -1,25 +1,34 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { CvdAbsorptionState } from '@crypto-screener/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   BIAS,
   BREADTH_LABEL,
+  CVD_ABSORPTION_STATE,
   DATA_QUALITY_FLAG,
   FACTOR,
   FIXED_SETUP,
   FRESHNESS,
+  lookupCvdAbsorptionState,
   lookupFactor,
   lookupFreshness,
+  lookupOiPriceTrendState,
   lookupProvider,
   lookupQualityFlag,
   lookupSectorRotationLabel,
   lookupSetup,
+  lookupSetupConfidence,
+  lookupTechnicalDivergence,
   lookupTechnicalPattern,
   lookupWatchlist,
+  OI_PRICE_TREND_STATE,
   PROVIDER,
   REGIME_STATE,
   SECTOR_ROTATION_LABEL,
+  SETUP_CONFIDENCE,
+  TECHNICAL_DIVERGENCE,
   TECHNICAL_PATTERN,
   WATCHLIST,
 } from '../lib/copy';
@@ -124,6 +133,24 @@ const PROVIDER_KEYS = [
   'long_short_ratio',
   'technicals',
 ];
+
+// apps/api/src/dashboard/rows.ts `setupConfidence()` tiers (Stage E/F).
+const SETUP_CONFIDENCE_TIERS = ['A', 'B', 'C'];
+
+// apps/api/src/pipeline/rowScoring.ts `cvd_absorption_state` values (Stage C2).
+const CVD_ABSORPTION_STATES: readonly CvdAbsorptionState[] = [
+  'absorption_bearish',
+  'absorption_bullish',
+  'confirmation_long',
+  'confirmation_short',
+];
+
+// apps/api/src/pipeline/rowScoring.ts `oi_price_trend_state` values that actually reach a
+// reason-part chip (Stage C3; 'confirmed_long'/'confirmed_short' are chip-silent by design).
+const OI_PRICE_TREND_DIVERGING_STATES = ['diverging_long', 'diverging_short'];
+
+// apps/api/src/pipeline/technicals.ts RSI/price swing divergence detector (Stage A4).
+const TECHNICAL_DIVERGENCE_VALUES = ['bearish', 'bullish'];
 
 // apps/api/src/pipeline/quality.ts:58-192 `dataQualityFlags()` -- 2 static codes, 11 suffixed
 // `code:value` codes. lookupQualityFlag() must key on the prefix for the suffixed ones.
@@ -236,6 +263,34 @@ describe('copy dictionaries cover every source-derived key', () => {
       assertHuman(resolved.label);
       // The raw code must not appear verbatim in the label (it must be translated, not passed through).
       expect(resolved.label).not.toContain(code);
+    }
+  });
+
+  it('covers every setup_confidence tier', () => {
+    for (const tier of SETUP_CONFIDENCE_TIERS) {
+      expect(SETUP_CONFIDENCE[tier], `SETUP_CONFIDENCE missing "${tier}"`).toBeDefined();
+      assertHuman(lookupSetupConfidence(tier).label);
+    }
+  });
+
+  it('covers every cvd_absorption_state value', () => {
+    for (const value of CVD_ABSORPTION_STATES) {
+      expect(CVD_ABSORPTION_STATE[value], `CVD_ABSORPTION_STATE missing "${value}"`).toBeDefined();
+      assertHuman(lookupCvdAbsorptionState(value).label);
+    }
+  });
+
+  it('covers every diverging oi_price_trend_state value', () => {
+    for (const value of OI_PRICE_TREND_DIVERGING_STATES) {
+      expect(OI_PRICE_TREND_STATE[value], `OI_PRICE_TREND_STATE missing "${value}"`).toBeDefined();
+      assertHuman(lookupOiPriceTrendState(value).label);
+    }
+  });
+
+  it('covers every technical_divergence value', () => {
+    for (const value of TECHNICAL_DIVERGENCE_VALUES) {
+      expect(TECHNICAL_DIVERGENCE[value], `TECHNICAL_DIVERGENCE missing "${value}"`).toBeDefined();
+      assertHuman(lookupTechnicalDivergence(value).label);
     }
   });
 });

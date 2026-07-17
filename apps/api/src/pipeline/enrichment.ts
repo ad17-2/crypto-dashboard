@@ -273,7 +273,8 @@ export async function appendCoinglassLongShortRatio(
         if (positionRatio !== null) {
           row.top_trader_position_ratio = positionRatio;
         }
-        await sleepBetweenRequests(requestDelay);
+        // No sleep here: positionHistory is the last call in the loop body, so the
+        // `finally` sleep below already paces the next request (success = 3 sleeps/3 calls).
       }
     } catch (error) {
       collectProviderError(errors, error, base);

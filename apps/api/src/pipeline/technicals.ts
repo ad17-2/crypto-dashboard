@@ -1,5 +1,5 @@
 import { sortByTime } from './derivatives.js';
-import { clamp, mean, stdev, toFloat } from './scoring.js';
+import { clamp, mean, pyRound, stdev, toFloat } from './scoring.js';
 
 export type RawCandle = Record<string, unknown>;
 
@@ -8,6 +8,7 @@ interface Candle {
   high: number;
   low: number;
   close: number;
+  volume: number | null;
 }
 
 interface Macd {
@@ -24,20 +25,39 @@ interface Bollinger {
   widthPct: number | null;
 }
 
+interface Donchian {
+  high: number | null;
+  low: number | null;
+}
+
+interface EmaCross {
+  direction: 'bullish' | 'bearish' | null;
+  barsSince: number | null;
+}
+
+interface Divergence {
+  direction: 'bearish' | 'bullish' | null;
+  strength: number | null;
+}
+
 export function technicalSnapshot(candles: RawCandle[], interval: string): Record<string, unknown> {
   const series = normalizeCandles(candles);
   const closes = series.map((item) => item.close);
   const highs = series.map((item) => item.high);
   const lows = series.map((item) => item.low);
+  const volumes = series.map((item) => item.volume);
   if (closes.length < 50) {
     return {};
   }
 
   const close = closes.at(-1) as number;
-  const ema20 = lastEma(closes, 20);
-  const ema50 = lastEma(closes, 50);
+  const ema20Series = emaSeries(closes, 20);
+  const ema50Series = emaSeries(closes, 50);
+  const ema20 = ema20Series.length ? (ema20Series.at(-1) as number) : null;
+  const ema50 = ema50Series.length ? (ema50Series.at(-1) as number) : null;
   const ema200 = lastEma(closes, 200);
-  const rsi14 = rsi(closes, 14);
+  const rsiValues = rsiSeries(closes, 14);
+  const rsi14 = rsiValues.at(-1) ?? null;
   const macd = macdOf(closes);
   const atr14 = atr(highs, lows, closes, 14);
   const bollinger = bollingerBands(closes, 20);
@@ -48,6 +68,17 @@ export function technicalSnapshot(candles: RawCandle[], interval: string): Recor
   const macdHistPct = macdHist !== null && close > 0 ? (macdHist / close) * 100.0 : null;
   const trendScore = trendScoreOf(close, ema20, ema50, ema200);
   const momentumScore = momentumScoreOf(rsi14, macdHistPct);
+  const setup = technicalSetup(
+    trendScore,
+    rsi14,
+    bollinger.position,
+    distanceEma20Pct,
+    bollinger.widthPct,
+  );
+
+  const donchian = donchianRange(highs, lows, DONCHIAN_PERIOD);
+  const emaCross = emaCrossOf(ema20Series, ema50Series, EMA_CROSS_LOOKBACK_BARS);
+  const divergence = divergenceOf(closes, rsiValues);
 
   return {
     technical_interval: interval,
@@ -71,13 +102,16 @@ export function technicalSnapshot(candles: RawCandle[], interval: string): Recor
     bb_width_pct: bollinger.widthPct,
     technical_trend_score: trendScore,
     technical_momentum_score: momentumScore,
-    technical_setup: technicalSetup(
-      trendScore,
-      rsi14,
-      bollinger.position,
-      distanceEma20Pct,
-      bollinger.widthPct,
-    ),
+    technical_setup: setup,
+    trend_state: trendStateOf(setup, trendScore),
+    breakout_pct_20: breakoutPct(close, donchian.high),
+    breakdown_pct_20: breakdownPct(close, donchian.low),
+    donchian_position_20: donchianPosition(close, donchian.high, donchian.low),
+    breakout_volume_ratio_20: breakoutVolumeRatio(volumes, DONCHIAN_PERIOD),
+    ema_cross_direction: emaCross.direction,
+    ema_cross_bars_since: emaCross.barsSince,
+    technical_divergence: divergence.direction,
+    technical_divergence_strength: divergence.strength,
   };
 }
 
@@ -95,7 +129,8 @@ function normalizeCandles(candles: RawCandle[]): Candle[] {
     if (Math.min(open, high, low, close) <= 0) {
       continue;
     }
-    normalized.push({ open, high, low, close });
+    // Older fixtures/history rows may lack volume_usd; keep the candle, just null out its volume.
+    normalized.push({ open, high, low, close, volume: toFloat(candle.volume_usd) });
   }
   return normalized;
 }
@@ -129,9 +164,27 @@ function wilderSmooth(values: number[], period: number): number {
   return value;
 }
 
-function rsi(values: number[], period: number): number | null {
+// Same recurrence as wilderSmooth, kept as a full series (matches emaSeries) so callers -- rsi_14
+// (via its last value) and the divergence detector (via the full lookback) -- share one computation.
+function wilderSmoothSeries(values: number[], period: number): number[] {
+  if (values.length < period) {
+    return [];
+  }
+  let value = mean(values.slice(0, period));
+  const result = [value];
+  for (const next of values.slice(period)) {
+    value = (value * (period - 1) + next) / period;
+    result.push(value);
+  }
+  return result;
+}
+
+// Full Wilder-smoothed RSI series; technicalSnapshot() computes this once and derives rsi_14 from
+// its last value directly, rather than recomputing via a separate scalar helper -- see
+// technicals.test.ts for the pinned equivalence check.
+export function rsiSeries(values: number[], period: number): number[] {
   if (values.length <= period) {
-    return null;
+    return [];
   }
   const gains: number[] = [];
   const losses: number[] = [];
@@ -140,13 +193,16 @@ function rsi(values: number[], period: number): number | null {
     gains.push(Math.max(delta, 0.0));
     losses.push(Math.abs(Math.min(delta, 0.0)));
   }
-  const avgGain = wilderSmooth(gains, period);
-  const avgLoss = wilderSmooth(losses, period);
-  if (avgLoss === 0) {
-    return 100.0;
-  }
-  const rs = avgGain / avgLoss;
-  return 100.0 - 100.0 / (1.0 + rs);
+  const avgGains = wilderSmoothSeries(gains, period);
+  const avgLosses = wilderSmoothSeries(losses, period);
+  return avgGains.map((avgGain, index) => {
+    const avgLoss = avgLosses[index] as number;
+    if (avgLoss === 0) {
+      return 100.0;
+    }
+    const rs = avgGain / avgLoss;
+    return 100.0 - 100.0 / (1.0 + rs);
+  });
 }
 
 function macdOf(values: number[]): Macd {
@@ -232,6 +288,11 @@ function momentumScoreOf(rsi14: number | null, macdHistPct: number | null): numb
   return clamp(rsiComponent * 0.45 + macdComponent * 0.55, -1.0, 1.0);
 }
 
+// A trend score at or beyond this magnitude counts as directionally decisive rather than mixed --
+// shared by technicalSetup()'s continuation/pullback labels and trendStateOf()'s Compression Watch
+// tie-break. 0.55 reuses trendScoreOf's own existing threshold.
+const TREND_SCORE_THRESHOLD = 0.55;
+
 function technicalSetup(
   trendScore: number | null,
   rsi14: number | null,
@@ -250,15 +311,250 @@ function technicalSetup(
   if (bbWidthPct !== null && bbWidthPct <= 4.0) {
     return 'Compression Watch';
   }
-  if (trendScore !== null && trendScore >= 0.55) {
+  if (trendScore !== null && trendScore >= TREND_SCORE_THRESHOLD) {
     return distanceEma20Pct !== null && distanceEma20Pct < 0
       ? 'Pullback Into Uptrend'
       : 'Trend Continuation';
   }
-  if (trendScore !== null && trendScore <= -0.55) {
+  if (trendScore !== null && trendScore <= -TREND_SCORE_THRESHOLD) {
     return distanceEma20Pct !== null && distanceEma20Pct > 0
       ? 'Rally Into Downtrend'
       : 'Downtrend Continuation';
   }
   return 'Mixed Technicals';
+}
+
+// technicalSetup checks BB-width compression BEFORE trend, so a trending coin mid-digestion is
+// labeled 'Compression Watch' -- the label is honest (it IS compressed), but a membership gate must
+// not read it as chop. TREND_SCORE_THRESHOLD reuses trendScoreOf's own existing threshold. Pure
+// function of the label technicalSetup() already produces, so the labels above stay byte-identical.
+export function trendStateOf(
+  setup: string,
+  trendScore: number | null,
+): 'uptrend' | 'downtrend' | 'chop' | 'exhaustion_top' | 'exhaustion_bottom' {
+  switch (setup) {
+    case 'Trend Continuation':
+    case 'Pullback Into Uptrend':
+      return 'uptrend';
+    case 'Downtrend Continuation':
+    case 'Rally Into Downtrend':
+      return 'downtrend';
+    case 'Upside Exhaustion':
+      return 'exhaustion_top';
+    case 'Downside Exhaustion':
+      return 'exhaustion_bottom';
+    case 'Compression Watch':
+      if (trendScore !== null && trendScore >= TREND_SCORE_THRESHOLD) {
+        return 'uptrend';
+      }
+      if (trendScore !== null && trendScore <= -TREND_SCORE_THRESHOLD) {
+        return 'downtrend';
+      }
+      return 'chop';
+    default:
+      return 'chop';
+  }
+}
+
+// Textbook Donchian(20); 20 bars = 3.3 days at 4h.
+export const DONCHIAN_PERIOD = 20;
+
+// Prior `period` bars, excluding the current bar -- a breakout must clear a range it wasn't part of.
+export function donchianRange(highs: number[], lows: number[], period: number): Donchian {
+  if (highs.length < period + 1) {
+    return { high: null, low: null };
+  }
+  const priorHighs = highs.slice(-(period + 1), -1);
+  const priorLows = lows.slice(-(period + 1), -1);
+  return { high: Math.max(...priorHighs), low: Math.min(...priorLows) };
+}
+
+export function breakoutPct(close: number, donchianHigh: number | null): number | null {
+  if (donchianHigh === null) {
+    return null;
+  }
+  return pyRound(close > donchianHigh ? ((close - donchianHigh) / donchianHigh) * 100.0 : 0.0, 4);
+}
+
+export function breakdownPct(close: number, donchianLow: number | null): number | null {
+  if (donchianLow === null) {
+    return null;
+  }
+  return pyRound(close < donchianLow ? ((donchianLow - close) / donchianLow) * 100.0 : 0.0, 4);
+}
+
+// close can exceed the prior range on either side, so this is clamped rather than assumed in [0,1].
+export function donchianPosition(
+  close: number,
+  donchianHigh: number | null,
+  donchianLow: number | null,
+): number | null {
+  if (donchianHigh === null || donchianLow === null || donchianHigh === donchianLow) {
+    return null;
+  }
+  return pyRound(clamp((close - donchianLow) / (donchianHigh - donchianLow), 0.0, 1.0), 4);
+}
+
+// Display-only: never feeds scoring. Missing volume (older fixtures lack volume_usd) nulls the ratio
+// rather than silently excluding bars from the average.
+export function breakoutVolumeRatio(volumes: Array<number | null>, period: number): number | null {
+  if (volumes.length < period + 1) {
+    return null;
+  }
+  const latest = volumes.at(-1) as number | null;
+  const priorWindow = volumes.slice(-(period + 1), -1);
+  if (latest === null || priorWindow.some((value) => value === null)) {
+    return null;
+  }
+  const priorMean = mean(priorWindow as number[]);
+  if (priorMean === 0) {
+    return null;
+  }
+  return pyRound(latest / priorMean, 2);
+}
+
+// 30 bars = 5 days at 4h, same order as the 3-day stretch window. +1 so the oldest bar in the window
+// still has a predecessor to diff against (30 bars of lookback needs 31 diff points).
+export const EMA_CROSS_LOOKBACK_BARS = 30;
+
+// Display-only, no score wiring. Scans backward for the most recent flip of sign(ema20-ema50); a
+// value of exactly 0 is bucketed with the >=0 (bullish) side, matching trendScoreOf's own >= convention.
+export function emaCrossOf(ema20: number[], ema50: number[], lookbackBars: number): EmaCross {
+  const length = Math.min(ema20.length, ema50.length);
+  const alignedEma20 = ema20.slice(ema20.length - length);
+  const alignedEma50 = ema50.slice(ema50.length - length);
+  const diff = alignedEma20.map((fast, index) => fast - (alignedEma50[index] as number));
+  const window = diff.slice(-(lookbackBars + 1));
+  for (let index = window.length - 1; index >= 1; index -= 1) {
+    const currentSign = (window[index] as number) >= 0 ? 1 : -1;
+    const previousSign = (window[index - 1] as number) >= 0 ? 1 : -1;
+    if (currentSign !== previousSign) {
+      return {
+        direction: currentSign > 0 ? 'bullish' : 'bearish',
+        barsSince: window.length - 1 - index,
+      };
+    }
+  }
+  return { direction: null, barsSince: null };
+}
+
+// 12h per side at 4h bars; ties (equal to a neighbor) are not a swing.
+export const SWING_HALF_WINDOW = 3;
+// 15 days at 4h.
+export const DIVERGENCE_LOOKBACK_BARS = 90;
+// 32h at 4h bars.
+export const MIN_SWING_SEPARATION_BARS = 8;
+// 2 days at 4h; a divergence this stale no longer describes the current tape.
+export const DIVERGENCE_ACTIVE_BARS = 12;
+
+function isSwingHigh(closes: number[], index: number): boolean {
+  const value = closes[index] as number;
+  for (let offset = 1; offset <= SWING_HALF_WINDOW; offset += 1) {
+    if (
+      (closes[index - offset] as number) >= value ||
+      (closes[index + offset] as number) >= value
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isSwingLow(closes: number[], index: number): boolean {
+  const value = closes[index] as number;
+  for (let offset = 1; offset <= SWING_HALF_WINDOW; offset += 1) {
+    if (
+      (closes[index - offset] as number) <= value ||
+      (closes[index + offset] as number) <= value
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Confirmed swings only: the last SWING_HALF_WINDOW bars can't be confirmed yet (no trailing bars to
+// compare against), so they're excluded from the search range.
+function findSwingIndices(
+  closes: number[],
+  isSwing: (closes: number[], index: number) => boolean,
+): number[] {
+  const start = Math.max(SWING_HALF_WINDOW, closes.length - DIVERGENCE_LOOKBACK_BARS);
+  const end = closes.length - 1 - SWING_HALF_WINDOW;
+  const indices: number[] = [];
+  for (let index = start; index <= end; index += 1) {
+    if (isSwing(closes, index)) {
+      indices.push(index);
+    }
+  }
+  return indices;
+}
+
+// The two most recent swings at least MIN_SWING_SEPARATION_BARS apart; null if fewer than two qualify.
+function latestSwingPair(indices: number[]): [number, number] | null {
+  if (indices.length < 2) {
+    return null;
+  }
+  const recent = indices[indices.length - 1] as number;
+  for (let index = indices.length - 2; index >= 0; index -= 1) {
+    const candidate = indices[index] as number;
+    if (recent - candidate >= MIN_SWING_SEPARATION_BARS) {
+      return [candidate, recent];
+    }
+  }
+  return null;
+}
+
+// Display-only, no score wiring. rsiValues is rsiSeries(closes, 14); its last element aligns with
+// closes' last element, offset by the RSI period at the start (rsiValues has no entry for the first
+// `period` closes).
+export function divergenceOf(closes: number[], rsiValues: number[]): Divergence {
+  const rsiOffset = closes.length - rsiValues.length;
+  const rsiAt = (index: number): number | null => {
+    const rsiIndex = index - rsiOffset;
+    return rsiIndex >= 0 && rsiIndex < rsiValues.length ? (rsiValues[rsiIndex] as number) : null;
+  };
+  const lastIndex = closes.length - 1;
+
+  const bearishPair = latestSwingPair(findSwingIndices(closes, isSwingHigh));
+  if (bearishPair !== null) {
+    const [p1, p2] = bearishPair;
+    const rsi1 = rsiAt(p1);
+    const rsi2 = rsiAt(p2);
+    if (
+      rsi1 !== null &&
+      rsi2 !== null &&
+      (closes[p2] as number) > (closes[p1] as number) &&
+      rsi2 < rsi1 &&
+      rsi2 > 50 &&
+      lastIndex - p2 <= DIVERGENCE_ACTIVE_BARS
+    ) {
+      return {
+        direction: 'bearish',
+        strength: pyRound(clamp(Math.abs(rsi1 - rsi2) / 10.0, 0.0, 1.0), 2),
+      };
+    }
+  }
+
+  const bullishPair = latestSwingPair(findSwingIndices(closes, isSwingLow));
+  if (bullishPair !== null) {
+    const [p1, p2] = bullishPair;
+    const rsi1 = rsiAt(p1);
+    const rsi2 = rsiAt(p2);
+    if (
+      rsi1 !== null &&
+      rsi2 !== null &&
+      (closes[p2] as number) < (closes[p1] as number) &&
+      rsi2 > rsi1 &&
+      rsi2 < 50 &&
+      lastIndex - p2 <= DIVERGENCE_ACTIVE_BARS
+    ) {
+      return {
+        direction: 'bullish',
+        strength: pyRound(clamp(Math.abs(rsi1 - rsi2) / 10.0, 0.0, 1.0), 2),
+      };
+    }
+  }
+
+  return { direction: null, strength: null };
 }

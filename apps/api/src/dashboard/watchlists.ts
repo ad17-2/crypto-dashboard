@@ -62,6 +62,18 @@ function hasDirectionalSignals(row: Row): boolean {
   );
 }
 
+// Membership additionally excludes trend states that work against the list's own direction (or are
+// trendless), per technicals.ts's trendStateOf. Exhaustion states pass both gates -- the
+// stretch/lateness penalties already price that risk, so the gate doesn't need to duplicate it.
+// Exclusion-list semantics: a row missing trend_state (no technicals yet, or a legacy fixture) is
+// unaffected and passes -- it's already excluded by hasDirectionalSignals if it truly lacks signal.
+const GATE_EXCLUDED_TREND_STATES_LONG: readonly string[] = ['chop', 'downtrend'];
+const GATE_EXCLUDED_TREND_STATES_SHORT: readonly string[] = ['chop', 'uptrend'];
+
+function isTrendExcluded(row: Row, excludedStates: readonly string[]): boolean {
+  return typeof row.trend_state === 'string' && excludedStates.includes(row.trend_state);
+}
+
 // Membership is an OBSERVATION -- this coin is advancing / declining -- not a prediction. Gating on
 // factor_score would empty both lists the moment no factor validates, which is now the standing state.
 // Majors are excluded: they are context (the Core section), never directional candidates, and a
@@ -70,7 +82,8 @@ export function isLongCandidate(row: Row): boolean {
   return (
     !isCoreSymbol(row) &&
     (toFloat(row.price_change_24h_pct, 0) ?? 0) >= MEMBERSHIP_MOVE_FLOOR_PCT &&
-    hasDirectionalSignals(row)
+    hasDirectionalSignals(row) &&
+    !isTrendExcluded(row, GATE_EXCLUDED_TREND_STATES_LONG)
   );
 }
 
@@ -78,7 +91,8 @@ export function isShortCandidate(row: Row): boolean {
   return (
     !isCoreSymbol(row) &&
     (toFloat(row.price_change_24h_pct, 0) ?? 0) <= -MEMBERSHIP_MOVE_FLOOR_PCT &&
-    hasDirectionalSignals(row)
+    hasDirectionalSignals(row) &&
+    !isTrendExcluded(row, GATE_EXCLUDED_TREND_STATES_SHORT)
   );
 }
 

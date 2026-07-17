@@ -40,7 +40,24 @@ const TechnicalStateSchema = z.object({
   bb_width_pct: z.number().optional(),
   technical_trend_score: z.number().optional(),
   technical_momentum_score: z.number().optional(),
+  trend_state: z
+    .enum(['uptrend', 'downtrend', 'chop', 'exhaustion_top', 'exhaustion_bottom'])
+    .nullable()
+    .optional(),
+  breakout_pct_20: z.number().nullable().optional(),
+  breakdown_pct_20: z.number().nullable().optional(),
+  donchian_position_20: z.number().nullable().optional(),
+  breakout_volume_ratio_20: z.number().nullable().optional(),
+  ema_cross_direction: z.enum(['bullish', 'bearish']).nullable().optional(),
+  ema_cross_bars_since: z.number().nullable().optional(),
+  technical_divergence: z.enum(['bearish', 'bullish']).nullable().optional(),
+  technical_divergence_strength: z.number().nullable().optional(),
 });
+
+// A cross this recent (<=1 day at 4h bars) is still tradeable news; older ones are already priced
+// in. Shared by apps/api (the "Fresh EMA20/50 cross" reason-part chip) and apps/web (the Chart
+// detail "Trend shift" line) so the chip and the line always agree on what counts as fresh.
+export const FRESH_EMA_CROSS_MAX_BARS = 6;
 
 const HistoryPointSchema = z.object({
   generated_at: z.string(),
@@ -69,6 +86,20 @@ export const DashboardRowSideSchema = z.enum([
   'squeeze-risk',
 ]);
 
+export const CvdAbsorptionStateSchema = z.enum([
+  'absorption_bearish',
+  'absorption_bullish',
+  'confirmation_long',
+  'confirmation_short',
+]);
+
+export const OiPriceTrendStateSchema = z.enum([
+  'diverging_long',
+  'diverging_short',
+  'confirmed_long',
+  'confirmed_short',
+]);
+
 export const DashboardRowSchema = z.object({
   symbol: z.string().nullable(),
   side: DashboardRowSideSchema,
@@ -95,6 +126,10 @@ export const DashboardRowSchema = z.object({
     .enum(['new_longs', 'short_covering', 'new_shorts', 'long_liquidation'])
     .nullable()
     .optional(),
+  cvd_trend_72h_pct: z.number().nullable().optional(),
+  cvd_absorption_state: CvdAbsorptionStateSchema.nullable().optional(),
+  oi_change_72h_pct_history: z.number().nullable().optional(),
+  oi_price_trend_state: OiPriceTrendStateSchema.nullable().optional(),
   top_trader_position_ratio: z.number().nullable().optional(),
   top_trader_ratio_delta_24h: z.number().nullable().optional(),
   price_history_gapped: z.boolean().nullable().optional(),
@@ -107,6 +142,7 @@ export const DashboardRowSchema = z.object({
   quote_volume_usd: z.number().nullable(),
   open_interest_usd: z.number().nullable(),
   technical_setup: z.string().nullable(),
+  setup_confidence: z.enum(['A', 'B', 'C']).optional(),
   technical_state: TechnicalStateSchema,
   data_source: z.string().nullable(),
   is_trusted: z.boolean(),
@@ -211,6 +247,8 @@ export const DashboardPayloadSchema = z.discriminatedUnion('status', [
 
 export type DashboardRow = z.infer<typeof DashboardRowSchema>;
 export type DashboardRowSide = z.infer<typeof DashboardRowSideSchema>;
+export type CvdAbsorptionState = z.infer<typeof CvdAbsorptionStateSchema>;
+export type OiPriceTrendState = z.infer<typeof OiPriceTrendStateSchema>;
 export type RunSummary = z.infer<typeof RunSummarySchema>;
 export type Freshness = z.infer<typeof FreshnessSchema>;
 export type Quality = z.infer<typeof QualitySchema>;

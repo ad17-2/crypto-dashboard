@@ -139,6 +139,78 @@ describe('isShortCandidate', () => {
   });
 });
 
+describe('isLongCandidate trend-state gate', () => {
+  it.each(['chop', 'downtrend'])('excludes a row in trend_state %s', (trend_state) => {
+    expect(
+      isLongCandidate(row({ price_change_24h_pct: 5.0, ...directionalSignals, trend_state })),
+    ).toBe(false);
+  });
+
+  it('accepts a row in trend_state uptrend', () => {
+    expect(
+      isLongCandidate(
+        row({ price_change_24h_pct: 5.0, ...directionalSignals, trend_state: 'uptrend' }),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    'exhaustion_top',
+    'exhaustion_bottom',
+  ])('accepts a row in trend_state %s (stretch/lateness penalties already price the risk)', (trend_state) => {
+    expect(
+      isLongCandidate(row({ price_change_24h_pct: 5.0, ...directionalSignals, trend_state })),
+    ).toBe(true);
+  });
+
+  it('passes a row with no trend_state at all (exclusion-list semantics)', () => {
+    expect(isLongCandidate(row({ price_change_24h_pct: 5.0, ...directionalSignals }))).toBe(true);
+  });
+
+  it('passes a row with a null trend_state', () => {
+    expect(
+      isLongCandidate(row({ price_change_24h_pct: 5.0, ...directionalSignals, trend_state: null })),
+    ).toBe(true);
+  });
+});
+
+describe('isShortCandidate trend-state gate', () => {
+  it.each(['chop', 'uptrend'])('excludes a row in trend_state %s', (trend_state) => {
+    expect(
+      isShortCandidate(row({ price_change_24h_pct: -5.0, ...directionalSignals, trend_state })),
+    ).toBe(false);
+  });
+
+  it('accepts a row in trend_state downtrend', () => {
+    expect(
+      isShortCandidate(
+        row({ price_change_24h_pct: -5.0, ...directionalSignals, trend_state: 'downtrend' }),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    'exhaustion_top',
+    'exhaustion_bottom',
+  ])('accepts a row in trend_state %s (stretch/lateness penalties already price the risk)', (trend_state) => {
+    expect(
+      isShortCandidate(row({ price_change_24h_pct: -5.0, ...directionalSignals, trend_state })),
+    ).toBe(true);
+  });
+
+  it('passes a row with no trend_state at all (exclusion-list semantics)', () => {
+    expect(isShortCandidate(row({ price_change_24h_pct: -5.0, ...directionalSignals }))).toBe(true);
+  });
+
+  it('passes a row with a null trend_state', () => {
+    expect(
+      isShortCandidate(
+        row({ price_change_24h_pct: -5.0, ...directionalSignals, trend_state: null }),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe('isCrowdedLong', () => {
   it('is unaffected by the membership move floor or core-symbol gate', () => {
     expect(

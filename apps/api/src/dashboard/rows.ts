@@ -1,4 +1,10 @@
-import type { DashboardRow, DashboardRowSide } from '@crypto-screener/contracts';
+import {
+  CvdAbsorptionStateSchema,
+  type DashboardRow,
+  type DashboardRowSide,
+  FRESH_EMA_CROSS_MAX_BARS,
+  OiPriceTrendStateSchema,
+} from '@crypto-screener/contracts';
 import { DIRECTIONAL_FACTORS } from '../pipeline/factorDefinitions.js';
 import { formatSigned, pyRound, toFloat } from '../pipeline/scoring.js';
 import type { Row } from '../pipeline/types.js';
@@ -43,6 +49,18 @@ export function booleanOrNull(value: unknown): boolean | null {
 /** Passes 'long'/'short' through as-is; anything else (absent, garbage) becomes null. */
 export function fightsBtcOrNull(value: unknown): 'long' | 'short' | null {
   return value === 'long' || value === 'short' ? value : null;
+}
+
+/** Passes a recognized cvd_absorption_state value through as-is; anything else becomes null. */
+export function cvdAbsorptionStateOrNull(value: unknown): DashboardRow['cvd_absorption_state'] {
+  const parsed = CvdAbsorptionStateSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Passes a recognized oi_price_trend_state value through as-is; anything else becomes null. */
+export function oiPriceTrendStateOrNull(value: unknown): DashboardRow['oi_price_trend_state'] {
+  const parsed = OiPriceTrendStateSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 /** Top-trader long/short positioning relative to the crowd's (top ÷ global). >1 = smart money more long than retail; null when either ratio is missing or the crowd ratio is non-positive. */
@@ -277,6 +295,83 @@ export function reasonParts(row: Row, side: string): ReasonPart[] {
     );
   }
 
+  if (row.cvd_absorption_state === 'absorption_bearish') {
+    parts.push({
+      kind: 'context',
+      label: 'Tape',
+      value: 'distribution into strength',
+      tone: 'warn',
+      help: '3d price up but net taker flow is negative -- selling into strength.',
+    });
+  } else if (row.cvd_absorption_state === 'absorption_bullish') {
+    parts.push({
+      kind: 'context',
+      label: 'Tape',
+      value: 'sellers absorbed',
+      tone: 'warn',
+      help: '3d price down but net taker flow is positive -- sellers being absorbed.',
+    });
+  } else if (row.cvd_absorption_state === 'confirmation_long') {
+    parts.push({
+      kind: 'context',
+      label: 'Tape',
+      value: 'confirms strength',
+      tone: 'pos',
+      help: '3d price up and net taker flow agrees -- the move has real buying behind it.',
+    });
+  } else if (row.cvd_absorption_state === 'confirmation_short') {
+    parts.push({
+      kind: 'context',
+      label: 'Tape',
+      value: 'confirms weakness',
+      tone: 'pos',
+      help: '3d price down and net taker flow agrees -- the move has real selling behind it.',
+    });
+  }
+
+  if (row.oi_price_trend_state === 'diverging_long') {
+    parts.push({
+      kind: 'context',
+      label: 'OI',
+      value: '3d drain vs move',
+      tone: 'warn',
+      help: '24h price up but 3d open interest has been draining -- late positioning.',
+    });
+  } else if (row.oi_price_trend_state === 'diverging_short') {
+    parts.push({
+      kind: 'context',
+      label: 'OI',
+      value: '3d build vs move',
+      tone: 'warn',
+      help: '24h price down but 3d open interest has been building -- crowded short.',
+    });
+  }
+
+  if (row.technical_divergence === 'bearish' || row.technical_divergence === 'bullish') {
+    parts.push({
+      kind: 'context',
+      label: 'RSI divergence',
+      value: String(row.technical_divergence),
+      tone: 'warn',
+      help: 'Price made a new swing extreme but RSI did not confirm it -- a possible momentum divergence.',
+    });
+  }
+
+  const emaCrossBarsSince = toFloat(row.ema_cross_bars_since);
+  if (
+    emaCrossBarsSince !== null &&
+    emaCrossBarsSince <= FRESH_EMA_CROSS_MAX_BARS &&
+    (row.ema_cross_direction === 'bullish' || row.ema_cross_direction === 'bearish')
+  ) {
+    parts.push({
+      kind: 'context',
+      label: 'Fresh EMA20/50 cross',
+      value: row.ema_cross_direction === 'bullish' ? 'bull' : 'bear',
+      tone: row.ema_cross_direction === 'bullish' ? 'pos' : 'neg',
+      help: `EMA20 crossed EMA50 ${emaCrossBarsSince} bars ago.`,
+    });
+  }
+
   const strongest = Object.entries(factors)
     .filter((entry): entry is [string, unknown] => DIRECTIONAL_FACTORS.includes(entry[0]))
     .map(([name, value]) => [name, toFloat(value)] as const)
@@ -343,6 +438,15 @@ const TECHNICAL_STATE_KEYS = [
   'bb_width_pct',
   'technical_trend_score',
   'technical_momentum_score',
+  'trend_state',
+  'breakout_pct_20',
+  'breakdown_pct_20',
+  'donchian_position_20',
+  'breakout_volume_ratio_20',
+  'ema_cross_direction',
+  'ema_cross_bars_since',
+  'technical_divergence',
+  'technical_divergence_strength',
 ] as const;
 
 /** The cast to DashboardRow['technical_state'] is safe because these keys are only ever written by technicals.ts as the types the schema expects. */
@@ -365,6 +469,48 @@ export function technicalTone(row: Row): string {
     return 'neutral';
   }
   return reasonTone(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+// Reuses trendStateOf/trendScoreOf's own 0.55 threshold (technicals.ts) for the trend vote.
+const SETUP_CONFIDENCE_TREND_FLOOR = 0.55;
+// Below this many of the 4 votes agreeing, confidence drops to the lowest grade.
+const SETUP_CONFIDENCE_MIN_VOTES_FOR_B = 2;
+
+/**
+ * Grades a directional setup by how many independent, already-computed reads agree with it: trend
+ * score, momentum score, 24h OI change not draining, and not being actively BTC-veto'd. Missing
+ * evidence counts as a failed vote (not an ignored one) -- an unreadable input is not agreement.
+ * All 4 agreeing -> 'A'; at least half -> 'B'; otherwise -> 'C'.
+ */
+export function setupConfidence(
+  side: 'long' | 'short',
+  trendScore: number | null,
+  momentumScore: number | null,
+  oiChange24hPct: number | null,
+  fightsBtc: 'long' | 'short' | null,
+): 'A' | 'B' | 'C' {
+  const votes =
+    side === 'long'
+      ? [
+          trendScore !== null && trendScore >= SETUP_CONFIDENCE_TREND_FLOOR,
+          momentumScore !== null && momentumScore > 0,
+          oiChange24hPct !== null && oiChange24hPct >= 0,
+          fightsBtc !== 'long',
+        ]
+      : [
+          trendScore !== null && trendScore <= -SETUP_CONFIDENCE_TREND_FLOOR,
+          momentumScore !== null && momentumScore < 0,
+          oiChange24hPct !== null && oiChange24hPct >= 0,
+          fightsBtc !== 'short',
+        ];
+  const votesPassed = votes.filter(Boolean).length;
+  if (votesPassed === votes.length) {
+    return 'A';
+  }
+  if (votesPassed >= SETUP_CONFIDENCE_MIN_VOTES_FOR_B) {
+    return 'B';
+  }
+  return 'C';
 }
 
 const SCORE_KEYS = [
@@ -432,6 +578,10 @@ export function dashboardRow(
       numberOrNull(row.price_change_24h_pct),
       numberOrNull(row.oi_change_24h_pct),
     ),
+    cvd_trend_72h_pct: numberOrNull(row.cvd_trend_72h_pct),
+    cvd_absorption_state: cvdAbsorptionStateOrNull(row.cvd_absorption_state),
+    oi_change_72h_pct_history: numberOrNull(row.oi_change_72h_pct_history),
+    oi_price_trend_state: oiPriceTrendStateOrNull(row.oi_price_trend_state),
     top_trader_position_ratio: numberOrNull(row.top_trader_position_ratio),
     top_trader_ratio_delta_24h: numberOrNull(row.top_trader_ratio_delta_24h),
     price_history_gapped: booleanOrNull(row.price_history_gapped),
@@ -447,6 +597,20 @@ export function dashboardRow(
     quote_volume_usd: numberOrNull(row.quote_volume_usd),
     open_interest_usd: numberOrNull(row.open_interest_usd),
     technical_setup: stringOrNull(row.technical_setup),
+    // Key genuinely omitted (not set to undefined) for non-directional sides, matching
+    // technicalState()'s own convention above -- "field absent" per the wire contract, since
+    // setup_confidence is optional-but-not-nullable (no side is not the same as an unreadable A/B/C).
+    ...(side === 'long' || side === 'short'
+      ? {
+          setup_confidence: setupConfidence(
+            side,
+            toFloat(row.technical_trend_score),
+            toFloat(row.technical_momentum_score),
+            toFloat(row.oi_change_24h_pct),
+            fightsBtcOrNull(row.fights_btc),
+          ),
+        }
+      : {}),
     technical_state: technicalState(row),
     data_source: stringOrNull(row.data_source),
     is_trusted: row.is_trusted ?? true,

@@ -1,4 +1,4 @@
-import { clamp, mean, pctChange, stdev, toFloat } from './scoring.js';
+import { clamp, mean, pctChange, pyRound, stdev, toFloat } from './scoring.js';
 
 export type RawHistoryRow = Record<string, unknown>;
 
@@ -66,6 +66,7 @@ export function derivativesSnapshot(
   }
 
   const window = candlesPerWindow(interval, 24.0);
+  const window72 = candlesPerWindow(interval, 72.0);
   const oiCloses = oiRows.map((row) => row.close);
   const fundingCloses = fundingRows.map((row) => row.close);
   const liqWindow = liquidationRows.slice(-window);
@@ -73,6 +74,7 @@ export function derivativesSnapshot(
 
   const oiChange1 = pctChangeSteps(oiCloses, 1);
   const oiChangeWindow = pctChangeSteps(oiCloses, window);
+  const oiChange72h = pctChangeSteps(oiCloses, window72);
   const oiPreviousChange = pctChangeSteps(oiCloses.slice(0, -1), 1);
   const oiAcceleration =
     oiChange1 !== null && oiPreviousChange !== null ? oiChange1 - oiPreviousChange : null;
@@ -93,6 +95,14 @@ export function derivativesSnapshot(
   const takerRatio = sellVolume > 0 ? buyVolume / sellVolume : null;
   const takerImbalance = takerTotal > 0 ? ((buyVolume - sellVolume) / takerTotal) * 100.0 : null;
 
+  const cvdRows = takerRows.slice(-window72);
+  const cvdNetDelta = cvdRows.reduce((sum, row) => sum + (row.buy - row.sell), 0);
+  const cvdTurnover = cvdRows.reduce((sum, row) => sum + (row.buy + row.sell), 0);
+  const cvdTrend72h =
+    takerRows.length >= window72 && cvdTurnover > 0
+      ? pyRound((100.0 * cvdNetDelta) / cvdTurnover, 2)
+      : null;
+
   const confirmation = derivativesConfirmation(oiAcceleration, takerImbalance, liqImbalance);
 
   const result: Record<string, unknown> = {
@@ -103,6 +113,7 @@ export function derivativesSnapshot(
     derivatives_taker_count: takerRows.length,
     oi_change_4h_pct_history: oiChange1,
     oi_change_24h_pct_history: oiChangeWindow,
+    oi_change_72h_pct_history: oiChange72h,
     oi_acceleration_4h_pct: oiAcceleration,
     oi_zscore_30: oiZscore,
     funding_avg_24h_pct: fundingAvg,
@@ -112,6 +123,7 @@ export function derivativesSnapshot(
     liquidation_imbalance_24h_pct: liqImbalance,
     taker_buy_sell_ratio_24h: takerRatio,
     taker_imbalance_24h_pct: takerImbalance,
+    cvd_trend_72h_pct: cvdTrend72h,
     derivatives_confirmation_score: confirmation,
   };
 

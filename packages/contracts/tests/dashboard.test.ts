@@ -84,6 +84,59 @@ describe('DashboardRowSchema', () => {
   it('rejects an unknown side value', () => {
     expect(() => DashboardRowSchema.parse({ ...sampleRow, side: 'sideways' })).toThrow();
   });
+
+  it('parses a row carrying the new TA-expansion fields', () => {
+    const row = {
+      ...sampleRow,
+      setup_confidence: 'A',
+      cvd_trend_72h_pct: -6.2,
+      cvd_absorption_state: 'absorption_bearish',
+      oi_change_72h_pct_history: 4.1,
+      oi_price_trend_state: 'diverging_short',
+      technical_state: {
+        ...sampleRow.technical_state,
+        trend_state: 'uptrend',
+        breakout_pct_20: 1.5,
+        breakdown_pct_20: 0,
+        donchian_position_20: 0.8,
+        breakout_volume_ratio_20: 1.3,
+        ema_cross_direction: 'bullish',
+        ema_cross_bars_since: 3,
+        technical_divergence: 'bearish',
+        technical_divergence_strength: 0.4,
+      },
+    };
+    expect(() => DashboardRowSchema.parse(row)).not.toThrow();
+  });
+
+  it('parses a row without any of the new TA-expansion fields (legacy shape)', () => {
+    expect(() => DashboardRowSchema.parse(sampleRow)).not.toThrow();
+  });
+
+  it('rejects an unrecognized cvd_absorption_state value', () => {
+    expect(() =>
+      DashboardRowSchema.parse({ ...sampleRow, cvd_absorption_state: 'sideways' }),
+    ).toThrow();
+  });
+
+  it('rejects an unrecognized oi_price_trend_state value', () => {
+    expect(() =>
+      DashboardRowSchema.parse({ ...sampleRow, oi_price_trend_state: 'sideways' }),
+    ).toThrow();
+  });
+
+  it('rejects an unrecognized setup_confidence value', () => {
+    expect(() => DashboardRowSchema.parse({ ...sampleRow, setup_confidence: 'D' })).toThrow();
+  });
+
+  it('rejects an unrecognized technical_state.trend_state value', () => {
+    expect(() =>
+      DashboardRowSchema.parse({
+        ...sampleRow,
+        technical_state: { ...sampleRow.technical_state, trend_state: 'sideways' },
+      }),
+    ).toThrow();
+  });
 });
 
 describe('DashboardPayloadSchema', () => {
