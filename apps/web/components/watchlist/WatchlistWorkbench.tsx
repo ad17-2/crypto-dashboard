@@ -148,7 +148,9 @@ export function WatchlistWorkbench({ watchlists, runBtcPrice }: WatchlistWorkben
   };
 
   return (
-    <section className="grid grid-cols-[minmax(0,1fr)_390px] max-[1100px]:grid-cols-1 gap-3 items-start">
+    // A 64rem document column can't fit the table and the detail rail side by side (the table
+    // alone needs ~55rem of grid-column minimums) -- the rail stacks below instead of beside it.
+    <section className="grid grid-cols-1 gap-10 items-start">
       <WatchlistPanel
         watchlists={watchlists}
         activeTab={activeTab}
@@ -164,10 +166,8 @@ export function WatchlistWorkbench({ watchlists, runBtcPrice }: WatchlistWorkben
         btcPulseChip={btcPulseChip}
         btcStalenessBanner={btcStalenessBanner}
       />
-      <aside className="detail-rail self-stretch">
-        <div className="grid gap-3 items-start sticky top-3 max-[1100px]:static">
-          <SelectedCoinRail row={selectedRow} />
-        </div>
+      <aside className="detail-rail">
+        <SelectedCoinRail row={selectedRow} />
       </aside>
     </section>
   );

@@ -93,8 +93,11 @@ function CategoryList({ title, items }: { title: string; items: CategoryItem[] }
       ) : (
         <ul className="mt-2 grid list-none gap-1.5 p-0">
           {items.map((item) => (
-            <li key={item.id} className="flex items-baseline justify-between gap-3 text-[13px]">
-              <span className="min-w-0 truncate" title={item.name}>
+            <li key={item.id} className="min-w-0 flex items-baseline gap-2 text-[13px]">
+              <span className="select-none text-ash" aria-hidden="true">
+                –
+              </span>
+              <span className="min-w-0 flex-1 truncate" title={item.name}>
                 {item.name}
               </span>
               <span className={`shrink-0 font-mono ${clsFor(item.changePct)}`}>

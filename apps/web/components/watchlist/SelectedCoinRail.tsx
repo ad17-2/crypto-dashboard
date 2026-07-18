@@ -45,7 +45,7 @@ export function SelectedCoinRail({ row }: SelectedCoinRailProps) {
       meta={lookupSetup(row.setup).label}
       aria-label="Selected coin detail"
     >
-      <div className="detail-body p-3 grid gap-3">
+      <div className="detail-body pt-3 grid gap-3">
         <div className="detail-title flex justify-between items-start gap-2.5">
           <div>
             <div className="detail-symbol text-xl font-extrabold leading-tight">
@@ -61,7 +61,7 @@ export function SelectedCoinRail({ row }: SelectedCoinRailProps) {
           </div>
           <div className="detail-actions flex gap-1.5 flex-wrap justify-end">
             <a
-              className="detail-link inline-flex items-center h-7 border border-line rounded-md px-2 text-ink no-underline text-xs font-bold"
+              className="detail-link link text-xs"
               href={href}
               target="_blank"
               rel="noopener noreferrer"
@@ -87,7 +87,7 @@ export function SelectedCoinRail({ row }: SelectedCoinRailProps) {
         </DetailSection>
 
         {flags.length > 0 ? (
-          <div className="quality-flag-list flex flex-wrap gap-1">
+          <div className="quality-flag-list flex flex-wrap gap-x-4 gap-y-1">
             {flags.map((flag) => (
               <QualityFlagChip key={flag} flag={flag} />
             ))}
@@ -363,11 +363,11 @@ function ReasonStack({ row }: { row: DashboardRow }) {
 
 function DetailSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <details className="detail-section border-2 border-line rounded-md bg-panel-2 overflow-hidden border-l-gold">
-      <summary className="flex items-center gap-2.5 px-2.5 py-2 cursor-pointer list-none text-ink text-xs font-semibold uppercase tracking-wide">
+    <details className="detail-section border-t border-line pt-2.5">
+      <summary className="label flex items-center gap-2.5 cursor-pointer list-none">
         {title}
       </summary>
-      <div className="detail-section-body px-2.5 pb-2.5 grid gap-2">{children}</div>
+      <div className="detail-section-body pt-2.5 grid gap-2">{children}</div>
     </details>
   );
 }
@@ -396,7 +396,7 @@ function StatTile({
 function MetricTiles({ row }: { row: DashboardRow }) {
   const qTone = qualityTone(row.quality);
   return (
-    <div className="grid grid-cols-3 max-[900px]:grid-cols-2 max-[480px]:grid-cols-1 gap-2">
+    <div className="grid grid-cols-3 max-[900px]:grid-cols-2 max-[480px]:grid-cols-1 gap-x-6 gap-y-4">
       {row.score_field === null ? null : (
         <StatTile
           label={scoreFieldMeta(row.score_field).label}
@@ -568,7 +568,7 @@ function ChartDetailBlock({ row }: { row: DashboardRow }) {
   }
   const pattern = lookupTechnicalPattern(row.technical_setup);
   return (
-    <div className="grid grid-cols-2 max-[680px]:grid-cols-1 gap-2 -mt-1">
+    <div className="grid grid-cols-2 max-[680px]:grid-cols-1 gap-x-6 gap-y-4 -mt-1">
       <StatTile label="Chart read (4h)" definition={pattern.definition} value={pattern.label} />
       <StatTile label="RSI (14)" value={fmtNum(state.rsi_14, 1)} />
       <StatTile

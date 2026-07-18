@@ -17,7 +17,7 @@ export function CoreReadStage({ rows }: CoreReadStageProps) {
   return (
     <section className="stage" aria-label="The majors">
       <h2 className="stage-eyebrow m-0">The majors</h2>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((row) => (
           <CoreCard key={`${row.symbol ?? '-'}:${row.side}`} row={row} />
         ))}
@@ -30,9 +30,9 @@ function CoreCard({ row }: { row: DashboardRow }) {
   const setup = lookupSetup(row.setup);
 
   return (
-    <div className="rounded-md border border-line bg-panel p-4">
+    <div>
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="m-0 text-[15px] font-semibold text-ink">{row.symbol ?? '—'}</h3>
+        <h3 className="m-0 text-[15px] font-bold text-ink">{row.symbol ?? '—'}</h3>
         <span className={`font-mono text-[13px] ${clsFor(row.price_change_24h_pct)}`}>
           {fmtPct(row.price_change_24h_pct)}
         </span>

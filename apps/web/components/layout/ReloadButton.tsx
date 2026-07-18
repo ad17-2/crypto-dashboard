@@ -31,7 +31,7 @@ export function ReloadButton() {
         type="button"
         onClick={handleClick}
         disabled={isPending}
-        className="h-9 border border-line bg-panel text-ink rounded-md px-2.5 text-[13px] cursor-pointer font-semibold disabled:cursor-wait disabled:opacity-60"
+        className="link cursor-pointer bg-transparent border-0 p-0 disabled:cursor-wait disabled:opacity-60"
       >
         {isPending ? 'Reloading…' : 'Reload'}
       </button>

@@ -76,13 +76,13 @@ export function WatchlistPanel({
         <span className="flex items-center gap-2.5">
           {btcPulseChip ? (
             <span
-              className="text-muted text-xs font-mono tabular-nums"
+              className="text-ash text-xs font-mono tabular-nums"
               title={lookupMetric('btc_pulse').definition}
             >
               {btcPulseChip}
             </span>
           ) : null}
-          <span className="text-muted text-xs font-mono tabular-nums">
+          <span className="text-ash text-xs font-mono tabular-nums">
             {rows.visible.length} / {rows.total}
           </span>
         </span>
@@ -90,7 +90,7 @@ export function WatchlistPanel({
       aria-label="Watchlist workbench"
       className="overflow-visible"
     >
-      <div className="grid gap-2 px-3 pt-2.5">
+      <div className="grid gap-3 pt-3">
         <TabGroup
           label="Shortlist"
           lists={shortlist}
@@ -104,9 +104,9 @@ export function WatchlistPanel({
           onTabChange={onTabChange}
         />
       </div>
-      <div className="flex gap-2 items-center flex-wrap px-3 py-2.5 border-b border-line bg-panel">
+      <div className="flex gap-2 items-center flex-wrap py-3 border-b border-line">
         <input
-          className="h-8 min-w-[180px] max-[680px]:w-full border border-line rounded-md bg-panel text-ink px-2 text-xs"
+          className="h-8 min-w-[180px] max-[680px]:w-full border-0 border-b border-line rounded-none bg-transparent text-ink px-0 text-xs font-mono placeholder:text-ash"
           type="search"
           placeholder="Find a coin"
           aria-label="Find a coin"
@@ -115,7 +115,7 @@ export function WatchlistPanel({
         />
       </div>
       {btcStalenessBanner ? (
-        <div role="status" className="staleness-banner mx-3 mt-2.5">
+        <div role="status" className="staleness-banner mt-2.5">
           {btcStalenessBanner}
         </div>
       ) : null}
@@ -146,21 +146,19 @@ function TabGroup({
   if (!lists.length) return null;
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-2 mb-1">
+      <div className="flex items-baseline justify-between gap-2 mb-1.5">
         <div className="label">{label}</div>
       </div>
-      <div className="flex gap-1.5 flex-wrap">
+      <div className="flex gap-x-4 gap-y-1.5 flex-wrap">
         {lists.map((list) => (
-          // Tailwind v4 cascade layers put utilities above components regardless of specificity —
-          // these border/bg/text utilities must stay conditional or they'd erase .active's look.
           <button
             key={list.id}
             type="button"
             onClick={() => onTabChange(list.id)}
-            className={`tab-btn h-[30px] rounded-full px-3 border text-xs cursor-pointer${
+            className={`tab-btn cursor-pointer bg-transparent border-0 p-0 text-xs${
               list.id === activeTab
-                ? ' active font-bold'
-                : ' border-line bg-panel-2 text-muted font-semibold'
+                ? ' active font-semibold'
+                : ' text-ash font-medium hover:text-ink'
             }`}
           >
             {lookupWatchlist(list.id).label}

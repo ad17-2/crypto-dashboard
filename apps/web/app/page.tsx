@@ -8,8 +8,7 @@ import { btcRunPrice } from '@/lib/btc-pulse';
 // Live DB state — never statically cache this route.
 export const dynamic = 'force-dynamic';
 
-const MAIN_CLASS =
-  'w-[min(1480px,calc(100vw-32px))] max-[680px]:w-[min(100vw-20px,1480px)] mx-auto pt-[22px] max-[680px]:pt-3.5 pb-[34px]';
+const MAIN_CLASS = 'max-w-[64rem] mx-auto px-6 pt-16 max-[680px]:pt-10 pb-24';
 
 interface PageProps {
   searchParams: Promise<{ run?: string }>;
@@ -17,10 +16,8 @@ interface PageProps {
 
 function BareHeader() {
   return (
-    <div className="flex items-start justify-between gap-4 mb-[18px]">
-      <h1 className="m-0 text-base font-semibold uppercase tracking-wide leading-tight">
-        Crypto Screener
-      </h1>
+    <div className="flex items-start justify-between gap-4 mb-10">
+      <h1 className="m-0 text-lg font-bold text-ink">Crypto Screener</h1>
       <ReloadButton />
     </div>
   );

@@ -1,6 +1,5 @@
 'use client';
 
-import type { CSSProperties } from 'react';
 import type { SieveStage } from '@/lib/verdict';
 
 export interface SieveProps {
@@ -13,27 +12,6 @@ export interface SieveProps {
  * the button below to do anything.
  */
 const SCREENED_COINS_ID = 'screened-coins';
-
-/**
- * Fixed taper per stage key so the funnel silhouette narrows left->right regardless of which
- * stages sieveStages() actually returns (it omits stages with missing data).
- * Floor is 58px, not less: a segment still has to fit its own count + label, and anything
- * shorter clips the text against the box it lives in.
- */
-const SEGMENT_HEIGHT_PX: Record<SieveStage['key'], number> = {
-  scanned: 92,
-  priced: 80,
-  trusted: 68,
-  shortlisted: 58,
-};
-
-/**
- * `--seg-h`/`--i` are CSS custom properties .sieve-seg reads for its taper and staggered grow-in
- * animation (see app/globals.css). CSSProperties intentionally has no index signature for them
- * (see the type's own doc comment in @types/react) -- this narrow, documented assertion is the
- * sanctioned way to add them, not an escape hatch.
- */
-type SieveSegStyle = CSSProperties & { '--seg-h': string; '--i': number };
 
 /**
  * Jump to the coin table.
@@ -59,9 +37,10 @@ function scrollToScreenedCoins(): void {
 }
 
 /**
- * The signature element: a horizontal funnel of real pipeline counts (scanned -> priced ->
- * trusted -> shortlisted). Client component only because the final segment needs an onClick --
- * everything else about the stage (verdict, stat tiles) stays server-rendered.
+ * The signature funnel, told as text: real pipeline counts (scanned -> priced -> trusted ->
+ * shortlisted) joined by ash arrows, e.g. "80 scanned -> 50 priced -> 50 trusted -> 11
+ * shortlisted". Client component only because the final segment needs an onClick -- everything
+ * else about the stage (verdict, stat tiles) stays server-rendered.
  */
 export function Sieve({ stages }: SieveProps) {
   if (stages.length === 0) return null;
@@ -71,34 +50,30 @@ export function Sieve({ stages }: SieveProps) {
       className="sieve m-0 border-0 p-0"
       aria-label="Screening funnel, scanned to shortlisted"
     >
-      {stages.map((stage, index) => {
-        const style: SieveSegStyle = {
-          '--seg-h': `${SEGMENT_HEIGHT_PX[stage.key]}px`,
-          '--i': index,
-        };
-
-        if (stage.key !== 'shortlisted') {
-          return (
-            <div key={stage.key} className="sieve-seg" style={style}>
-              <span className="sieve-count">{stage.count}</span>
-              <span className="sieve-label">{stage.label}</span>
-            </div>
-          );
-        }
-
-        return (
-          <button
-            key={stage.key}
-            type="button"
-            className="sieve-seg final"
-            style={style}
-            onClick={scrollToScreenedCoins}
-          >
-            <span className="sieve-count">{stage.count}</span>
-            <span className="sieve-label">{stage.label}</span>
-          </button>
-        );
-      })}
+      {stages.map((stage, index) => (
+        <span key={stage.key}>
+          {index > 0 ? (
+            <span className="mx-2 text-ash" aria-hidden="true">
+              &rarr;
+            </span>
+          ) : null}
+          {stage.key === 'shortlisted' ? (
+            <button
+              type="button"
+              className="link cursor-pointer bg-transparent border-0 p-0"
+              onClick={scrollToScreenedCoins}
+            >
+              <span className="tabular-nums">{stage.count}</span>{' '}
+              <span className="lowercase">{stage.label}</span>
+            </button>
+          ) : (
+            <>
+              <span className="tabular-nums">{stage.count}</span>{' '}
+              <span className="lowercase">{stage.label}</span>
+            </>
+          )}
+        </span>
+      ))}
     </fieldset>
   );
 }

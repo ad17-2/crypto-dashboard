@@ -44,7 +44,13 @@ export function MarketStage({
   return (
     <section className="stage" aria-label="The market">
       <h2 className="stage-eyebrow m-0">The market</h2>
-      <h3 className="verdict m-0 mt-2">{verdict.headline}</h3>
+      <h3 className="verdict m-0 mt-2">
+        {verdict.headline}
+        <span
+          aria-hidden="true"
+          className="ml-2 inline-block h-[1em] w-[0.55em] translate-y-[0.12em] animate-blink bg-ink motion-reduce:animate-none"
+        />
+      </h3>
       <p className="verdict-sub">{verdict.summary}</p>
       {verdict.facts.length > 0 ? (
         <ul className="mt-4 grid max-w-[62ch] list-none gap-1.5 p-0 text-[13px] text-muted">
@@ -58,7 +64,7 @@ export function MarketStage({
         <Sieve stages={stages} />
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mt-8 flex flex-wrap gap-x-10 gap-y-4">
         <StatTile label="Regime" value={lookupRegimeState(regimeState).label} metricKey="regime" />
         <StatTile label="Bias" value={lookupBias(str(regime, 'bias')).label} metricKey="bias" />
         <StatTile

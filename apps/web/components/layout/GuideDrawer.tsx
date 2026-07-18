@@ -44,7 +44,7 @@ export function GuideDrawer() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="h-9 border border-line bg-panel text-ink rounded-md px-2.5 text-[13px] font-semibold cursor-pointer"
+        className="link cursor-pointer bg-transparent border-0 p-0"
       >
         How to read
       </button>
@@ -64,17 +64,17 @@ export function GuideDrawer() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="guide-title"
-            className="panel relative z-10 w-full max-w-[640px] my-0 sm:my-6 max-h-full overflow-y-auto"
+            className="panel relative z-10 w-full max-w-[640px] my-0 sm:my-6 max-h-full overflow-y-auto border border-line"
           >
-            <div className="flex justify-between items-center gap-2 min-h-[42px] px-3 py-2.5 bg-panel-2 border-b border-line sticky top-0">
-              <h2 id="guide-title" className="m-0 text-xs font-semibold uppercase tracking-wide">
+            <div className="flex justify-between items-baseline gap-2 px-4 py-3 border-b border-line sticky top-0 bg-bg">
+              <h2 id="guide-title" className="label m-0">
                 How to read this screener
               </h2>
               <button
                 type="button"
                 onClick={close}
                 aria-label="Close guide"
-                className="h-7 w-7 inline-flex items-center justify-center border border-line bg-panel text-ink rounded-md cursor-pointer"
+                className="text-ash hover:text-ink cursor-pointer bg-transparent border-0 p-0 text-sm transition-colors"
               >
                 ✕
               </button>

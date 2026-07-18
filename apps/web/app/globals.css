@@ -4,6 +4,10 @@
  * Tailwind v4 CSS-first theme. Do not rename tokens; the watchlist/context panel implementations
  * (and this file's own @layer components below) key off these exact class names (`bg-panel`,
  * `text-up`, `.setup-badge`, etc.).
+ *
+ * Visual language: pure grayscale chrome (paper/ink/smoke/ash/line), one monospace face
+ * everywhere, zero cards/shadows/radii. Color is reserved for data semantics (--up/--down/--gold)
+ * and never used for decoration.
  */
 @theme {
   --color-bg: var(--bg);
@@ -12,51 +16,66 @@
   --color-line: var(--line);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
+  --color-ash: var(--ash);
   --color-up: var(--up);
   --color-down: var(--down);
   --color-gold: var(--gold);
+  /* The signature blink — Tailwind v4 auto-generates the `animate-blink` utility from this. */
+  --animate-blink: blink 1.1s step-end infinite;
 }
 
 /*
- * --font-plex-sans / --font-plex-mono are CSS variables next/font stamps onto <html>
- * (see app/layout.tsx). `inline` is required whenever a theme variable references another
- * custom property — without it Tailwind emits a var(--font-sans) chain that resolves before
- * the font-loader variable is in scope, and the system fallback wins instead of Plex.
+ * --font-jetbrains-mono is the CSS variable next/font stamps onto <html> (see app/layout.tsx).
+ * `inline` is required whenever a theme variable references another custom property — without it
+ * Tailwind emits a var(--font-sans) chain that resolves before the font-loader variable is in
+ * scope, and the system fallback wins instead of the real face. One face for both roles: this app
+ * is JetBrains Mono everywhere, sans and mono alike.
  */
 @theme inline {
-  --font-sans:
-    var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --font-sans: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 @layer base {
   :root {
-    /* Tape — phosphor-ink trading terminal (dark = default) */
-    --bg: #0a0e14;
-    --panel: #111722;
-    --panel-2: #0d131c;
-    --line: #1e2733;
-    --ink: #e8eef6;
-    --muted: #7d8ba0;
-    --up: #2fbd6e;
-    --down: #f0475f;
-    --gold: #e8b84b;
+    /* Grayscale, dark (default) — exact ari-landing-page values. */
+    --bg: #0b0b0b;
+    --panel: var(--bg);
+    --panel-2: var(--bg);
+    --line: #232323;
+    --ink: #f2f2f2;
+    --muted: #a3a3a3;
+    --ash: #7a7a7a;
+    /* Data semantics only — muted mono-terminal tones, tuned to read on both themes. */
+    --up: #35a06a;
+    --down: #d1615c;
+    --gold: #c9a25a;
     /* Legacy alias kept because ~40 component rules already reference var(--mono). Repointed at
-       Plex Mono so those numbers pick up the real face; renaming it would touch every one. */
-    --mono: var(--font-plex-mono), ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+       JetBrains Mono so those numbers pick up the real face; renaming it would touch every one. */
+    --mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   :root[data-theme="light"] {
-    /* refined paper-white mirror of the same token names */
-    --bg: #f5f7fa;
-    --panel: #ffffff;
-    --panel-2: #f2f5f9;
-    --line: #dbe1ea;
-    --ink: #171a1f;
-    --muted: #657084;
-    --up: #15803d;
-    --down: #b42318;
-    --gold: #b7791f;
+    /* Grayscale, light — exact ari-landing-page values. */
+    --bg: #ffffff;
+    --panel: var(--bg);
+    --panel-2: var(--bg);
+    --line: #e7e7e7;
+    --ink: #111111;
+    --muted: #555555;
+    --ash: #757575;
+    --up: #1f7d4a;
+    --down: #b23b3b;
+    --gold: #93701f;
   }
 
   * {
@@ -67,15 +86,14 @@
     background: var(--bg);
     color: var(--ink);
     font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.75;
     letter-spacing: 0;
   }
   :focus-visible {
-    outline: 2px solid var(--gold);
+    outline: 2px solid var(--ink);
     outline-offset: 2px;
-    border-radius: 4px;
-  }
-  button:hover {
-    border-color: color-mix(in srgb, var(--gold) 45%, var(--line));
+    border-radius: 0;
   }
 }
 
@@ -83,62 +101,81 @@
   .font-mono {
     font-variant-numeric: tabular-nums;
   }
+
+  /* ari's link idiom: always-underlined, ash decoration, ink on hover. The only sanctioned
+     color/text transition in the app besides the cursor blink. */
+  .link {
+    @apply underline decoration-ash underline-offset-4 transition-colors hover:text-ink hover:decoration-ink;
+  }
+
+  /* No card chrome anywhere: --panel/--panel-2 already equal --bg, so this paints nothing. Kept
+     unstyled beyond that so nothing (border/radius/shadow) can reappear here by accident. */
   .panel {
     background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    overflow: hidden;
-    margin-bottom: 12px;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
   }
   .live-dot {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--up);
     flex: 0 0 auto;
   }
+  /* The section-header system: uppercase, wide-tracked, ash. Used everywhere -- panel titles,
+     table headers, rail sections, stage eyebrows. */
   .label {
-    color: var(--muted);
-    font-size: 11px;
-    line-height: 1.2;
+    color: var(--ash);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.25em;
   }
+  /* Coin symbols get the one other bold-ink treatment besides the verdict headline. */
   .symbol-link {
     color: var(--ink);
     font-size: 13px;
-    font-weight: 760;
+    font-weight: 700;
     text-decoration: none;
   }
   .symbol-link:hover {
-    color: var(--gold);
     text-decoration: underline;
     text-underline-offset: 3px;
   }
+  /* Consolidated -- was previously defined twice (base + a later override). Plain text in tone
+     color, no pill. */
   .quality-flag-chip {
     display: inline-flex;
-    align-items: center;
-    height: 22px;
-    border-radius: 999px;
-    padding: 0 8px;
-    font-size: 12px;
+    align-items: baseline;
+    gap: 4px;
+    color: var(--gold);
+    font-size: 11px;
     font-weight: 700;
+    line-height: 1.35;
+    white-space: normal;
+  }
+  .quality-flag-chip.neg {
+    color: var(--down);
+  }
+  .quality-flag-chip.warn {
+    color: var(--gold);
   }
   .help-tip {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 17px;
-    height: 17px;
-    border: 1px solid color-mix(in srgb, var(--muted) 55%, var(--line));
-    border-radius: 999px;
-    color: var(--muted);
+    color: var(--ash);
     font-size: 11px;
-    font-weight: 800;
     line-height: 1;
     cursor: help;
     outline: none;
+  }
+  .help-tip:hover,
+  .help-tip:focus-visible {
+    color: var(--ink);
   }
   .tooltip-trigger {
     position: relative;
@@ -150,7 +187,8 @@
      counts toward the document's scroll width, and a page carries dozens of these: enough to widen
      both pages past the viewport and give mobile a phantom sideways scroll into empty space.
      `visibility: hidden` alone does NOT prevent that; the box has to actually collapse. `.open`
-     below restores it. */
+     below restores it. Solid paper background (not transparent) -- a floating popover has to stay
+     legible over whatever page content sits under it, same as the guide modal. */
   .tooltip-popover {
     position: absolute;
     z-index: 40;
@@ -163,8 +201,7 @@
     overflow: hidden;
     /* Zero-width border, so `.open` only has to restore border-width. */
     border: 0 solid var(--line);
-    border-radius: 6px;
-    background: var(--panel-2);
+    background: var(--bg);
     color: var(--ink);
     font-size: 12px;
     font-weight: 500;
@@ -179,7 +216,6 @@
     text-transform: none;
     letter-spacing: normal;
     text-align: left;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
     pointer-events: none;
     visibility: hidden;
     opacity: 0;
@@ -213,24 +249,25 @@
   .reason-stack {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 5px 0;
     min-width: 0;
     max-width: 100%;
   }
+  /* Reason chips as middot-separated inline text -- no pill/border/fill. */
   .reason-part {
     display: inline-flex;
     align-items: baseline;
     gap: 4px;
     max-width: 100%;
-    min-height: 23px;
-    padding: 2px 7px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel-2);
-    line-height: 1.35;
+    line-height: 1.4;
+  }
+  .reason-part:not(:first-child):not(.quality)::before {
+    content: "·";
+    margin-right: 4px;
+    color: var(--ash);
   }
   .reason-part span {
-    color: var(--muted);
+    color: var(--ash);
     font-size: 11px;
   }
   .reason-part strong {
@@ -238,7 +275,7 @@
     overflow-wrap: anywhere;
     color: var(--ink);
     font-size: 12px;
-    font-weight: 760;
+    font-weight: 700;
   }
   .reason-part.pos strong {
     color: var(--up);
@@ -251,43 +288,27 @@
   }
   .reason-part.quality {
     flex-basis: 100%;
-    border-style: dashed;
-    background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+    margin-top: 4px;
+    border-top: 1px solid var(--line);
+    padding-top: 4px;
   }
-  .quality-flag-chip {
-    height: auto;
-    min-height: 24px;
-    border-radius: 6px;
-    background: var(--panel);
-    border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line));
-    color: var(--gold);
-    line-height: 1.25;
-    white-space: normal;
-  }
-  .quality-flag-chip.neg {
-    border-color: color-mix(in srgb, var(--down) 45%, var(--line));
-    color: var(--down);
-  }
-  .quality-flag-chip.warn {
-    border-color: color-mix(in srgb, var(--gold) 45%, var(--line));
-    color: var(--gold);
-  }
-  /* The BTC staleness tripwire banner -- same amber-warn recipe as .quality-flag-chip.warn, but a
-     full-width block rather than an inline chip. */
+  /* The BTC staleness tripwire banner -- amber TEXT (semantic warn), grayscale hairline rules
+     instead of a tinted fill. */
   .staleness-banner {
-    border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line));
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
     color: var(--gold);
-    padding: 8px 12px;
+    padding: 8px 0;
     font-size: 13px;
     font-weight: 600;
     line-height: 1.4;
   }
+  /* Watchlist tabs are text links now: active = ink + underline, inactive = ash (see .tab-btn
+     utilities in WatchlistPanel.tsx for the rest). */
   .tab-btn.active {
-    background: var(--ink);
-    border-color: var(--ink);
-    color: var(--bg);
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
   .watch-head,
   .watch-row {
@@ -303,22 +324,19 @@
     width: 100%;
     border: 0;
     border-bottom: 1px solid var(--line);
-    background: var(--panel);
+    background: transparent;
     padding: 10px 12px;
     color: var(--ink);
     font: inherit;
     text-align: right;
     cursor: pointer;
-    transition:
-      background 120ms ease,
-      box-shadow 120ms ease;
   }
-  .watch-row:hover,
-  .watch-row.active {
-    background: var(--panel-2);
+  .watch-row:hover {
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
   }
   .watch-row.active {
-    box-shadow: inset 3px 0 0 var(--ink);
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    box-shadow: inset 2px 0 0 var(--ink);
   }
   .watch-cell {
     min-width: 0;
@@ -351,76 +369,50 @@
     font-weight: 500;
   }
 
+  /* Setup/conflict badges -- plain text in tone color, no pill. */
   .setup-badge {
     display: inline-flex;
-    align-items: center;
+    align-items: baseline;
     max-width: 100%;
-    min-height: 24px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--panel-2);
     color: var(--ink);
     font-size: 11px;
-    font-weight: 760;
-    line-height: 1.25;
+    font-weight: 700;
+    line-height: 1.3;
     text-align: left;
   }
   .setup-badge.pos {
-    border-color: color-mix(in srgb, var(--up) 40%, var(--line));
-    background: color-mix(in srgb, var(--up) 13%, var(--panel));
     color: var(--up);
   }
   .setup-badge.neg {
-    border-color: color-mix(in srgb, var(--down) 40%, var(--line));
-    background: color-mix(in srgb, var(--down) 13%, var(--panel));
     color: var(--down);
   }
   .setup-badge.warn {
-    border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
-    background: color-mix(in srgb, var(--gold) 13%, var(--panel));
     color: var(--gold);
   }
   .watch-row .setup-badge {
-    min-height: auto;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
     font-size: 12px;
   }
   .conflict-badge {
     display: inline-flex;
-    align-items: center;
+    align-items: baseline;
     max-width: 100%;
-    min-height: 24px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--panel-2);
     color: var(--ink);
     font-size: 11px;
-    font-weight: 760;
-    line-height: 1.25;
+    font-weight: 700;
+    line-height: 1.3;
   }
   .conflict-badge.pos {
-    border-color: color-mix(in srgb, var(--up) 40%, var(--line));
-    background: color-mix(in srgb, var(--up) 13%, var(--panel));
     color: var(--up);
   }
   .conflict-badge.warn {
-    border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
-    background: color-mix(in srgb, var(--gold) 13%, var(--panel));
     color: var(--gold);
   }
   .conflict-badge.neg {
-    border-color: color-mix(in srgb, var(--down) 40%, var(--line));
-    background: color-mix(in srgb, var(--down) 13%, var(--panel));
     color: var(--down);
   }
   .sparkline polyline {
     fill: none;
-    stroke-width: 2;
+    stroke-width: 1.25;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
@@ -445,19 +437,16 @@
   }
   .detail-section summary::after {
     content: "";
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     margin-left: auto;
-    border-right: 2px solid var(--muted);
-    border-bottom: 2px solid var(--muted);
+    border-right: 1px solid var(--ash);
+    border-bottom: 1px solid var(--ash);
     transform: rotate(45deg);
-    transition:
-      transform 120ms ease,
-      margin-top 120ms ease;
     flex: 0 0 auto;
   }
   .detail-section[open] summary::after {
-    margin-top: 4px;
+    margin-top: 3px;
     transform: rotate(225deg);
   }
   .pos-dot {
@@ -491,81 +480,39 @@
     font-family: var(--mono);
   }
   /*
-   * Redesign primitives: top-down analysis flow (stage bands), the sieve funnel,
-   * verdict hero, stat tiles, and the breadth bar. See app/globals.css header note —
-   * these class names are the contract other components key off.
+   * Redesign primitives: top-down analysis flow (stage bands), the verdict hero, stat tiles, and
+   * the breadth bar. See app/globals.css header note — these class names are the contract other
+   * components key off. The sieve funnel is plain text now (see components/market/Sieve.tsx),
+   * so its box/clip-path rules have been removed.
    */
   .stage {
     position: relative;
-    padding: 40px 0;
+    padding: 56px 0;
     border-top: 1px solid var(--line);
   }
   .stage-eyebrow {
-    font-size: 10.5px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--muted);
+    letter-spacing: 0.25em;
+    color: var(--ash);
   }
   .stage-title {
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
   }
 
   .sieve {
-    display: flex;
-    align-items: flex-end;
-  }
-  .sieve-seg {
-    --seg-h: 56px;
-    flex: 1 1 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    height: var(--seg-h);
-    padding: 0 8px;
-    border: 0;
-    background: var(--panel);
-    clip-path: polygon(0 0, 100% 14%, 100% 100%, 0 100%);
-    color: inherit;
-    font: inherit;
-    text-align: center;
-    transform-origin: left center;
-  }
-  .sieve-seg:not(:first-child) {
-    border-left: 1px solid var(--line);
-  }
-  .sieve-count {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: 20px;
-    font-weight: 600;
-  }
-  .sieve-seg.final {
-    background: color-mix(in srgb, var(--gold) 24%, var(--panel));
-    cursor: pointer;
-    transition: background 120ms ease;
-  }
-  .sieve-seg.final:hover {
-    background: color-mix(in srgb, var(--gold) 34%, var(--panel));
-  }
-  .sieve-seg.final .sieve-count {
-    color: var(--gold);
-  }
-  .sieve-label {
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
+    color: var(--ink);
+    font-size: 14px;
   }
 
+  /* The document lead — largest, boldest text on the page. */
   .verdict {
-    font-size: clamp(26px, 3.2vw, 40px);
-    font-weight: 600;
-    line-height: 1.12;
-    letter-spacing: -0.02em;
+    font-size: clamp(28px, 3.4vw, 42px);
+    font-weight: 700;
+    line-height: 1.15;
   }
   .verdict-sub {
     margin-top: 8px;
@@ -575,24 +522,25 @@
     line-height: 1.55;
   }
 
+  /* Label/value pairs, no boxes. */
   .stat {
-    padding: 10px 12px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
   }
   .stat-label {
-    font-size: 10.5px;
+    font-size: 12px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
+    letter-spacing: 0.25em;
+    color: var(--ash);
   }
   .stat-value {
-    margin-top: 2px;
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: 19px;
+    font-size: 15px;
     font-weight: 500;
+    color: var(--ink);
   }
   .stat.pos .stat-value {
     color: var(--up);
@@ -604,62 +552,28 @@
     color: var(--gold);
   }
 
+  /* Ratio told as text (see BreadthRotationStage); the bar is a 2px hairline, ink fill on a line
+     track -- no up/down split, no color. */
   .breadth-bar {
     display: flex;
-    height: 10px;
-    border-radius: 999px;
-    overflow: hidden;
-    background: var(--panel-2);
+    height: 2px;
+    background: var(--line);
   }
   .breadth-up,
   .breadth-down {
     height: 100%;
   }
   .breadth-up {
-    background: var(--up);
+    background: var(--ink);
   }
   .breadth-down {
-    background: var(--down);
+    background: transparent;
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    .live-dot {
-      animation: tape-pulse 2.4s ease-out infinite;
-    }
-    @keyframes tape-pulse {
-      0% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--up) 55%, transparent);
-      }
-      70% {
-        box-shadow: 0 0 0 7px color-mix(in srgb, var(--up) 0%, transparent);
-      }
-      100% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--up) 0%, transparent);
-      }
-    }
-    .sieve-seg {
-      animation: sieve-grow 500ms ease-out backwards;
-      animation-delay: calc(var(--i, 0) * 80ms);
-    }
-    @keyframes sieve-grow {
-      from {
-        transform: scaleX(0);
-      }
-      to {
-        transform: scaleX(1);
-      }
-    }
-  }
   @media (prefers-reduced-motion: reduce) {
     * {
       animation: none !important;
       transition: none !important;
-    }
-    /* Belt-and-suspenders: .sieve-seg's grow-in keyframes only exist inside the
-       no-preference query above, so this just guarantees the funnel renders at
-       full size with zero motion instead of stuck mid-animation. */
-    .sieve-seg {
-      transform: none;
     }
   }
   @media (max-width: 900px) {
@@ -674,23 +588,11 @@
       content: attr(data-label);
       display: block;
       margin-bottom: 2px;
-      color: var(--muted);
+      color: var(--ash);
       font-size: 11px;
       font-family: var(--font-sans);
-    }
-  }
-  @media (max-width: 680px) {
-    /* Four sieve segments share the width, so each gets ~90px here — "SHORTLISTED" at the default
-       size and tracking overflows that. Shrink rather than wrap; the funnel must stay one row. */
-    .sieve-seg {
-      padding: 0 4px;
-    }
-    .sieve-count {
-      font-size: 16px;
-    }
-    .sieve-label {
-      font-size: 9px;
-      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
     }
   }
 }

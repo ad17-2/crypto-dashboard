@@ -95,7 +95,7 @@ export function WatchlistTable({
     <table aria-label="Watchlist rows" className="watch-table w-full block">
       <thead className="block">
         <tr
-          className={`watch-head ${GRID_COLUMNS} sticky top-0 z-[2] px-3 py-2 border-b border-line bg-panel-2 text-muted text-[11px] font-bold tracking-wide uppercase`}
+          className={`watch-head ${GRID_COLUMNS} sticky top-0 z-[2] px-3 py-2 border-b border-line bg-panel-2 text-ash text-xs font-medium tracking-[0.25em] uppercase`}
         >
           {COLUMNS.map((column) => (
             <HeaderCell
@@ -351,7 +351,7 @@ export function SetupConfidenceBadge({ confidence }: { confidence: 'A' | 'B' | '
   const meta = lookupSetupConfidence(confidence);
   return (
     <span className={SETUP_CONFIDENCE_CLASS[confidence]} title={meta.definition}>
-      {meta.label}
+      [{meta.label}]
     </span>
   );
 }
