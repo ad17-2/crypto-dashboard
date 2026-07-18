@@ -52,9 +52,14 @@ describe('parseWeeklyEvents against the saved fixture (a trimmed, real 2026-07-1
     expect(warsh?.previous).toBeNull();
   });
 
-  it('hand-verified: 07-15-2026 10:30pm US-Eastern (EDT, UTC-4 in July) crosses into the next UTC day', () => {
+  it('parses feed times as plain UTC: 07-15-2026 10:30pm is 22:30Z the same day', () => {
     const musalem = events.find((event) => event.title === 'FOMC Member Musalem Speaks');
-    expect(musalem?.time_utc).toBe('2026-07-16T02:30:00.000Z');
+    expect(musalem?.time_utc).toBe('2026-07-15T22:30:00.000Z');
+  });
+
+  it('ground truth: fixture CPI m/m at 12:30pm is the real 8:30am-ET print = 12:30 UTC', () => {
+    const cpiMm = events.find((event) => event.title === 'CPI m/m');
+    expect(cpiMm?.time_utc).toBe('2026-07-14T12:30:00.000Z');
   });
 });
 
@@ -188,7 +193,7 @@ describe("parseWeeklyEvents against hand-built snippets (cases absent from this 
     expect(parseWeeklyEvents(xml)[0]?.title).toBe('Broken Ref &#99999999999; Event');
   });
 
-  it('hand-verified: winter EST (UTC-5) -- 12-15-2026 8:30am US-Eastern', () => {
+  it('winter date parses as plain UTC too -- no DST shift anywhere in the year', () => {
     const xml = `<weeklyevents>
       <event>
         <title>Winter Print</title>
@@ -201,10 +206,10 @@ describe("parseWeeklyEvents against hand-built snippets (cases absent from this 
       </event>
     </weeklyevents>`;
 
-    expect(parseWeeklyEvents(xml)[0]?.time_utc).toBe('2026-12-15T13:30:00.000Z');
+    expect(parseWeeklyEvents(xml)[0]?.time_utc).toBe('2026-12-15T08:30:00.000Z');
   });
 
-  it('hand-verified: noon (EDT, UTC-4) -- 07-15-2026 12:00pm US-Eastern is hour 12, not hour 0', () => {
+  it('noon: 12:00pm is hour 12, not hour 0', () => {
     const xml = `<weeklyevents>
       <event>
         <title>Noon Print</title>
@@ -217,10 +222,10 @@ describe("parseWeeklyEvents against hand-built snippets (cases absent from this 
       </event>
     </weeklyevents>`;
 
-    expect(parseWeeklyEvents(xml)[0]?.time_utc).toBe('2026-07-15T16:00:00.000Z');
+    expect(parseWeeklyEvents(xml)[0]?.time_utc).toBe('2026-07-15T12:00:00.000Z');
   });
 
-  it('hand-verified: midnight (EDT, UTC-4) -- 07-15-2026 12:00am US-Eastern is hour 0, not hour 12', () => {
+  it('midnight: 12:00am is hour 0, not hour 12', () => {
     const xml = `<weeklyevents>
       <event>
         <title>Midnight Print</title>
@@ -233,7 +238,7 @@ describe("parseWeeklyEvents against hand-built snippets (cases absent from this 
       </event>
     </weeklyevents>`;
 
-    expect(parseWeeklyEvents(xml)[0]?.time_utc).toBe('2026-07-15T04:00:00.000Z');
+    expect(parseWeeklyEvents(xml)[0]?.time_utc).toBe('2026-07-15T00:00:00.000Z');
   });
 
   it('skips an event missing a required field (title) rather than throwing', () => {

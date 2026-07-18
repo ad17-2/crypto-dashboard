@@ -1,4 +1,3 @@
-import { zonedTimeToUtc } from '../refresh/scheduler.js';
 import { ProviderError } from './errors.js';
 import { fetchWithRetry429 } from './http.js';
 
@@ -8,10 +7,14 @@ import { fetchWithRetry429 } from './http.js';
  * the sibling .json path 429s, while .xml survives behind an edge cache. The feed is flat,
  * hand-rolled XML (not full RSS/Atom), so it's parsed with regex/string ops below rather than
  * pulling in an XML dependency for one shape.
+ *
+ * Feed times are UTC wall-clock, NOT US-Eastern (live-verified 2026-07-19 against two known print
+ * times: US CPI listed 12:30pm = 12:30 UTC = its real 8:30am ET slot, and BusinessNZ Services
+ * listed 10:30pm = 22:30 UTC = its real 10:30am NZT slot). Do not reintroduce a timezone
+ * conversion here.
  */
 
 const PATH = '/ff_calendar_thisweek.xml';
-const EASTERN_TIME_ZONE = 'America/New_York';
 
 // The host can 429; bounded (unlike CoinGecko's unlimited retries) since this is a single request,
 // not hundreds of sequential ones -- there's no throughput reason to keep retrying past a few tries.
@@ -110,7 +113,7 @@ function eventTimeUtc(dateText: string | null, timeText: string | null): string 
     hour += 12;
   }
   const minute = Number.parseInt(timeMatch[2] as string, 10);
-  return zonedTimeToUtc(year, month, day, hour, minute, EASTERN_TIME_ZONE).toISOString();
+  return new Date(Date.UTC(year, month - 1, day, hour, minute)).toISOString();
 }
 
 /** Exported for unit testing -- pure string parsing, no fetch involved. */
