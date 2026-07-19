@@ -1,16 +1,25 @@
-import { arr, str } from './payload';
+import { fmtPct } from './format';
+import { arr, num, str } from './payload';
 
 /**
  * Display-only banner copy for the ForexFactory macro calendar (apps/api's
  * collectMacroCalendarContext) -- market_context.macro_events is already filtered server-side to
  * USD + High impact and capped at 30, so this module only picks which one(s), if any, are close
  * enough to now to surface. No scoring/gating reads this; it's copy for a banner, nothing else.
+ *
+ * forecast/previous come straight off the feed (the free feed never carries an actual printed
+ * value -- live-verified 2026-07-19, see pipeline/macroReaction.ts's doc comment on the API side).
+ * btcChangeSincePrintPct is apps/api's pipeline/macroReaction.ts stand-in for "did the market
+ * care": BTC's % move since the event printed.
  */
 
 export interface MacroEvent {
   title: string;
   /** null when the feed's time isn't a wall-clock time ('All Day', 'Tentative', blank). */
   timeUtc: Date | null;
+  forecast: string | null;
+  previous: string | null;
+  btcChangeSincePrintPct: number | null;
 }
 
 export interface MacroBanner {
@@ -54,7 +63,13 @@ export function parseMacroEvents(marketContext: unknown): MacroEvent[] {
     if (!title) {
       continue;
     }
-    events.push({ title, timeUtc: parseTimeUtc(str(item, 'time_utc')) });
+    events.push({
+      title,
+      timeUtc: parseTimeUtc(str(item, 'time_utc')),
+      forecast: str(item, 'forecast'),
+      previous: str(item, 'previous'),
+      btcChangeSincePrintPct: num(item, 'btc_change_since_print_pct'),
+    });
   }
   return events;
 }
@@ -63,9 +78,30 @@ function upcomingBannerText(title: string, timeUtc: Date): string {
   return `High-impact US data ahead: ${title} — ${formatJakartaTime(timeUtc)} WIB.`;
 }
 
-function recentBannerText(title: string, hoursAgo: number): string {
+/** '' when forecast/previous are both absent, else '(forecast X, prior Y)' with either side optional. */
+function factsClause(event: MacroEvent): string {
+  const parts: string[] = [];
+  if (event.forecast !== null) {
+    parts.push(`forecast ${event.forecast}`);
+  }
+  if (event.previous !== null) {
+    parts.push(`prior ${event.previous}`);
+  }
+  return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+}
+
+function recentBannerText(event: MacroEvent, hoursAgo: number): string {
   const agoPhrase = hoursAgo === 0 ? 'under an hour ago' : `${hoursAgo}h ago`;
-  return `${title} printed ${agoPhrase} — check that open setups survived it.`;
+  const facts = factsClause(event);
+  const btc =
+    event.btcChangeSincePrintPct !== null
+      ? `BTC ${fmtPct(event.btcChangeSincePrintPct, 1)} since.`
+      : '';
+  if (facts === '' && btc === '') {
+    return `${event.title} printed ${agoPhrase} — check that open setups survived it.`;
+  }
+  const tail = btc !== '' ? ` — ${btc}` : '.';
+  return `${event.title} printed ${agoPhrase}${facts}${tail}`;
 }
 
 /** Picks (at most) one upcoming and one recent banner line; both may be non-null at once. */
@@ -73,7 +109,7 @@ export function selectMacroBanner(events: MacroEvent[], now: Date): MacroBanner 
   const nowMs = now.getTime();
 
   let soonest: { title: string; timeMs: number } | null = null;
-  let latest: { title: string; timeMs: number } | null = null;
+  let latest: { event: MacroEvent; timeMs: number } | null = null;
 
   for (const event of events) {
     if (!event.timeUtc) {
@@ -89,7 +125,7 @@ export function selectMacroBanner(events: MacroEvent[], now: Date): MacroBanner 
 
     if (timeMs <= nowMs && timeMs >= nowMs - RECENT_WINDOW_MS) {
       if (!latest || timeMs > latest.timeMs) {
-        latest = { title: event.title, timeMs };
+        latest = { event, timeMs };
       }
     }
   }
@@ -97,7 +133,7 @@ export function selectMacroBanner(events: MacroEvent[], now: Date): MacroBanner 
   return {
     upcoming: soonest ? upcomingBannerText(soonest.title, new Date(soonest.timeMs)) : null,
     recent: latest
-      ? recentBannerText(latest.title, Math.floor((nowMs - latest.timeMs) / MS_PER_HOUR))
+      ? recentBannerText(latest.event, Math.floor((nowMs - latest.timeMs) / MS_PER_HOUR))
       : null,
   };
 }

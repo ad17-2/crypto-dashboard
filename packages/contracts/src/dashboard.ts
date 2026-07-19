@@ -237,6 +237,20 @@ export const WatchlistChangesSchema = z.object({
   departed_short: z.array(z.string()),
 });
 
+/**
+ * The newest row from weekly_reviews (apps/api's db/weeklyReview.ts), attached by
+ * buildDashboardPayload. `metrics` stays a loose jsonRecord -- it's a computed blob, not a wire
+ * contract of its own -- so the web layer reads it defensively (apps/web/lib/weekly-review.ts).
+ */
+export const WeeklyReviewSchema = z.object({
+  generated_at: z.string(),
+  week_start: z.string(),
+  week_end: z.string(),
+  metrics: jsonRecord,
+  narrative: z.string().nullable(),
+  model: z.string().nullable(),
+});
+
 const DashboardPayloadEmptySchema = z.object({
   status: z.literal('empty'),
   database: z.string(),
@@ -262,6 +276,9 @@ const DashboardPayloadOkSchema = z.object({
   // watchlist membership -- pre-feature runs and backfill rows). Optional/nullable so old payloads
   // and the empty-state schema stay valid.
   watchlist_changes: WatchlistChangesSchema.nullable().optional(),
+  // null before the weekly review has ever run (or the table doesn't exist yet on an old
+  // deployment). Optional/nullable so payloads captured before this feature shipped still validate.
+  weekly_review: WeeklyReviewSchema.nullable().optional(),
   /** set by the route handler; optional here so this schema also validates the builder's raw return. */
   refresh_status: z.unknown().nullable().optional(),
 });
@@ -282,4 +299,5 @@ export type Sections = z.infer<typeof SectionsSchema>;
 export type WatchlistId = z.infer<typeof WatchlistIdSchema>;
 export type Watchlist = z.infer<typeof WatchlistSchema>;
 export type WatchlistChanges = z.infer<typeof WatchlistChangesSchema>;
+export type WeeklyReview = z.infer<typeof WeeklyReviewSchema>;
 export type DashboardPayload = z.infer<typeof DashboardPayloadSchema>;

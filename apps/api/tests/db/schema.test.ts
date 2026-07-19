@@ -11,6 +11,7 @@ const EXPECTED_TABLES = [
   'market_rows',
   'factor_history',
   'outcome_labels',
+  'weekly_reviews',
   'market_regime_history',
   'recommendations',
 ];
@@ -20,6 +21,7 @@ const EXPECTED_INDEXES = [
   'idx_factor_history_symbol_time',
   'idx_factor_history_time',
   'idx_outcome_labels_symbol_time',
+  'idx_outcome_labels_time',
   'idx_market_regime_history_time',
   'idx_recommendations_symbol_time',
 ];

@@ -24,9 +24,12 @@ export const BRIEFING_SYSTEM_PROMPT =
   'you are given -- never invent prices, levels, events, or percentages. Name at most 3 candidates ' +
   "worth opening a chart on tonight and say why, in the data's own terms (trend state, distance to " +
   'the golden pocket, whether it fights BTC, setup confidence). Flag any symbol newly arrived on a ' +
-  'list and any macro event landing inside the given window. If bias is risk-off, add one caution ' +
-  'sentence. If both the long and short lists are empty, say plainly that the tape offers nothing ' +
-  'worth trading tonight.';
+  'list and any macro event landing inside the given window. The long/short lists only carry the ' +
+  'top-ranked candidates, not the whole run, so scope any absence claim to what you were given: say ' +
+  'nothing is new tonight only when new_to_list_total is 0, otherwise mention the count even when ' +
+  'the new names sit outside the candidates listed (for example, one lower-ranked name is new). If ' +
+  'bias is risk-off, add one caution sentence. If both the long and short lists are empty, say ' +
+  'plainly that the tape offers nothing worth trading tonight.';
 
 export interface BriefingCandidateRow {
   symbol: string | null;
@@ -46,6 +49,8 @@ export interface BriefingMacroEvent {
   title: string;
   /** Signed hours from now, rounded to 1dp -- negative means it already printed. */
   in_hours: number;
+  /** BTC's % move since the event printed (pipeline/macroReaction.ts); null when not computable. */
+  btc_change_since_print_pct: number | null;
 }
 
 export interface BriefingWatchlistDepartures {
@@ -62,6 +67,8 @@ export interface BriefingPayload {
   fear_greed: { value: number | null; classification: string | null };
   btc_change_24h_pct: number | null;
   macro_events: BriefingMacroEvent[];
+  /** Count of new_to_list symbols across ALL rows, not just the top-5-per-side slices above -- lets the model scope "nothing is new" claims correctly. */
+  new_to_list_total: number;
 }
 
 export interface Briefing {
@@ -114,6 +121,18 @@ function topCandidates(
     .map((row) => candidateRow(row, side, newToList));
 }
 
+/** Counts every row whose symbol is in `newToList`, not just the top-5-per-side slice topCandidates keeps -- see BriefingPayload.new_to_list_total. */
+function newToListTotal(rows: Row[], newToList: Set<string>): number {
+  let count = 0;
+  for (const row of rows) {
+    const symbol = stringOrNull(row.symbol);
+    if (symbol !== null && newToList.has(symbol)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 /** Mirrors pipeline/regime.ts's own btcChange(): the BTC row's own 24h move, falling back to the market-context field backfill.ts writes. */
 function btcChange24hPct(rows: Row[], marketContext: MarketContext): number | null {
   for (const row of rows) {
@@ -141,7 +160,11 @@ function macroEventsInWindow(marketContext: MarketContext, nowMs: number): Brief
     }
     const inHours = (eventMs - nowMs) / MS_PER_HOUR;
     if (inHours >= -MACRO_LOOKBACK_HOURS && inHours <= MACRO_LOOKAHEAD_HOURS) {
-      result.push({ title, in_hours: Math.round(inHours * 10) / 10 });
+      result.push({
+        title,
+        in_hours: Math.round(inHours * 10) / 10,
+        btc_change_since_print_pct: toFloat(record.btc_change_since_print_pct),
+      });
     }
   }
   return result;
@@ -178,6 +201,7 @@ export function buildBriefingPayload(
     },
     btc_change_24h_pct: btcChange24hPct(rows, marketContext),
     macro_events: Number.isNaN(nowMs) ? [] : macroEventsInWindow(marketContext, nowMs),
+    new_to_list_total: newToListTotal(rows, newToList),
   };
 }
 

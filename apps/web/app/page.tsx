@@ -1,6 +1,11 @@
 import { Header } from '@/components/layout/Header';
 import { ReloadButton } from '@/components/layout/ReloadButton';
-import { BreadthRotationStage, CoreReadStage, MarketStage } from '@/components/market';
+import {
+  BreadthRotationStage,
+  CoreReadStage,
+  MarketStage,
+  WeeklyReviewStage,
+} from '@/components/market';
 import { WatchlistWorkbench } from '@/components/watchlist';
 import { getDashboard } from '@/lib/api';
 import { btcRunPrice } from '@/lib/btc-pulse';
@@ -81,6 +86,8 @@ export default async function Page({ searchParams }: PageProps) {
       />
 
       <BreadthRotationStage marketContext={payload.market_context} />
+
+      <WeeklyReviewStage weeklyReview={payload.weekly_review} />
 
       <CoreReadStage rows={payload.sections.core} />
 

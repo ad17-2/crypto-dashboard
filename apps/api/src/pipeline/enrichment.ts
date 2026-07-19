@@ -57,6 +57,12 @@ export async function appendCoinglassTechnicals(
       const series = closeSeries(candles);
       if (symbol && series.length > 0) {
         seriesBySymbol.set(symbol, series);
+        if (symbol === 'BTC') {
+          // Retained on the row itself (seriesBySymbol above is local to this function, used only
+          // for the correlation pass below and then discarded) so pipeline/macroReaction.ts can
+          // compute a macro event's BTC price reaction without a second candle fetch.
+          row.price_history_bars = series;
+        }
       }
     } catch (error) {
       collectProviderError(errors, error, String(row.symbol ?? contractSymbol));

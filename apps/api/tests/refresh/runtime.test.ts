@@ -1,8 +1,9 @@
 import type Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppConfigSchema } from '../../src/config/schema.js';
+import { formatJakartaIso } from '../../src/db/time.js';
 import { RefreshRuntime } from '../../src/refresh/runtime.js';
-import { setupTempDb, teardownTempDb } from '../support/tempDb.js';
+import { hoursAgo, setupTempDb, teardownTempDb } from '../support/tempDb.js';
 
 let dir: string;
 let dbPath: string;
@@ -10,10 +11,16 @@ let db: Database.Database;
 
 beforeEach(() => {
   ({ dir, dbPath, db } = setupTempDb('crypto-screener-runtime-'));
+  // Blank the DeepSeek activation switch for every test: attachWeeklyReview constructs a real
+  // DeepSeekHttpClient whenever no client is injected AND the env key is present, so an ambient
+  // DEEPSEEK_API_KEY (dev laptop, CI sharing deploy secrets) would turn these unit tests into live
+  // paid API calls. Tests that want the narration path inject `deepseekClient` instead.
+  vi.stubEnv('DEEPSEEK_API_KEY', '');
 });
 
 afterEach(() => {
   teardownTempDb(dir, db);
+  vi.unstubAllEnvs();
 });
 
 function fakeConfig() {
@@ -121,6 +128,179 @@ describe('RefreshRuntime.refresh', () => {
     resolveFirst?.();
     const firstResult = await first;
     expect(firstResult).toMatchObject({ state: 'ok', reason: 'daily' });
+  });
+});
+
+describe('RefreshRuntime.refresh post-save housekeeping (outcome labeling + weekly review)', () => {
+  function insertFactorHistoryRow(
+    runId: string,
+    generatedAt: string,
+    symbol: string,
+    metrics: Record<string, unknown> = { is_trusted: true },
+  ): void {
+    db.prepare(
+      `INSERT INTO factor_history (run_id, generated_at, symbol, price_usd, factors_json, scores_json, metrics_json)
+       VALUES (?, ?, ?, 100, '{}', '{}', ?)`,
+    ).run(runId, generatedAt, symbol, JSON.stringify(metrics));
+  }
+
+  function insertOutcomeLabelRow(runId: string, generatedAt: string, symbol: string): void {
+    db.prepare(
+      `INSERT INTO outcome_labels
+          (run_id, generated_at, symbol, horizon_hours, fwd_return_pct, fwd_residual_pct,
+           btc_fwd_return_pct, beta_used, matched_run_id, matched_delta_hours)
+       VALUES (?, ?, ?, 24, 5, NULL, NULL, NULL, ?, 24)`,
+    ).run(runId, generatedAt, symbol, runId);
+  }
+
+  function mockedRunPipeline(now: Date) {
+    return vi.fn().mockResolvedValue({
+      payload: { run_id: 'run-1', generated_at: formatJakartaIso(now) },
+      paths: {},
+    });
+  }
+
+  it('labels closed-but-unlabeled factor_history rows after a successful refresh, and notes the write count', async () => {
+    const now = new Date();
+    // 40h-old base row + its 24h-later forward match -- both already closed relative to `now`
+    // (24h's tolerance band tops out at 36h).
+    insertFactorHistoryRow('base', hoursAgo(now, 40), 'SYM');
+    insertFactorHistoryRow('fwd', hoursAgo(now, 16), 'SYM');
+
+    const runtime = new RefreshRuntime({
+      db,
+      settings: { configPath: 'config/default.json', dbPath, reportDir: dir, retainRuns: 0 },
+      loadConfig: () => fakeConfig(),
+      runPipeline: mockedRunPipeline(now),
+    });
+
+    const status = await runtime.refresh('test');
+
+    expect(status.state).toBe('ok');
+    expect(status.state === 'ok' ? status.notes : []).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^outcome_labeling: wrote \d+ row\(s\)$/)]),
+    );
+    const count = (
+      db.prepare('SELECT COUNT(*) AS count FROM outcome_labels').get() as { count: number }
+    ).count;
+    expect(count).toBeGreaterThan(0);
+  });
+
+  it('produces no notes and no weekly_reviews row when nothing is labeled yet', async () => {
+    const now = new Date();
+    const runtime = new RefreshRuntime({
+      db,
+      settings: { configPath: 'config/default.json', dbPath, reportDir: dir, retainRuns: 0 },
+      loadConfig: () => fakeConfig(),
+      runPipeline: mockedRunPipeline(now),
+    });
+
+    const status = await runtime.refresh('test');
+
+    expect(status.state === 'ok' ? status.notes : ['unexpected state']).toEqual([]);
+    const count = (
+      db.prepare('SELECT COUNT(*) AS count FROM weekly_reviews').get() as { count: number }
+    ).count;
+    expect(count).toBe(0);
+  });
+
+  it('generates and narrates a weekly review once labeled rows exist and no prior review does, using the injected DeepSeek client', async () => {
+    const now = new Date();
+    insertFactorHistoryRow('lbl-run', hoursAgo(now, 40), 'SYM', {
+      is_trusted: true,
+      watchlist_side: 'long',
+    });
+    insertOutcomeLabelRow('lbl-run', hoursAgo(now, 40), 'SYM');
+
+    const complete = vi.fn().mockResolvedValue({
+      text: 'Long setups hit about half the time this week.',
+      model: 'deepseek-v4-pro',
+      output_tokens: 10,
+      reasoning_tokens: 2,
+    });
+    const runtime = new RefreshRuntime({
+      db,
+      settings: { configPath: 'config/default.json', dbPath, reportDir: dir, retainRuns: 0 },
+      loadConfig: () => fakeConfig(),
+      runPipeline: mockedRunPipeline(now),
+      deepseekClient: { complete },
+    });
+
+    const status = await runtime.refresh('test');
+
+    expect(complete).toHaveBeenCalledOnce();
+    expect(status.state === 'ok' ? status.notes : []).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^weekly_review: generated \(n=1, narrated=true\)$/),
+      ]),
+    );
+
+    const row = db.prepare('SELECT narrative, model FROM weekly_reviews').get() as {
+      narrative: string | null;
+      model: string | null;
+    };
+    expect(row.narrative).toBe('Long setups hit about half the time this week.');
+    expect(row.model).toBe('deepseek-v4-pro');
+  });
+
+  it('still persists the computed metrics when narration fails -- narrative/model stay null, facts beat prose', async () => {
+    const now = new Date();
+    insertFactorHistoryRow('lbl-run', hoursAgo(now, 40), 'SYM');
+    insertOutcomeLabelRow('lbl-run', hoursAgo(now, 40), 'SYM');
+
+    const complete = vi.fn().mockRejectedValue(new Error('DeepSeek unreachable'));
+    const runtime = new RefreshRuntime({
+      db,
+      settings: { configPath: 'config/default.json', dbPath, reportDir: dir, retainRuns: 0 },
+      loadConfig: () => fakeConfig(),
+      runPipeline: mockedRunPipeline(now),
+      deepseekClient: { complete },
+    });
+
+    const status = await runtime.refresh('test');
+
+    expect(status.state === 'ok' ? status.notes : []).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^weekly_review: generated \(n=1, narrated=false\)$/),
+      ]),
+    );
+
+    const row = db.prepare('SELECT narrative, model, metrics_json FROM weekly_reviews').get() as {
+      narrative: string | null;
+      model: string | null;
+      metrics_json: string;
+    };
+    expect(row.narrative).toBeNull();
+    expect(row.model).toBeNull();
+    expect(JSON.parse(row.metrics_json)).toMatchObject({ horizons: [24, 72] });
+  });
+
+  it('skips weekly review generation when the latest review is still within its 7-day window', async () => {
+    const now = new Date();
+    insertFactorHistoryRow('lbl-run', hoursAgo(now, 1), 'SYM');
+    insertOutcomeLabelRow('lbl-run', hoursAgo(now, 1), 'SYM');
+    db.prepare(
+      `INSERT INTO weekly_reviews (generated_at, week_start, week_end, metrics_json, narrative, model)
+       VALUES (?, ?, ?, '{}', 'stale-but-fresh', NULL)`,
+    ).run(hoursAgo(now, 24), hoursAgo(now, 192), hoursAgo(now, 24));
+
+    const complete = vi.fn();
+    const runtime = new RefreshRuntime({
+      db,
+      settings: { configPath: 'config/default.json', dbPath, reportDir: dir, retainRuns: 0 },
+      loadConfig: () => fakeConfig(),
+      runPipeline: mockedRunPipeline(now),
+      deepseekClient: { complete },
+    });
+
+    const status = await runtime.refresh('test');
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(status.state === 'ok' ? status.notes : ['unexpected state']).toEqual([]);
+    const count = (
+      db.prepare('SELECT COUNT(*) AS count FROM weekly_reviews').get() as { count: number }
+    ).count;
+    expect(count).toBe(1); // still just the pre-seeded row -- no second one generated
   });
 });
 

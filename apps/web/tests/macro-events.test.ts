@@ -4,8 +4,18 @@ import { NO_LEAKED_VALUES } from './noLeakedValues';
 
 const NOW = new Date('2026-07-16T12:00:00.000Z');
 
-function event(title: string, timeUtc: string | null): MacroEvent {
-  return { title, timeUtc: timeUtc === null ? null : new Date(timeUtc) };
+function event(
+  title: string,
+  timeUtc: string | null,
+  extra: Partial<Pick<MacroEvent, 'forecast' | 'previous' | 'btcChangeSincePrintPct'>> = {},
+): MacroEvent {
+  return {
+    title,
+    timeUtc: timeUtc === null ? null : new Date(timeUtc),
+    forecast: extra.forecast ?? null,
+    previous: extra.previous ?? null,
+    btcChangeSincePrintPct: extra.btcChangeSincePrintPct ?? null,
+  };
 }
 
 describe('parseMacroEvents', () => {
@@ -55,6 +65,43 @@ describe('parseMacroEvents', () => {
     expect(parseMacroEvents({ macro_events: 'not-an-array' })).toEqual([]);
     expect(parseMacroEvents({ macro_events: null })).toEqual([]);
     expect(parseMacroEvents({ other_field: 1 })).toEqual([]);
+  });
+
+  it('parses forecast/previous/btc_change_since_print_pct when present', () => {
+    const marketContext = {
+      macro_events: [
+        {
+          title: 'CPI m/m',
+          time_utc: '2026-07-17T12:30:00.000Z',
+          forecast: '-0.1%',
+          previous: '0.5%',
+          btc_change_since_print_pct: -1.23,
+        },
+      ],
+    };
+
+    expect(parseMacroEvents(marketContext)).toEqual([
+      event('CPI m/m', '2026-07-17T12:30:00.000Z', {
+        forecast: '-0.1%',
+        previous: '0.5%',
+        btcChangeSincePrintPct: -1.23,
+      }),
+    ]);
+  });
+
+  it('tolerates the new fields being absent or the wrong type, defaulting each to null', () => {
+    const marketContext = {
+      macro_events: [
+        {
+          title: 'CPI m/m',
+          time_utc: '2026-07-17T12:30:00.000Z',
+          forecast: null,
+          btc_change_since_print_pct: 'not-a-number',
+        },
+      ],
+    };
+
+    expect(parseMacroEvents(marketContext)).toEqual([event('CPI m/m', '2026-07-17T12:30:00.000Z')]);
   });
 });
 
@@ -149,6 +196,85 @@ describe('selectMacroBanner: recent window [now-10h, now]', () => {
 
   it('is null when nothing qualifies', () => {
     expect(selectMacroBanner([], NOW).recent).toBeNull();
+  });
+});
+
+describe('selectMacroBanner: recent line gains forecast/prior/BTC facts when present', () => {
+  it('keeps the existing copy shape when no extra facts are present', () => {
+    const events = [event('CPI m/m', '2026-07-16T09:00:00.000Z')];
+
+    expect(selectMacroBanner(events, NOW).recent).toBe(
+      'CPI m/m printed 3h ago — check that open setups survived it.',
+    );
+  });
+
+  it('adds a (forecast, prior) clause when both are present and BTC data is absent', () => {
+    const events = [
+      event('CPI m/m', '2026-07-16T09:00:00.000Z', { forecast: '-0.1%', previous: '0.5%' }),
+    ];
+
+    expect(selectMacroBanner(events, NOW).recent).toBe(
+      'CPI m/m printed 3h ago (forecast -0.1%, prior 0.5%).',
+    );
+  });
+
+  it('adds only forecast when previous is absent', () => {
+    const events = [event('CPI m/m', '2026-07-16T09:00:00.000Z', { forecast: '-0.1%' })];
+
+    expect(selectMacroBanner(events, NOW).recent).toBe('CPI m/m printed 3h ago (forecast -0.1%).');
+  });
+
+  it('adds only prior when forecast is absent', () => {
+    const events = [event('CPI m/m', '2026-07-16T09:00:00.000Z', { previous: '0.5%' })];
+
+    expect(selectMacroBanner(events, NOW).recent).toBe('CPI m/m printed 3h ago (prior 0.5%).');
+  });
+
+  it('adds a signed BTC clause when btcChangeSincePrintPct is present and facts are absent', () => {
+    const events = [
+      event('CPI m/m', '2026-07-16T09:00:00.000Z', { btcChangeSincePrintPct: -1.23 }),
+    ];
+
+    expect(selectMacroBanner(events, NOW).recent).toBe('CPI m/m printed 3h ago — BTC -1.2% since.');
+  });
+
+  it('renders a positive BTC move with a leading +', () => {
+    const events = [event('CPI m/m', '2026-07-16T09:00:00.000Z', { btcChangeSincePrintPct: 2.5 })];
+
+    expect(selectMacroBanner(events, NOW).recent).toBe('CPI m/m printed 3h ago — BTC +2.5% since.');
+  });
+
+  it('combines forecast, prior, and BTC clause when all three are present', () => {
+    const events = [
+      event('CPI m/m', '2026-07-16T09:00:00.000Z', {
+        forecast: '-0.1%',
+        previous: '0.5%',
+        btcChangeSincePrintPct: -1.23,
+      }),
+    ];
+
+    expect(selectMacroBanner(events, NOW).recent).toBe(
+      'CPI m/m printed 3h ago (forecast -0.1%, prior 0.5%) — BTC -1.2% since.',
+    );
+  });
+
+  it('never leaks null/NaN/undefined into the enriched recent line, in any combination', () => {
+    const combos = [
+      event('CPI m/m', '2026-07-16T09:00:00.000Z', { forecast: '-0.1%' }),
+      event('CPI m/m', '2026-07-16T09:00:00.000Z', { previous: '0.5%' }),
+      event('CPI m/m', '2026-07-16T09:00:00.000Z', { btcChangeSincePrintPct: -1.23 }),
+      event('CPI m/m', '2026-07-16T09:00:00.000Z', {
+        forecast: '-0.1%',
+        previous: '0.5%',
+        btcChangeSincePrintPct: -1.23,
+      }),
+    ];
+
+    for (const combo of combos) {
+      const recent = selectMacroBanner([combo], NOW).recent;
+      expect(recent).not.toBeNull();
+      expect(recent as string).not.toMatch(NO_LEAKED_VALUES);
+    }
   });
 });
 

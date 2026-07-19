@@ -1,6 +1,10 @@
 import type Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildOutcomeLabels, saveOutcomeLabelRecords } from '../../src/db/outcomeLabels.js';
+import {
+  buildOutcomeLabels,
+  labelClosedWindows,
+  saveOutcomeLabelRecords,
+} from '../../src/db/outcomeLabels.js';
 import { formatJakartaIso } from '../../src/db/time.js';
 import { setupTempDb, teardownTempDb } from '../support/tempDb.js';
 
@@ -250,5 +254,105 @@ describe('buildOutcomeLabels BTC residual leg run alignment', () => {
     // fwd_return = (120/100-1)x100 = 20; residual = 20 - 1.0x2 = 18.
     expect(h24?.fwd_return_pct).toBeCloseTo(20.0, 9);
     expect(h24?.fwd_residual_pct).toBeCloseTo(18.0, 9);
+  });
+});
+
+// Isolated from the shared fixture above (own temp db) -- labelClosedWindows' "closed" gate and
+// low-water-mark bounding both depend on picking `now` deliberately relative to REFERENCE, which
+// the shared fixture's rows (all clustered at 0/24/72h) aren't laid out for.
+describe('labelClosedWindows', () => {
+  let dir3: string;
+  let db3: Database.Database;
+
+  beforeEach(() => {
+    ({ dir: dir3, db: db3 } = setupTempDb('crypto-screener-label-closed-windows-'));
+  });
+
+  afterEach(() => {
+    teardownTempDb(dir3, db3);
+  });
+
+  it('computes the same fwd_return/residual math as buildOutcomeLabels, once the window has closed', () => {
+    insertFactorHistoryRow(db3, 'c0', 0, 'SYM', 100, { is_trusted: true, btc_beta: 1.5 });
+    insertFactorHistoryRow(db3, 'c0', 0, 'BTC', 50_000, { is_trusted: true });
+    insertFactorHistoryRow(db3, 'c24', 24, 'SYM', 110, { is_trusted: true });
+    insertFactorHistoryRow(db3, 'c24', 24, 'BTC', 51_500, { is_trusted: true });
+
+    // 24h's tolerance band tops out at 36h, so `now` must be at least that far past the base row.
+    const now = new Date(REFERENCE.getTime() + 40 * 3_600_000);
+    const { records, written } = labelClosedWindows(db3, now);
+    const h24 = records.find(
+      (r) => r.run_id === 'c0' && r.symbol === 'SYM' && r.horizon_hours === 24,
+    );
+
+    expect(h24?.fwd_return_pct).toBeCloseTo(10.0, 9);
+    expect(h24?.btc_fwd_return_pct).toBeCloseTo(3.0, 9);
+    expect(h24?.fwd_residual_pct).toBeCloseTo(5.5, 9);
+    expect(written).toBe(records.length);
+
+    const persistedCount = (
+      db3.prepare('SELECT COUNT(*) AS count FROM outcome_labels').get() as { count: number }
+    ).count;
+    expect(persistedCount).toBe(records.length);
+  });
+
+  it('does not label a base row before its horizon window has fully closed', () => {
+    insertFactorHistoryRow(db3, 'r0', 0, 'SYM', 100, { is_trusted: true });
+    insertFactorHistoryRow(db3, 'r24', 24, 'SYM', 105, { is_trusted: true });
+
+    // A forward match exists (r24 is within [18,36]h of r0), but the 24h window's own [max
+    // tolerance = 36h] hasn't fully elapsed yet at now=+30h -- must not be labeled early.
+    const now = new Date(REFERENCE.getTime() + 30 * 3_600_000);
+    const { records } = labelClosedWindows(db3, now);
+
+    expect(records).toHaveLength(0);
+  });
+
+  it('is idempotent: a second call right after the first writes nothing new', () => {
+    insertFactorHistoryRow(db3, 'x0', 0, 'SYM', 100, { is_trusted: true });
+    insertFactorHistoryRow(db3, 'x24', 24, 'SYM', 105, { is_trusted: true });
+
+    const now = new Date(REFERENCE.getTime() + 40 * 3_600_000);
+    const first = labelClosedWindows(db3, now);
+    expect(first.written).toBeGreaterThan(0);
+
+    const second = labelClosedWindows(db3, now);
+    expect(second.written).toBe(0);
+    expect(second.records).toHaveLength(0);
+  });
+
+  it('counts a base row closed-and-unlabeled at BOTH horizons only once in base_rows_considered, not once per horizon', () => {
+    // A single row with no other rows around it: at now=+110h its window has closed for both 24h
+    // (max tolerance 36h) and 72h (max tolerance 108h), and it has no outcome_labels row yet at
+    // either horizon, so it's a candidate in both labelHorizon(24) and labelHorizon(72) passes.
+    insertFactorHistoryRow(db3, 'z0', 0, 'SYM', 100, { is_trusted: true });
+
+    const now = new Date(REFERENCE.getTime() + 110 * 3_600_000);
+    const { summary } = labelClosedWindows(db3, now);
+
+    expect(summary.base_rows_considered).toBe(1);
+  });
+
+  it('is bounded: a later call only produces records for rows that closed since the last pass, not an already-labeled backlog', () => {
+    // A backlog "run" far in the past whose own window fully resolves (base -> +24h -> +72h all
+    // present), so the low-water mark advances past it once labeled.
+    insertFactorHistoryRow(db3, 'old0', -500, 'SYM', 100, { is_trusted: true });
+    insertFactorHistoryRow(db3, 'old24', -476, 'SYM', 105, { is_trusted: true });
+    insertFactorHistoryRow(db3, 'old72', -428, 'SYM', 120, { is_trusted: true });
+
+    const backlogNow = new Date(REFERENCE.getTime() + (-428 + 110) * 3_600_000);
+    const backlog = labelClosedWindows(db3, backlogNow);
+    expect(backlog.records.some((r) => r.run_id === 'old0')).toBe(true);
+
+    // A single freshly-closed pair, far ahead of the backlog.
+    insertFactorHistoryRow(db3, 'new0', 0, 'SYM', 100, { is_trusted: true });
+    insertFactorHistoryRow(db3, 'new24', 24, 'SYM', 108, { is_trusted: true });
+
+    const now = new Date(REFERENCE.getTime() + 40 * 3_600_000);
+    const second = labelClosedWindows(db3, now);
+
+    expect(second.records.length).toBeGreaterThan(0);
+    expect(second.records.every((r) => r.run_id === 'new0')).toBe(true);
+    expect(second.records.some((r) => r.run_id === 'new0' && r.horizon_hours === 24)).toBe(true);
   });
 });

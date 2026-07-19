@@ -167,3 +167,142 @@ describe('runPipeline deepseek briefing wiring', () => {
     expect(payload.provider_status.deepseek).toMatchObject({ status: 'ok' });
   });
 });
+
+describe('runPipeline macro reaction wiring', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('stamps btc_change_since_print_pct onto a recent macro event, visible to the briefing payload too', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', '');
+    const HOUR_MS = 60 * 60 * 1000;
+    const now = Date.now();
+    // 7 bars, 4h apart, ending "now" -- closes step +5 each bar so the math is exact.
+    const bars = Array.from({ length: 7 }, (_, index) => ({
+      time: now - (24 - index * 4) * HOUR_MS,
+      close: 100 + index * 5,
+    }));
+    const eventTimeUtc = new Date(now - 5 * HOUR_MS).toISOString(); // between the -8h and -4h bars
+
+    const config = AppConfigSchema.parse({ storage_path: ':memory:' });
+    collectMarketMock.mockResolvedValueOnce({
+      rows: [{ symbol: 'BTC' }],
+      market_context: { macro_events: [{ title: 'CPI m/m', time_utc: eventTimeUtc }] },
+      provider_status: {},
+    });
+    scoreSnapshotMock.mockReturnValueOnce({
+      rows: [{ symbol: 'BTC', scores: {}, factors: {}, price_history_bars: bars }],
+      regime: {},
+    });
+
+    const { payload } = await runPipeline(config, '/tmp/crypto-screener-unused-out-dir', {
+      save: false,
+      writeReportFiles: false,
+    });
+
+    const events = payload.market_context.macro_events as Array<Record<string, unknown>>;
+    // (125 -> 130) / 125 * 100 = 4.
+    expect(events[0]?.btc_change_since_print_pct).toBe(4);
+  });
+
+  it('runs before attachBriefing, so the DeepSeek payload sees the enriched value too', async () => {
+    const HOUR_MS = 60 * 60 * 1000;
+    const now = Date.now();
+    const bars = Array.from({ length: 7 }, (_, index) => ({
+      time: now - (24 - index * 4) * HOUR_MS,
+      close: 100 + index * 5,
+    }));
+    const eventTimeUtc = new Date(now - 5 * HOUR_MS).toISOString();
+
+    const config = AppConfigSchema.parse({ storage_path: ':memory:' });
+    collectMarketMock.mockResolvedValueOnce({
+      rows: [{ symbol: 'BTC' }],
+      market_context: { macro_events: [{ title: 'CPI m/m', time_utc: eventTimeUtc }] },
+      provider_status: {},
+    });
+    scoreSnapshotMock.mockReturnValueOnce({
+      rows: [{ symbol: 'BTC', scores: {}, factors: {}, price_history_bars: bars }],
+      regime: {},
+    });
+    const complete = vi.fn().mockResolvedValue({
+      text: 'Tonight the tape is quiet.',
+      model: 'deepseek-v4-pro',
+      output_tokens: 100,
+      reasoning_tokens: 40,
+    });
+    const deepseekClient: DeepSeekClient = { complete };
+
+    await runPipeline(
+      config,
+      '/tmp/crypto-screener-unused-out-dir',
+      { save: false, writeReportFiles: false },
+      { deepseekClient },
+    );
+
+    expect(complete).toHaveBeenCalledOnce();
+    const userPrompt = complete.mock.calls[0]?.[1] as string;
+    const sentPayload = JSON.parse(userPrompt) as {
+      macro_events: Array<{ btc_change_since_print_pct: number | null }>;
+    };
+    expect(sentPayload.macro_events[0]?.btc_change_since_print_pct).toBe(4);
+  });
+});
+
+describe('runPipeline price_history_bars stripping', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('strips price_history_bars before saveSnapshot, after both consumers (annotateMacroReactions, attachBriefing) have already run', async () => {
+    const HOUR_MS = 60 * 60 * 1000;
+    const now = Date.now();
+    const bars = Array.from({ length: 7 }, (_, index) => ({
+      time: now - (24 - index * 4) * HOUR_MS,
+      close: 100 + index * 5,
+    }));
+    const eventTimeUtc = new Date(now - 5 * HOUR_MS).toISOString();
+
+    const config = AppConfigSchema.parse({ storage_path: ':memory:' });
+    // This file's saveSnapshotMock is a shared, module-level mock with no global clearMocks config
+    // -- reset its call history so `toHaveBeenCalledOnce` below reflects only this test's call, not
+    // an earlier save:true test's call earlier in the file.
+    saveSnapshotMock.mockClear();
+    collectMarketMock.mockResolvedValueOnce({
+      rows: [{ symbol: 'BTC' }],
+      market_context: { macro_events: [{ title: 'CPI m/m', time_utc: eventTimeUtc }] },
+      provider_status: {},
+    });
+    scoreSnapshotMock.mockReturnValueOnce({
+      rows: [{ symbol: 'BTC', scores: {}, factors: {}, price_history_bars: bars }],
+      regime: {},
+    });
+    const deepseekClient: DeepSeekClient = {
+      complete: vi.fn().mockResolvedValue({
+        text: 'Tonight the tape is quiet.',
+        model: 'deepseek-v4-pro',
+        output_tokens: 100,
+        reasoning_tokens: 40,
+      }),
+    };
+
+    const { payload } = await runPipeline(
+      config,
+      '/tmp/crypto-screener-unused-out-dir',
+      { save: true, writeReportFiles: false },
+      { deepseekClient },
+    );
+
+    // Consumption already happened before the strip: the macro event's BTC reaction, computed off
+    // price_history_bars, is still on the saved payload.
+    const events = payload.market_context.macro_events as Array<Record<string, unknown>>;
+    expect(events[0]?.btc_change_since_print_pct).toBe(4);
+
+    expect(saveSnapshotMock).toHaveBeenCalledOnce();
+    const savedPayload = saveSnapshotMock.mock.calls[0]?.[1] as {
+      rows: Array<Record<string, unknown>>;
+    };
+    expect(savedPayload.rows[0]).not.toHaveProperty('price_history_bars');
+    // The rest of the row survives the strip untouched.
+    expect(savedPayload.rows[0]?.symbol).toBe('BTC');
+  });
+});

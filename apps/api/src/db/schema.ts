@@ -65,6 +65,19 @@ CREATE TABLE IF NOT EXISTS outcome_labels (
 
 CREATE INDEX IF NOT EXISTS idx_outcome_labels_symbol_time
     ON outcome_labels(symbol, generated_at);
+CREATE INDEX IF NOT EXISTS idx_outcome_labels_time
+    ON outcome_labels(generated_at);
+
+-- Weekly narrated review of the forward-outcome labels (db/weeklyReview.ts, pipeline/weeklyReview.ts).
+-- One row per computation; the newest by generated_at is what the dashboard shows (dashboard/payload.ts).
+CREATE TABLE IF NOT EXISTS weekly_reviews (
+    generated_at TEXT PRIMARY KEY,
+    week_start TEXT NOT NULL,
+    week_end TEXT NOT NULL,
+    metrics_json TEXT NOT NULL,
+    narrative TEXT,
+    model TEXT
+);
 
 CREATE TABLE IF NOT EXISTS market_regime_history (
     run_id TEXT NOT NULL,

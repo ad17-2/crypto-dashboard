@@ -10,6 +10,7 @@ import type {
 import type Database from 'better-sqlite3';
 import type { AppConfig } from '../config/schema.js';
 import { sqlPlaceholders } from '../db/client.js';
+import { loadLatestWeeklyReview } from '../db/weeklyReview.js';
 import type { Row } from '../pipeline/types.js';
 import { asArray, asRecord } from '../pipeline/types.js';
 import { freshnessSummary } from './freshness.js';
@@ -359,5 +360,8 @@ export function buildDashboardPayload(
     sections,
     watchlists: buildWatchlists(sections, options.limit),
     watchlist_changes: diff.changes,
+    // The newest weekly_reviews row, independent of the selected run -- null before the weekly
+    // review has ever computed (see db/weeklyReview.ts, refresh/runtime.ts's attachWeeklyReview).
+    weekly_review: loadLatestWeeklyReview(db),
   };
 }

@@ -6,11 +6,16 @@ export {
 } from './factorHistory.js';
 export type {
   BuildOutcomeLabelsResult,
+  LabelClosedWindowsResult,
   LabelOutcomesOptions,
   OutcomeLabelRecord,
   OutcomeLabelSummary,
 } from './outcomeLabels.js';
-export { buildOutcomeLabels, saveOutcomeLabelRecords } from './outcomeLabels.js';
+export {
+  buildOutcomeLabels,
+  labelClosedWindows,
+  saveOutcomeLabelRecords,
+} from './outcomeLabels.js';
 export { loadLatestRegimeState, loadRegimeStates, recordRegimeHistory } from './regimeHistory.js';
 export { pruneOldRuns, saveSnapshot } from './runs.js';
 export { ensureSchema } from './schema.js';

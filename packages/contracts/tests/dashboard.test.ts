@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DashboardPayloadSchema, DashboardRowSchema } from '../src/dashboard';
+import { DashboardPayloadSchema, DashboardRowSchema, WeeklyReviewSchema } from '../src/dashboard';
 
 const sampleRow = {
   symbol: 'BTC',
@@ -196,5 +196,70 @@ describe('DashboardPayloadSchema', () => {
 
   it('rejects an unrecognized status', () => {
     expect(() => DashboardPayloadSchema.parse({ status: 'weird' })).toThrow();
+  });
+
+  it('parses an ok payload with no weekly_review key at all -- old payloads must still validate', () => {
+    const payload = {
+      status: 'ok',
+      database: 'data/crypto_screener.sqlite3',
+      run: { run_id: 'run_1', generated_at: '2026-07-11T00:00:00+00:00', row_count: 1 },
+      runs: [],
+      regime: {},
+      market_context: {},
+      provider_status: {},
+      validation: {},
+      freshness: { status: 'ok', label: 'fresh', age_seconds: 60, age_minutes: 1 },
+      quality: { trusted_count: 0, excluded_count: 0, flagged_count: 0, flagged_rows: [] },
+      sections: { core: [], long: [], short: [], crowded_longs: [], squeeze_risks: [] },
+      watchlists: [],
+    };
+
+    expect(() => DashboardPayloadSchema.parse(payload)).not.toThrow();
+  });
+
+  it('parses an ok payload with weekly_review explicitly null', () => {
+    const payload = {
+      status: 'ok',
+      database: 'data/crypto_screener.sqlite3',
+      run: { run_id: 'run_1', generated_at: '2026-07-11T00:00:00+00:00', row_count: 1 },
+      runs: [],
+      regime: {},
+      market_context: {},
+      provider_status: {},
+      validation: {},
+      freshness: { status: 'ok', label: 'fresh', age_seconds: 60, age_minutes: 1 },
+      quality: { trusted_count: 0, excluded_count: 0, flagged_count: 0, flagged_rows: [] },
+      sections: { core: [], long: [], short: [], crowded_longs: [], squeeze_risks: [] },
+      watchlists: [],
+      weekly_review: null,
+    };
+
+    expect(() => DashboardPayloadSchema.parse(payload)).not.toThrow();
+  });
+});
+
+describe('WeeklyReviewSchema', () => {
+  const sampleWeeklyReview = {
+    generated_at: '2026-07-19T00:00:00+07:00',
+    week_start: '2026-07-12T00:00:00+07:00',
+    week_end: '2026-07-19T00:00:00+07:00',
+    metrics: { horizons: [24, 72], side_hit_rates: [] },
+    narrative: 'Long setups hit about half the time this week, n=40.',
+    model: 'deepseek-v4-pro',
+  };
+
+  it('parses a well-formed row', () => {
+    expect(() => WeeklyReviewSchema.parse(sampleWeeklyReview)).not.toThrow();
+  });
+
+  it('parses narrative/model as null (narration skipped or failed)', () => {
+    expect(() =>
+      WeeklyReviewSchema.parse({ ...sampleWeeklyReview, narrative: null, model: null }),
+    ).not.toThrow();
+  });
+
+  it('rejects a row missing a required field', () => {
+    const { week_start: _weekStart, ...withoutWeekStart } = sampleWeeklyReview;
+    expect(() => WeeklyReviewSchema.parse(withoutWeekStart)).toThrow();
   });
 });

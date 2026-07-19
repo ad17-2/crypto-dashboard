@@ -17,6 +17,7 @@ import { writeReports } from '../reports/writeReports.js';
 import { buildBriefingPayload, generateBriefing } from './briefing.js';
 import { collectMarket } from './collector.js';
 import { scoreSnapshot } from './factors.js';
+import { annotateMacroReactions } from './macroReaction.js';
 import type { RunPayload } from './models.js';
 import { pctChange, toFloat } from './scoring.js';
 
@@ -175,9 +176,23 @@ export async function runPipeline(
     // to know what was actually shown at the time, not what today's code would show in hindsight).
     annotateWatchlistMembership(payload.rows, config);
 
+    // Display-only, guarded internally (never throws): enriches recently-printed macro events
+    // with BTC's reaction, BEFORE attachBriefing so the briefing payload can see it too.
+    annotateMacroReactions(payload.rows, payload.market_context, payload.generated_at);
+
     // Display-only: attachBriefing never throws, so a DeepSeek outage or timeout can never fail or
     // delay-block a refresh beyond its own request_timeout_seconds.
     await attachBriefing(db, payload, config, deps.deepseekClient);
+
+    // Transient plumbing only (enrichment.ts stashes it on the BTC row so annotateMacroReactions
+    // above can compute a reaction without a second candle fetch) -- must never persist into
+    // factor_history/market_rows or the written report files, so strip it now that both consumers
+    // (annotateMacroReactions and attachBriefing's payload) have already run.
+    for (const row of payload.rows) {
+      if ('price_history_bars' in row) {
+        delete row.price_history_bars;
+      }
+    }
 
     if (save) {
       // Row and MarketRow are the same open row shape, differing only in whether `symbol` is

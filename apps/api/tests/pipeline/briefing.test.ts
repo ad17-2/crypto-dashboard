@@ -102,6 +102,26 @@ describe('buildBriefingPayload', () => {
     expect(payload.long).toEqual([]);
     expect(payload.short).toEqual([]);
     expect(payload.watchlist_departures).toBeNull();
+    expect(payload.new_to_list_total).toBe(0);
+  });
+
+  it('new_to_list_total counts every new-to-list row across the whole run, not just the top-5-per-side slice', () => {
+    const rows: Row[] = Array.from({ length: 8 }, (_, i) =>
+      row({ symbol: `SYM${i}`, watchlist_side: 'long', watchlist_rank: i + 1 }),
+    );
+    // SYM0 is new and ranks into the top-5 slice topCandidates keeps; SYM6/SYM7 are new too but
+    // rank outside it -- the bug this fix addresses is exactly this gap between what the model sees
+    // per-row and the true global count.
+    const diff: WatchlistDiff = {
+      newToList: new Set(['SYM0', 'SYM6', 'SYM7']),
+      changes: null,
+    };
+
+    const payload = buildBriefingPayload(rows, diff, {}, {}, '2026-07-19T00:00:00+07:00');
+
+    expect(payload.long.map((r) => r.symbol)).toEqual(['SYM0', 'SYM1', 'SYM2', 'SYM3', 'SYM4']);
+    expect(payload.long.filter((r) => r.new_to_list).map((r) => r.symbol)).toEqual(['SYM0']);
+    expect(payload.new_to_list_total).toBe(3);
   });
 
   it('reads regime.regime_state/bias and fear_greed value+classification defensively', () => {
@@ -167,7 +187,9 @@ describe('buildBriefingPayload', () => {
         NOW,
       );
 
-      expect(payload.macro_events).toEqual([{ title: 'CPI m/m', in_hours: 47.5 }]);
+      expect(payload.macro_events).toEqual([
+        { title: 'CPI m/m', in_hours: 47.5, btc_change_since_print_pct: null },
+      ]);
     });
 
     it('excludes an event 49h in the future (past the 48h lookahead)', () => {
@@ -191,7 +213,29 @@ describe('buildBriefingPayload', () => {
         NOW,
       );
 
-      expect(payload.macro_events).toEqual([{ title: 'CPI y/y', in_hours: -11.5 }]);
+      expect(payload.macro_events).toEqual([
+        { title: 'CPI y/y', in_hours: -11.5, btc_change_since_print_pct: null },
+      ]);
+    });
+
+    it('carries btc_change_since_print_pct through when pipeline/macroReaction.ts already stamped it', () => {
+      const payload = buildBriefingPayload(
+        [],
+        EMPTY_DIFF,
+        macroContext([
+          {
+            title: 'CPI y/y',
+            time_utc: '2026-07-18T12:30:00.000Z',
+            btc_change_since_print_pct: -1.23,
+          },
+        ]),
+        {},
+        NOW,
+      );
+
+      expect(payload.macro_events).toEqual([
+        { title: 'CPI y/y', in_hours: -11.5, btc_change_since_print_pct: -1.23 },
+      ]);
     });
 
     it('excludes an event that printed 13h ago (past the 12h lookback)', () => {
