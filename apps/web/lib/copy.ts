@@ -104,7 +104,7 @@ export const FIXED_SETUP: Record<string, CopyEntry> = {
   'Short Squeeze Risk': {
     label: 'Crowded short — squeeze risk',
     definition:
-      'Funding and/or the long/short ratio show short positioning is crowded, with rising open interest and price — a squeeze could force shorts to cover.',
+      'Funding and/or the long/short ratio show short positioning is crowded, with rising open interest and price — a short-crowding risk watch; in 2026 these names more often continued lower than squeezed.',
   },
   'OI Momentum Long': {
     label: 'New money pushing up',
@@ -286,7 +286,7 @@ export const WATCHLIST: Record<string, CopyEntry> = {
   squeeze_risks: {
     label: 'Squeeze risk',
     definition:
-      'Coins where short positioning looks crowded — candidates for a short-squeeze bounce, not a fresh short.',
+      'Coins where short positioning looks crowded — a risk watch, not an entry list; in the 2026 panel these names more often continued lower than squeezed.',
   },
   core: {
     label: 'Majors',
@@ -781,7 +781,7 @@ export const OI_PRICE_TREND_STATE: Record<string, CopyEntry> = {
   diverging_short: {
     label: '3d OI build vs. move',
     definition:
-      'Price is down over 24h, but open interest has been building over the last 3 days -- a crowded short that a bounce could squeeze.',
+      'Price is down over 24h, but open interest has been building over the last 3 days -- short-crowding risk; in 2026 these names more often continued lower than squeezed.',
   },
 };
 

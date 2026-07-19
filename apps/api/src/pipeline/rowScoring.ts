@@ -91,6 +91,20 @@ export function applyScores(
   const oiTermShort =
     oiChange >= 0 ? clamp(oiChange / 12.0) * 15.0 : -clamp(-oiChange / 12.0) * 10.0;
 
+  // High 4h-ATR names rank-anti-predict forward returns in every panel era (atr_14_pct IC ≈
+  // −0.05..−0.08); momentumScale normalizes the move, this prices the vol level itself.
+  const medianAtr = toFloat(marketContext.median_atr_pct);
+  const volPenalty =
+    atrPct !== null && medianAtr !== null && medianAtr > 0
+      ? clamp(atrPct / medianAtr - 1.0) * 12.0
+      : 0.0;
+
+  const takerImb = toFloat(row.taker_imbalance_24h_pct);
+  // Net aggressive taker flow is the strongest live-era confirmation signal (72h rank-IC
+  // +0.027/+0.040 in 2026-H1/H2); /8 ≈ p95 magnitude so the credit saturates at the tails.
+  const takerLong = takerImb !== null ? clamp(Math.max(takerImb, 0.0) / 8.0) * 8.0 : 0.0;
+  const takerShort = takerImb !== null ? clamp(Math.max(-takerImb, 0.0) / 8.0) * 8.0 : 0.0;
+
   const btcUp =
     btcChange24h !== null &&
     btcChange24h >= 1.0 &&
@@ -193,8 +207,10 @@ export function applyScores(
     vetoOiShort = divergingShort ? clamp((oi72h - OI_TREND_DEADZONE_PCT) / 6.0) * 10.0 : 0;
   }
 
+  // 24h-move rank-IC was ≤0 in every panel era (2024-09→2026-07); membership still requires the
+  // move (dashboard/watchlists.ts floor), but its size no longer dominates ranking.
   const longScore =
-    longMomentum * 45.0 +
+    longMomentum * 20.0 +
     oiTermLong +
     liquidityQuality * 0.25 -
     longCrowding * 10.0 -
@@ -203,9 +219,11 @@ export function applyScores(
     lateLong +
     boostLong -
     vetoCvdLong -
-    vetoOiLong;
+    vetoOiLong -
+    volPenalty +
+    takerLong;
   const shortScore =
-    shortMomentum * 45.0 +
+    shortMomentum * 20.0 +
     oiTermShort +
     liquidityQuality * 0.25 -
     shortCrowding * 8.0 -
@@ -214,7 +232,9 @@ export function applyScores(
     lateShort +
     boostShort -
     vetoCvdShort -
-    vetoOiShort;
+    vetoOiShort -
+    volPenalty +
+    takerShort;
   const crowdedLongScore =
     longCrowding * 35.0 +
     clamp(Math.max(oiChange, 0.0) / 12.0) * 25.0 +

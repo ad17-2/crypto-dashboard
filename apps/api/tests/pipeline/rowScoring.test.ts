@@ -26,9 +26,9 @@ describe('applyScores', () => {
     score(row);
     // longCrowding = clamp(0.01/0.08) = 0.125; shortCrowding = 0.
     // longMomentum = clamp(6/10) = 0.6; oiTermLong = oiTermShort = clamp(8/12)*15 = 10.0.
-    // long = 0.6*45 + 10 + 50*0.25 - 0.125*10 = 27 + 10 + 12.5 - 1.25 = 48.25
-    // short = 0*45 + 10 + 12.5 - 0 = 22.5
-    expect(row.long_score).toBeCloseTo(48.25, 9);
+    // long = 0.6*20 + 10 + 50*0.25 - 0.125*10 = 12 + 10 + 12.5 - 1.25 = 33.25
+    // short = 0*20 + 10 + 12.5 - 0 = 22.5
+    expect(row.long_score).toBeCloseTo(33.25, 9);
     expect(row.short_score).toBeCloseTo(22.5, 9);
     expect(row.residual_change_24h_pct).toBeUndefined();
     expect(row.fights_btc).toBeNull();
@@ -53,10 +53,10 @@ describe('applyScores', () => {
     expect(withBtcDrop.residual_change_24h_pct).toBeCloseTo(0.4, 9);
     expect(withoutBtcDrop.residual_change_24h_pct).toBeCloseTo(-5.0, 9);
     expect(withBtcDrop.short_score as number).toBeLessThan(withoutBtcDrop.short_score as number);
-    // 0.5 * 45 = 22.5 momentum-term gap between the two cases.
+    // 0.5 * 20 = 10.0 momentum-term gap between the two cases.
     expect(
       (withoutBtcDrop.short_score as number) - (withBtcDrop.short_score as number),
-    ).toBeCloseTo(22.5, 9);
+    ).toBeCloseTo(10, 9);
   });
 
   describe('fights-BTC veto', () => {

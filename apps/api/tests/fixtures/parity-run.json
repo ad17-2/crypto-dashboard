@@ -18645,7 +18645,7 @@
         "scores": {
           "liquidity_quality": 95.26,
           "long_score": 15,
-          "short_score": 32.51,
+          "short_score": 27.85,
           "crowded_long_score": 50.46,
           "squeeze_risk_score": 23.81,
           "round_trip_cost_pct": 0.1679,
@@ -18690,8 +18690,8 @@
         },
         "scores": {
           "liquidity_quality": 68.91,
-          "long_score": 65.03,
-          "short_score": 29.75,
+          "long_score": 40.03,
+          "short_score": 32.84,
           "crowded_long_score": 88.71,
           "squeeze_risk_score": 65.45,
           "round_trip_cost_pct": 0.2344,
@@ -18736,7 +18736,7 @@
         },
         "scores": {
           "liquidity_quality": 83.58,
-          "long_score": 68.89,
+          "long_score": 44.8,
           "short_score": 35.77,
           "crowded_long_score": 91.95,
           "squeeze_risk_score": 57.46,
@@ -18783,7 +18783,7 @@
         "scores": {
           "liquidity_quality": 78.82,
           "long_score": 8.67,
-          "short_score": 31.48,
+          "short_score": 27.49,
           "crowded_long_score": 54.7,
           "squeeze_risk_score": 20.19,
           "round_trip_cost_pct": 0.1631,
@@ -18829,7 +18829,7 @@
         "scores": {
           "liquidity_quality": 95.26,
           "long_score": 11.99,
-          "short_score": 31.96,
+          "short_score": 28.65,
           "crowded_long_score": 61.03,
           "squeeze_risk_score": 23.81,
           "round_trip_cost_pct": 0.1752,
@@ -18875,7 +18875,7 @@
         "scores": {
           "liquidity_quality": 30.92,
           "long_score": 3.53,
-          "short_score": 32.29,
+          "short_score": 14.87,
           "crowded_long_score": 8.23,
           "squeeze_risk_score": 15.91,
           "round_trip_cost_pct": 0.2116,
@@ -18920,8 +18920,8 @@
         },
         "scores": {
           "liquidity_quality": 45.9,
-          "long_score": 3.33,
-          "short_score": 46.48,
+          "long_score": 0,
+          "short_score": 9.48,
           "crowded_long_score": 12.0,
           "squeeze_risk_score": 11.48,
           "round_trip_cost_pct": 0.1636,
@@ -18967,7 +18967,7 @@
         "scores": {
           "liquidity_quality": 35.56,
           "long_score": 6.98,
-          "short_score": 21.42,
+          "short_score": 13.24,
           "crowded_long_score": 10.32,
           "squeeze_risk_score": 10.41,
           "round_trip_cost_pct": 0.1698,
@@ -19013,7 +19013,7 @@
         "scores": {
           "liquidity_quality": 83.89,
           "long_score": 15.04,
-          "short_score": 27.92,
+          "short_score": 20.99,
           "crowded_long_score": 23.0,
           "squeeze_risk_score": 20.97,
           "round_trip_cost_pct": 0.1739,
@@ -19059,7 +19059,7 @@
         "scores": {
           "liquidity_quality": 36.7,
           "long_score": 3.38,
-          "short_score": 16,
+          "short_score": 9.17,
           "crowded_long_score": 15.67,
           "squeeze_risk_score": 11.78,
           "round_trip_cost_pct": 0.1764,
@@ -19104,8 +19104,8 @@
         },
         "scores": {
           "liquidity_quality": 39.3,
-          "long_score": 7.78,
-          "short_score": 15.66,
+          "long_score": 5.39,
+          "short_score": 7.1,
           "crowded_long_score": 9.83,
           "squeeze_risk_score": 22.8,
           "round_trip_cost_pct": 0.2323,
@@ -19150,8 +19150,8 @@
         },
         "scores": {
           "liquidity_quality": 48.86,
-          "long_score": 4.21,
-          "short_score": 37.67,
+          "long_score": 0,
+          "short_score": 2.33,
           "crowded_long_score": 12.21,
           "squeeze_risk_score": 43.36,
           "round_trip_cost_pct": 0.2799,
@@ -19196,8 +19196,8 @@
         },
         "scores": {
           "liquidity_quality": 36.08,
-          "long_score": 3.52,
-          "short_score": 29.14,
+          "long_score": 0,
+          "short_score": 10.77,
           "crowded_long_score": 11.21,
           "squeeze_risk_score": 9.02,
           "round_trip_cost_pct": 0.175,
@@ -19242,8 +19242,8 @@
         },
         "scores": {
           "liquidity_quality": 53.63,
-          "long_score": 67.23,
-          "short_score": 28.41,
+          "long_score": 38.23,
+          "short_score": 16.41,
           "crowded_long_score": 54.7,
           "squeeze_risk_score": 50.41,
           "round_trip_cost_pct": 0.1689,
@@ -19288,8 +19288,8 @@
         },
         "scores": {
           "liquidity_quality": 53.54,
-          "long_score": 43.94,
-          "short_score": 28.38,
+          "long_score": 29.77,
+          "short_score": 23.7,
           "crowded_long_score": 51.71,
           "squeeze_risk_score": 47.57,
           "round_trip_cost_pct": 0.1869,
@@ -19335,7 +19335,7 @@
         "scores": {
           "liquidity_quality": 57.15,
           "long_score": 1.18,
-          "short_score": 24.91,
+          "short_score": 21.35,
           "crowded_long_score": 49.29,
           "squeeze_risk_score": 15.74,
           "round_trip_cost_pct": 0.1692,
@@ -19381,7 +19381,7 @@
         "scores": {
           "liquidity_quality": 58.2,
           "long_score": 0,
-          "short_score": 23.39,
+          "short_score": 3.19,
           "crowded_long_score": 50.5,
           "squeeze_risk_score": 14.55,
           "round_trip_cost_pct": 0.1665,
@@ -19427,7 +19427,7 @@
         "scores": {
           "liquidity_quality": 53.63,
           "long_score": 0,
-          "short_score": 9.91,
+          "short_score": 8.4,
           "crowded_long_score": 49.47,
           "squeeze_risk_score": 13.41,
           "round_trip_cost_pct": 0.1673,
@@ -19472,8 +19472,8 @@
         },
         "scores": {
           "liquidity_quality": 37.41,
-          "long_score": 0.9,
-          "short_score": 16.92,
+          "long_score": 0,
+          "short_score": 1.57,
           "crowded_long_score": 23.77,
           "squeeze_risk_score": 9.35,
           "round_trip_cost_pct": 0.1629,
@@ -19518,7 +19518,7 @@
         },
         "scores": {
           "liquidity_quality": 25.62,
-          "long_score": 46.03,
+          "long_score": 32.03,
           "short_score": 21.4,
           "crowded_long_score": 41.78,
           "squeeze_risk_score": 39.5,
@@ -19565,7 +19565,7 @@
         "scores": {
           "liquidity_quality": 31.58,
           "long_score": 0,
-          "short_score": 10.48,
+          "short_score": 5.7,
           "crowded_long_score": 43.07,
           "squeeze_risk_score": 7.89,
           "round_trip_cost_pct": 0.1612,
@@ -19610,8 +19610,8 @@
         },
         "scores": {
           "liquidity_quality": 68.51,
-          "long_score": 10.58,
-          "short_score": 22.84,
+          "long_score": 6.71,
+          "short_score": 15.65,
           "crowded_long_score": 17.13,
           "squeeze_risk_score": 19.44,
           "round_trip_cost_pct": 0.1746,
@@ -19656,8 +19656,8 @@
         },
         "scores": {
           "liquidity_quality": 47.97,
-          "long_score": 8.39,
-          "short_score": 22.03,
+          "long_score": 8.36,
+          "short_score": 12.9,
           "crowded_long_score": 12.49,
           "squeeze_risk_score": 21.56,
           "round_trip_cost_pct": 0.2205,
@@ -19702,8 +19702,8 @@
         },
         "scores": {
           "liquidity_quality": 38.4,
-          "long_score": 6.1,
-          "short_score": 29.19,
+          "long_score": 5.6,
+          "short_score": 15.34,
           "crowded_long_score": 9.6,
           "squeeze_risk_score": 9.87,
           "round_trip_cost_pct": 0.1617,
@@ -19748,7 +19748,7 @@
         },
         "scores": {
           "liquidity_quality": 31.69,
-          "long_score": 11.59,
+          "long_score": 11.11,
           "short_score": 9.9,
           "crowded_long_score": 12.89,
           "squeeze_risk_score": 16.66,
@@ -19794,8 +19794,8 @@
         },
         "scores": {
           "liquidity_quality": 39.82,
-          "long_score": 4.83,
-          "short_score": 27.01,
+          "long_score": 3.11,
+          "short_score": 11.23,
           "crowded_long_score": 9.95,
           "squeeze_risk_score": 18.67,
           "round_trip_cost_pct": 0.1766,
@@ -19840,7 +19840,7 @@
         },
         "scores": {
           "liquidity_quality": 26.25,
-          "long_score": 15.7,
+          "long_score": 12.54,
           "short_score": 13.63,
           "crowded_long_score": 32.93,
           "squeeze_risk_score": 19.93,
@@ -19887,7 +19887,7 @@
         "scores": {
           "liquidity_quality": 29.27,
           "long_score": 0,
-          "short_score": 33.57,
+          "short_score": 13.34,
           "crowded_long_score": 9.32,
           "squeeze_risk_score": 8.11,
           "round_trip_cost_pct": 0.165,
@@ -19933,7 +19933,7 @@
         "scores": {
           "liquidity_quality": 27.07,
           "long_score": 5.16,
-          "short_score": 27.33,
+          "short_score": 15.07,
           "crowded_long_score": 8.18,
           "squeeze_risk_score": 6.77,
           "round_trip_cost_pct": 0.1697,
@@ -19979,7 +19979,7 @@
         "scores": {
           "liquidity_quality": 27.72,
           "long_score": 5.12,
-          "short_score": 33.02,
+          "short_score": 15.8,
           "crowded_long_score": 6.93,
           "squeeze_risk_score": 19.51,
           "round_trip_cost_pct": 0.2395,
@@ -20025,7 +20025,7 @@
         "scores": {
           "liquidity_quality": 91.68,
           "long_score": 10.19,
-          "short_score": 38.73,
+          "short_score": 27.98,
           "crowded_long_score": 59.28,
           "squeeze_risk_score": 22.92,
           "round_trip_cost_pct": 0.1693,
@@ -20071,7 +20071,7 @@
         "scores": {
           "liquidity_quality": 84.48,
           "long_score": 6.66,
-          "short_score": 36.22,
+          "short_score": 28.27,
           "crowded_long_score": 64.28,
           "squeeze_risk_score": 21.12,
           "round_trip_cost_pct": 0.216,
@@ -20117,7 +20117,7 @@
         "scores": {
           "liquidity_quality": 63.27,
           "long_score": 2.41,
-          "short_score": 25.77,
+          "short_score": 22.48,
           "crowded_long_score": 50.82,
           "squeeze_risk_score": 16.35,
           "round_trip_cost_pct": 0.1633,
@@ -20163,7 +20163,7 @@
         "scores": {
           "liquidity_quality": 57.69,
           "long_score": 13.74,
-          "short_score": 28.89,
+          "short_score": 25.19,
           "crowded_long_score": 15.13,
           "squeeze_risk_score": 14.42,
           "round_trip_cost_pct": 0.1648,
@@ -20208,8 +20208,8 @@
         },
         "scores": {
           "liquidity_quality": 40.91,
-          "long_score": 8.55,
-          "short_score": 9.66,
+          "long_score": 4.58,
+          "short_score": 5.11,
           "crowded_long_score": 11.57,
           "squeeze_risk_score": 10.23,
           "round_trip_cost_pct": 0.1692,
@@ -20254,8 +20254,8 @@
         },
         "scores": {
           "liquidity_quality": 53.65,
-          "long_score": 9.29,
-          "short_score": 18.71,
+          "long_score": 8.25,
+          "short_score": 16.65,
           "crowded_long_score": 17.72,
           "squeeze_risk_score": 13.41,
           "round_trip_cost_pct": 0.1655,
@@ -20301,7 +20301,7 @@
         "scores": {
           "liquidity_quality": 42.64,
           "long_score": 6.35,
-          "short_score": 19.05,
+          "short_score": 12,
           "crowded_long_score": 19.66,
           "squeeze_risk_score": 20.79,
           "round_trip_cost_pct": 0.224,
@@ -20347,7 +20347,7 @@
         "scores": {
           "liquidity_quality": 30.25,
           "long_score": 0.0,
-          "short_score": 22.08,
+          "short_score": 15.28,
           "crowded_long_score": 47.32,
           "squeeze_risk_score": 11.21,
           "round_trip_cost_pct": 0.1666,
@@ -20392,8 +20392,8 @@
         },
         "scores": {
           "liquidity_quality": 61.32,
-          "long_score": 33.84,
-          "short_score": 27.16,
+          "long_score": 25.37,
+          "short_score": 26.7,
           "crowded_long_score": 63.32,
           "squeeze_risk_score": 42.38,
           "round_trip_cost_pct": 0.1805,
@@ -20439,7 +20439,7 @@
         "scores": {
           "liquidity_quality": 31.99,
           "long_score": 5.94,
-          "short_score": 22.56,
+          "short_score": 12.61,
           "crowded_long_score": 8.0,
           "squeeze_risk_score": 11.64,
           "round_trip_cost_pct": 0.183,
@@ -20484,8 +20484,8 @@
         },
         "scores": {
           "liquidity_quality": 39.64,
-          "long_score": 4.24,
-          "short_score": 24.99,
+          "long_score": 1.17,
+          "short_score": 9.4,
           "crowded_long_score": 9.91,
           "squeeze_risk_score": 11.64,
           "round_trip_cost_pct": 0.1661,
@@ -20530,8 +20530,8 @@
         },
         "scores": {
           "liquidity_quality": 68.67,
-          "long_score": 12.51,
-          "short_score": 17.54,
+          "long_score": 6.31,
+          "short_score": 10.27,
           "crowded_long_score": 17.98,
           "squeeze_risk_score": 17.17,
           "round_trip_cost_pct": 0.1655,
@@ -20577,7 +20577,7 @@
         "scores": {
           "liquidity_quality": 37.74,
           "long_score": 4.67,
-          "short_score": 25.91,
+          "short_score": 13.85,
           "crowded_long_score": 11.45,
           "squeeze_risk_score": 9.43,
           "round_trip_cost_pct": 0.1738,
@@ -20623,7 +20623,7 @@
         "scores": {
           "liquidity_quality": 84.99,
           "long_score": 9.86,
-          "short_score": 39.72,
+          "short_score": 27.45,
           "crowded_long_score": 58.76,
           "squeeze_risk_score": 21.25,
           "round_trip_cost_pct": 0.1773,
@@ -20669,7 +20669,7 @@
         "scores": {
           "liquidity_quality": 88.11,
           "long_score": 19.82,
-          "short_score": 51.06,
+          "short_score": 37.3,
           "crowded_long_score": 72.73,
           "squeeze_risk_score": 35.33,
           "round_trip_cost_pct": 0.1727,
@@ -20714,8 +20714,8 @@
         },
         "scores": {
           "liquidity_quality": 53.05,
-          "long_score": 8.66,
-          "short_score": 24.98,
+          "long_score": 8.34,
+          "short_score": 17.4,
           "crowded_long_score": 17.27,
           "squeeze_risk_score": 13.26,
           "round_trip_cost_pct": 0.1875,
@@ -20760,8 +20760,8 @@
         },
         "scores": {
           "liquidity_quality": 51.14,
-          "long_score": 4.79,
-          "short_score": 18.93,
+          "long_score": 0,
+          "short_score": 0.71,
           "crowded_long_score": 12.79,
           "squeeze_risk_score": 29.13,
           "round_trip_cost_pct": 0.1816,
@@ -20807,7 +20807,7 @@
         "scores": {
           "liquidity_quality": 83.33,
           "long_score": 8.71,
-          "short_score": 33.34,
+          "short_score": 26.08,
           "crowded_long_score": 58.94,
           "squeeze_risk_score": 20.83,
           "round_trip_cost_pct": 0.1813,
@@ -20852,8 +20852,8 @@
         },
         "scores": {
           "liquidity_quality": 84.88,
-          "long_score": 24.58,
-          "short_score": 21.58,
+          "long_score": 19.9,
+          "short_score": 20.51,
           "crowded_long_score": 29.48,
           "squeeze_risk_score": 31.49,
           "round_trip_cost_pct": 0.1879,
@@ -20899,7 +20899,7 @@
         "scores": {
           "liquidity_quality": 26.51,
           "long_score": 2.73,
-          "short_score": 20.85,
+          "short_score": 10.67,
           "crowded_long_score": 8.81,
           "squeeze_risk_score": 6.63,
           "round_trip_cost_pct": 0.1749,

@@ -12,6 +12,9 @@ export function openDatabase(path: string): Database.Database {
   const db = new Database(path);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = OFF');
+  // Prod WAL hit 645MB after the 2026-07-12 backfill burst; PASSIVE checkpoint reuses space but
+  // never truncates -- 64MB cap makes post-checkpoint truncation automatic.
+  db.pragma('journal_size_limit = 67108864');
   ensureSchema(db);
   return db;
 }
