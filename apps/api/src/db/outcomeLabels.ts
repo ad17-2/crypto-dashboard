@@ -10,6 +10,41 @@ import {
 // a foreign key -- matches the same synthetic backfill-* run_ids the base rows may carry.
 const BTC_SYMBOL = 'BTC';
 const DEFAULT_HORIZONS = [24, 72];
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+// The weekly review consumes a trailing 7d window; the manual CLI (buildOutcomeLabels) remains the
+// tool for full-history labeling and is NOT bounded by this. This floor also keeps the first-ever
+// auto pass bounded against a large historical backlog instead of scanning the whole never-pruned
+// factor_history table (see labelClosedWindows).
+const AUTO_LABEL_WINDOW_DAYS = 14;
+/**
+ * Keeps IN (...) lists (and their bound parameters) under both V8's function-argument limit
+ * (~125k -- see pushAll below) and SQLite's bound-parameter cap. Prod's first labeling pass saw a
+ * 232k-row backlog and blew the former (incident run 20260719-085133, "Maximum call stack size
+ * exceeded"); chunking here is what keeps a future large backlog from doing the same.
+ */
+const CHUNK_SIZE = 500;
+
+/** Splits `items` into arrays of at most `size` elements, for chunked IN (...) queries. */
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/**
+ * Appends every element of `items` onto `target` via a loop -- never `target.push(...items)`,
+ * which hits V8's function-argument limit (~125k) once `items` is backlog-sized. This is the
+ * exact call that crashed prod (incident run 20260719-085133: refresh note "outcome_labeling:
+ * error - Maximum call stack size exceeded"). Exported so it can be unit-tested directly without
+ * seeding a giant DB.
+ */
+export function pushAll<T>(target: T[], items: Iterable<T>): void {
+  for (const item of items) {
+    target.push(item);
+  }
+}
 
 interface FactorHistoryLabelDbRow {
   run_id: string;
@@ -75,18 +110,32 @@ function loadSeriesBySymbol(
   db: Database.Database,
   symbols?: string[] | undefined,
 ): Map<string, SeriesPoint[]> {
-  let query = `SELECT run_id, generated_at, symbol, price_usd, metrics_json
-       FROM factor_history`;
-  const params: string[] = [];
-  if (symbols && symbols.length > 0) {
-    const fetchSymbols = new Set(symbols);
-    fetchSymbols.add(BTC_SYMBOL);
-    query += ` WHERE symbol IN (${Array.from(fetchSymbols, () => '?').join(', ')})`;
-    params.push(...fetchSymbols);
+  if (!symbols || symbols.length === 0) {
+    const rows = db
+      .prepare(
+        `SELECT run_id, generated_at, symbol, price_usd, metrics_json
+       FROM factor_history
+       ORDER BY symbol ASC, generated_at ASC`,
+      )
+      .all() as FactorHistoryLabelDbRow[];
+    return rowsToSeriesBySymbol(rows);
   }
-  query += ` ORDER BY symbol ASC, generated_at ASC`;
 
-  const rows = db.prepare(query).all(...params) as FactorHistoryLabelDbRow[];
+  const fetchSymbols = new Set(symbols);
+  fetchSymbols.add(BTC_SYMBOL);
+  const rows: FactorHistoryLabelDbRow[] = [];
+  for (const batch of chunk(Array.from(fetchSymbols), CHUNK_SIZE)) {
+    const placeholders = batch.map(() => '?').join(', ');
+    const batchRows = db
+      .prepare(
+        `SELECT run_id, generated_at, symbol, price_usd, metrics_json
+         FROM factor_history
+         WHERE symbol IN (${placeholders})
+         ORDER BY symbol ASC, generated_at ASC`,
+      )
+      .all(...batch) as FactorHistoryLabelDbRow[];
+    pushAll(rows, batchRows);
+  }
   return rowsToSeriesBySymbol(rows);
 }
 
@@ -104,15 +153,19 @@ function loadSeriesInWindow(
 ): Map<string, SeriesPoint[]> {
   const fetchSymbols = new Set(symbols);
   fetchSymbols.add(BTC_SYMBOL);
-  const placeholders = Array.from(fetchSymbols, () => '?').join(', ');
-  const rows = db
-    .prepare(
-      `SELECT run_id, generated_at, symbol, price_usd, metrics_json
-       FROM factor_history
-       WHERE symbol IN (${placeholders}) AND generated_at >= ? AND generated_at <= ?
-       ORDER BY symbol ASC, generated_at ASC`,
-    )
-    .all(...fetchSymbols, minGeneratedAt, maxGeneratedAt) as FactorHistoryLabelDbRow[];
+  const rows: FactorHistoryLabelDbRow[] = [];
+  for (const batch of chunk(Array.from(fetchSymbols), CHUNK_SIZE)) {
+    const placeholders = batch.map(() => '?').join(', ');
+    const batchRows = db
+      .prepare(
+        `SELECT run_id, generated_at, symbol, price_usd, metrics_json
+         FROM factor_history
+         WHERE symbol IN (${placeholders}) AND generated_at >= ? AND generated_at <= ?
+         ORDER BY symbol ASC, generated_at ASC`,
+      )
+      .all(...batch, minGeneratedAt, maxGeneratedAt) as FactorHistoryLabelDbRow[];
+    pushAll(rows, batchRows);
+  }
   return rowsToSeriesBySymbol(rows);
 }
 
@@ -394,11 +447,15 @@ interface HorizonCandidateRow {
  * (buildOutcomeLabels), which naturally retries everything on every invocation. Accepted because
  * these are steady per-refresh calls, not one-off backfills; a stuck symbol stays stuck rather
  * than costing a full rescan every refresh.
+ *
+ * `floorGeneratedAt`, when given, adds a third lower bound alongside the low-water mark -- see
+ * AUTO_LABEL_WINDOW_DAYS.
  */
 function fetchClosedUnlabeledCandidates(
   db: Database.Database,
   hours: number,
   cutoff: string,
+  floorGeneratedAt?: string,
 ): HorizonCandidateRow[] {
   // No index covers (horizon_hours, generated_at) -- this is a full outcome_labels scan, but a
   // cheap one (two TEXT columns, no JSON parsing), done once per horizon per call.
@@ -420,6 +477,10 @@ function fetchClosedUnlabeledCandidates(
     query += ' AND fh.generated_at > ?';
     params.push(lowWaterMark);
   }
+  if (floorGeneratedAt !== undefined) {
+    query += ' AND fh.generated_at >= ?';
+    params.push(floorGeneratedAt);
+  }
   query += ' ORDER BY fh.generated_at ASC';
 
   return db.prepare(query).all(...params) as HorizonCandidateRow[];
@@ -431,10 +492,11 @@ function labelHorizon(
   now: Date,
   summary: OutcomeLabelSummary,
   consideredRowKeys: Set<string>,
+  floorGeneratedAt?: string,
 ): OutcomeLabelRecord[] {
   const [, maxToleranceHours] = horizonTolerance(hours);
   const cutoff = formatJakartaIso(new Date(now.getTime() - maxToleranceHours * 3_600_000));
-  const candidateRows = fetchClosedUnlabeledCandidates(db, hours, cutoff);
+  const candidateRows = fetchClosedUnlabeledCandidates(db, hours, cutoff, floorGeneratedAt);
   if (candidateRows.length === 0) {
     return [];
   }
@@ -518,16 +580,23 @@ export interface LabelClosedWindowsResult extends BuildOutcomeLabelsResult {
  * call with no new closed rows in between writes nothing (fetchClosedUnlabeledCandidates' anti-join
  * already excludes anything labeled by the first call; the low-water mark is a bounded-cost
  * optimization on top of that, not the idempotence guarantee itself).
+ *
+ * Also floored to a trailing AUTO_LABEL_WINDOW_DAYS window: the first-ever call has no low-water
+ * mark, so without this floor it would scan the entire (possibly backfilled, never-pruned)
+ * factor_history table in one pass. buildOutcomeLabels remains the unbounded, full-history tool.
  */
 export function labelClosedWindows(db: Database.Database, now: Date): LabelClosedWindowsResult {
   const horizons = DEFAULT_HORIZONS;
   const summary = emptySummary(horizons);
   // Shared across every horizon's labelHorizon call below -- see that function's own comment.
   const consideredRowKeys = new Set<string>();
+  const floorGeneratedAt = formatJakartaIso(
+    new Date(now.getTime() - AUTO_LABEL_WINDOW_DAYS * MS_PER_DAY),
+  );
 
   const records: OutcomeLabelRecord[] = [];
   for (const hours of horizons) {
-    records.push(...labelHorizon(db, hours, now, summary, consideredRowKeys));
+    pushAll(records, labelHorizon(db, hours, now, summary, consideredRowKeys, floorGeneratedAt));
   }
 
   const written = saveOutcomeLabelRecords(db, records);

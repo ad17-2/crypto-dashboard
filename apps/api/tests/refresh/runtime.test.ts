@@ -186,6 +186,27 @@ describe('RefreshRuntime.refresh post-save housekeeping (outcome labeling + week
     expect(count).toBeGreaterThan(0);
   });
 
+  it('does not label a closed row older than the 14-day auto floor', async () => {
+    const now = new Date();
+    // 15 days old, with a valid closed forward match at 24h -- old enough for the window to have
+    // fully closed, but outside labelClosedWindows' AUTO_LABEL_WINDOW_DAYS (14) floor.
+    insertFactorHistoryRow('old-base', hoursAgo(now, 15 * 24), 'SYM');
+    insertFactorHistoryRow('old-fwd', hoursAgo(now, 14 * 24), 'SYM');
+
+    const runtime = new RefreshRuntime({
+      db,
+      settings: { configPath: 'config/default.json', dbPath, reportDir: dir, retainRuns: 0 },
+      loadConfig: () => fakeConfig(),
+      runPipeline: mockedRunPipeline(now),
+    });
+
+    const status = await runtime.refresh('test');
+
+    expect(status.state).toBe('ok');
+    const row = db.prepare('SELECT 1 FROM outcome_labels WHERE run_id = ?').get('old-base');
+    expect(row).toBeUndefined();
+  });
+
   it('produces no notes and no weekly_reviews row when nothing is labeled yet', async () => {
     const now = new Date();
     const runtime = new RefreshRuntime({

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildOutcomeLabels,
   labelClosedWindows,
+  pushAll,
   saveOutcomeLabelRecords,
 } from '../../src/db/outcomeLabels.js';
 import { formatJakartaIso } from '../../src/db/time.js';
@@ -354,5 +355,99 @@ describe('labelClosedWindows', () => {
     expect(second.records.length).toBeGreaterThan(0);
     expect(second.records.every((r) => r.run_id === 'new0')).toBe(true);
     expect(second.records.some((r) => r.run_id === 'new0' && r.horizon_hours === 24)).toBe(true);
+  });
+
+  it('skips a closed base row older than the 14-day auto floor, but buildOutcomeLabels (the CLI, unbounded) still labels it', () => {
+    // 20 days before `now` -- comfortably past AUTO_LABEL_WINDOW_DAYS (14) regardless of exact
+    // constant tuning, with a valid closed forward match at 24h.
+    const baseOffsetHours = -20 * 24;
+    insertFactorHistoryRow(db3, 'old-base', baseOffsetHours, 'SYM', 100, { is_trusted: true });
+    insertFactorHistoryRow(db3, 'old-fwd', baseOffsetHours + 24, 'SYM', 110, { is_trusted: true });
+
+    const now = new Date(REFERENCE.getTime() + 40 * 3_600_000);
+
+    const { records: closedRecords } = labelClosedWindows(db3, now);
+    expect(closedRecords.some((r) => r.run_id === 'old-base')).toBe(false);
+
+    const { records: cliRecords } = buildOutcomeLabels(db3);
+    const cliRecord = cliRecords.find(
+      (r) => r.run_id === 'old-base' && r.symbol === 'SYM' && r.horizon_hours === 24,
+    );
+    expect(cliRecord).toBeDefined();
+    // (110/100 - 1) x 100 = 10.
+    expect(cliRecord?.fwd_return_pct).toBeCloseTo(10.0, 9);
+  });
+});
+
+// Isolated (own temp db, no shared fixture) -- red-proofs the fix for the prod incident directly,
+// without seeding a giant DB: prod run 20260719-085133's refresh note read verbatim
+// "outcome_labeling: error - Maximum call stack size exceeded". Root cause was
+// `target.push(...items)` spreading a backlog-sized array (232,108 factor_history rows on that
+// first pass) as individual .push() call arguments, past V8's function-argument limit (~125k).
+// pushAll is exported from outcomeLabels.ts specifically so this can be exercised directly against
+// a plain array, in milliseconds, instead of reproducing prod's row count in a real database.
+describe('pushAll', () => {
+  it('appends a 200,000-element array onto an existing array without blowing the call stack', () => {
+    const target: number[] = [1, 2, 3];
+    const items = Array.from({ length: 200_000 }, (_, i) => i);
+
+    expect(() => pushAll(target, items)).not.toThrow();
+    expect(target).toHaveLength(200_003);
+    expect(target[0]).toBe(1);
+    expect(target[3]).toBe(0);
+    expect(target[target.length - 1]).toBe(199_999);
+  });
+});
+
+// Isolated from the shared fixture above (own temp db) -- exercises the two chunked IN (...)
+// queries (loadSeriesBySymbol via buildOutcomeLabels, loadSeriesInWindow via labelClosedWindows)
+// past their 500-symbol-per-chunk boundary (outcomeLabels.ts's CHUNK_SIZE), proving the per-chunk
+// results merge back into a complete, correctly-matched set instead of silently dropping or
+// cross-wiring symbols at the chunk boundary.
+describe('buildOutcomeLabels / labelClosedWindows chunking across >500 symbols', () => {
+  let dir4: string;
+  let db4: Database.Database;
+  const SYMBOL_COUNT = 1_200;
+
+  beforeEach(() => {
+    ({ dir: dir4, db: db4 } = setupTempDb('crypto-screener-outcome-labels-chunking-'));
+    for (let i = 0; i < SYMBOL_COUNT; i++) {
+      const symbol = `SYM${i}`;
+      // fwd_return_pct = ((100+i)/100 - 1) x 100 = i -- gives every symbol a distinct, easily
+      // checked expected value, so a chunk-boundary mixup (wrong symbol's series merged into
+      // another's) would show up as a wrong number, not just a missing/duplicate row.
+      insertFactorHistoryRow(db4, `base-${i}`, 0, symbol, 100, { is_trusted: true });
+      insertFactorHistoryRow(db4, `fwd-${i}`, 24, symbol, 100 + i, { is_trusted: true });
+    }
+  });
+
+  afterEach(() => {
+    teardownTempDb(dir4, db4);
+  });
+
+  it('loadSeriesBySymbol (buildOutcomeLabels symbol filter): every symbol across chunk boundaries is present with the correct match', () => {
+    const allSymbols = Array.from({ length: SYMBOL_COUNT }, (_, i) => `SYM${i}`);
+    const { records } = buildOutcomeLabels(db4, { symbols: allSymbols, horizons: [24] });
+
+    expect(records).toHaveLength(SYMBOL_COUNT);
+    expect(new Set(records.map((r) => r.symbol)).size).toBe(SYMBOL_COUNT);
+    for (let i = 0; i < SYMBOL_COUNT; i++) {
+      const record = records.find((r) => r.symbol === `SYM${i}`);
+      expect(record?.fwd_return_pct).toBeCloseTo(i, 9);
+    }
+  });
+
+  it('loadSeriesInWindow (labelClosedWindows): an IN-chunked query combined with range params returns the union across chunk boundaries', () => {
+    const now = new Date(REFERENCE.getTime() + 40 * 3_600_000);
+    const { records, written } = labelClosedWindows(db4, now);
+
+    expect(records).toHaveLength(SYMBOL_COUNT);
+    expect(new Set(records.map((r) => r.symbol)).size).toBe(SYMBOL_COUNT);
+    for (let i = 0; i < SYMBOL_COUNT; i++) {
+      const record = records.find((r) => r.symbol === `SYM${i}`);
+      expect(record?.horizon_hours).toBe(24);
+      expect(record?.fwd_return_pct).toBeCloseTo(i, 9);
+    }
+    expect(written).toBe(records.length);
   });
 });
